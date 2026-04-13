@@ -1,44 +1,35 @@
 package services
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 )
 
-// ServerParams Server 初始化参数
 type ServerParams struct {
 	BindPort int
 	Token    string
 	Logger   *logrus.Logger
 }
 
-// Server 内网穿透服务端核心
 type Server struct {
-	bindPort int
-	token    string
-	logger   *logrus.Logger
-
-	listener net.Listener
-
-	mu      sync.RWMutex
-	clients map[string]*controlSession // runID → 控制会话
-	proxies map[string]*proxyEntry     // proxyName → 代理条目
-
-	// 等待工作连接: workID → channel(工作连接)
+	bindPort      int
+	token         string
+	logger        *logrus.Logger
+	listener      net.Listener
+	mu            sync.RWMutex
+	clients       map[string]*controlSession // runID → 控制会话
+	proxies       map[string]*proxyEntry     // proxyName → 代理条目
 	pendingWork   map[string]chan net.Conn
 	pendingWorkMu sync.Mutex
-
-	stopCh chan struct{}
+	stopCh        chan struct{}
 }
 
-// controlSession 代表一个 client 的控制连接会话
 type controlSession struct {
 	runID  string
 	conn   net.Conn
@@ -46,7 +37,6 @@ type controlSession struct {
 	stopCh chan struct{}
 }
 
-// proxyEntry 一个已注册的 TCP 代理
 type proxyEntry struct {
 	name       string
 	remotePort int
@@ -75,19 +65,15 @@ func (s *Server) Start() error {
 		return fmt.Errorf("监听端口 %d 失败: %w", s.bindPort, err)
 	}
 	s.listener = ln
-
 	go s.acceptLoop()
 	return nil
 }
 
-// Stop 停止服务端，关闭所有连接
 func (s *Server) Stop() {
 	close(s.stopCh)
 	_ = s.listener.Close()
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	for _, proxy := range s.proxies {
 		if proxy.listener != nil {
 			_ = proxy.listener.Close()
@@ -98,7 +84,6 @@ func (s *Server) Stop() {
 	}
 }
 
-// acceptLoop 接受所有入站 TCP 连接（控制连接 + 工作连接）
 func (s *Server) acceptLoop() {
 	for {
 		conn, err := s.listener.Accept()
@@ -115,7 +100,6 @@ func (s *Server) acceptLoop() {
 	}
 }
 
-// handleIncoming 读取第一条消息，判断是控制连接还是工作连接
 func (s *Server) handleIncoming(conn net.Conn) {
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	msgType, payload, err := utils.ReadMsg(conn)
@@ -125,7 +109,6 @@ func (s *Server) handleIncoming(conn net.Conn) {
 		return
 	}
 	_ = conn.SetDeadline(time.Time{})
-
 	switch msgType {
 	case utils.MsgLogin:
 		s.handleControlConn(conn, payload)
@@ -137,8 +120,8 @@ func (s *Server) handleIncoming(conn net.Conn) {
 	}
 }
 
-// handleControlConn 处理 client 控制连接：认证、注册代理、心跳
 func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
+
 	var loginMsg utils.LoginMsg
 	if err := utils.Decode(payload, &loginMsg); err != nil {
 		s.logger.Errorf("解析 LoginMsg 失败: %v", err)
@@ -153,31 +136,24 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 		return
 	}
 
-	runID := genID()
 	sess := &controlSession{
-		runID:  runID,
+		runID:  uuid.New().String(),
 		conn:   conn,
 		stopCh: make(chan struct{}),
 	}
 
 	s.mu.Lock()
-	s.clients[runID] = sess
+	s.clients[sess.runID] = sess
 	s.mu.Unlock()
 
-	s.logger.Infof("client 已连接 [%s], runID=%s", conn.RemoteAddr(), runID)
+	s.logger.Infof("client 已连接 [%s], runID=%s", conn.RemoteAddr(), sess.runID)
 
-	if err := utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{RunID: runID}); err != nil {
+	defer s.removeClient(sess.runID)
+
+	if err := utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{RunID: sess.runID}); err != nil {
 		s.logger.Errorf("发送 LoginResp 失败: %v", err)
-		s.removeClient(runID)
 		return
 	}
-
-	s.controlLoop(sess)
-}
-
-// controlLoop 持续读取来自 client 的控制消息
-func (s *Server) controlLoop(sess *controlSession) {
-	defer s.removeClient(sess.runID)
 
 	for {
 		msgType, payload, err := utils.ReadMsg(sess.conn)
@@ -185,7 +161,6 @@ func (s *Server) controlLoop(sess *controlSession) {
 			s.logger.Infof("client 控制连接断开 runID=%s: %v", sess.runID, err)
 			return
 		}
-
 		switch msgType {
 		case utils.MsgNewProxy:
 			s.handleNewProxy(sess, payload)
@@ -195,10 +170,11 @@ func (s *Server) controlLoop(sess *controlSession) {
 			s.logger.Warnf("控制连接收到未知消息 0x%02x runID=%s", msgType, sess.runID)
 		}
 	}
+
 }
 
-// handleNewProxy 处理 client 注册新 TCP 代理请求
 func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
+
 	var msg utils.NewProxyMsg
 	if err := utils.Decode(payload, &msg); err != nil {
 		s.sendProxyResp(sess, "", "解析 NewProxyMsg 失败")
@@ -244,8 +220,8 @@ func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
 	s.logger.Infof("代理注册成功: name=%s, remotePort=%d, runID=%s", msg.Name, msg.RemotePort, sess.runID)
 	s.sendProxyResp(sess, msg.Name, "")
 
-	// 启动协程监听用户连接
 	go s.proxyAcceptLoop(entry, sess)
+
 }
 
 func (s *Server) sendProxyResp(sess *controlSession, name, errMsg string) {
@@ -257,8 +233,8 @@ func (s *Server) sendProxyResp(sess *controlSession, name, errMsg string) {
 	})
 }
 
-// proxyAcceptLoop 在 remotePort 上接受用户连接，并通知 client 建立工作连接
 func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *controlSession) {
+
 	defer func() {
 		_ = entry.listener.Close()
 		s.mu.Lock()
@@ -283,13 +259,14 @@ func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *controlSession) {
 		s.logger.Infof("用户连接到达: proxy=%s, src=%s", entry.name, userConn.RemoteAddr())
 		go s.bridgeUserConn(userConn, entry, sess)
 	}
+
 }
 
-// bridgeUserConn 为一个用户连接请求 client 的工作连接，完成数据桥接
 func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *controlSession) {
-	defer userConn.Close()
 
-	workID := genID()
+	defer func() { _ = userConn.Close() }()
+
+	workID := uuid.New().String()
 	workCh := make(chan net.Conn, 1)
 
 	s.pendingWorkMu.Lock()
@@ -302,7 +279,6 @@ func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *cont
 		s.pendingWorkMu.Unlock()
 	}()
 
-	// 通知 client 建立工作连接
 	sess.mu.Lock()
 	err := utils.WriteMsg(sess.conn, utils.MsgNewWorkConn, utils.NewWorkConnMsg{
 		WorkID:    workID,
@@ -314,18 +290,18 @@ func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *cont
 		return
 	}
 
-	// 等待 client 的工作连接，超时 10 秒
 	select {
 	case workConn := <-workCh:
 		s.logger.Debugf("工作连接就绪: workID=%s, proxy=%s", workID, entry.name)
-		pipe(userConn, workConn)
+		utils.Pipe(userConn, workConn)
 	case <-time.After(10 * time.Second):
 		s.logger.Warnf("等待工作连接超时: workID=%s, proxy=%s", workID, entry.name)
 	}
+
 }
 
-// handleWorkConn 处理 client 发起的工作连接
 func (s *Server) handleWorkConn(conn net.Conn, payload []byte) {
+
 	var msg utils.StartWorkConnMsg
 	if err := utils.Decode(payload, &msg); err != nil {
 		s.logger.Errorf("解析 StartWorkConnMsg 失败: %v", err)
@@ -344,18 +320,18 @@ func (s *Server) handleWorkConn(conn net.Conn, payload []byte) {
 	}
 
 	ch <- conn
+
 }
 
-// removeClient 清理 client 控制会话及其所有代理
 func (s *Server) removeClient(runID string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	sess, ok := s.clients[runID]
 	if ok {
 		close(sess.stopCh)
 		_ = sess.conn.Close()
 		delete(s.clients, runID)
 	}
-
 	for name, proxy := range s.proxies {
 		if proxy.runID == runID {
 			_ = proxy.listener.Close()
@@ -363,14 +339,5 @@ func (s *Server) removeClient(runID string) {
 			s.logger.Infof("已移除代理: name=%s (client 断连)", name)
 		}
 	}
-	s.mu.Unlock()
-
 	s.logger.Infof("client 会话已清理: runID=%s", runID)
-}
-
-// genID 生成随机唯一标识
-func genID() string {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

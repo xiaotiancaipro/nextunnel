@@ -6,7 +6,6 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// ServerConfigs 服务端配置
 type ServerConfigs struct {
 	BindPort int    `toml:"bind_port"`
 	Token    string `toml:"token"`
