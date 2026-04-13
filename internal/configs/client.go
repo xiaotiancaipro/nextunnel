@@ -20,6 +20,8 @@ type ClientTLSConfigs struct {
 	Enabled            bool   `toml:"enabled"`
 	ServerName         string `toml:"server_name"`
 	CAFile             string `toml:"ca_file"`
+	CertFile           string `toml:"cert_file"`
+	KeyFile            string `toml:"key_file"`
 	InsecureSkipVerify bool   `toml:"insecure_skip_verify"`
 }
 
@@ -54,6 +56,14 @@ func (c *ClientConfigs) Validate() error {
 	}
 	if strings.TrimSpace(c.Token) == "" {
 		return fmt.Errorf("token cannot be empty")
+	}
+	if c.TLS.Enabled {
+		if strings.TrimSpace(c.TLS.CertFile) == "" {
+			return fmt.Errorf("tls.cert_file is required when tls is enabled")
+		}
+		if strings.TrimSpace(c.TLS.KeyFile) == "" {
+			return fmt.Errorf("tls.key_file is required when tls is enabled")
+		}
 	}
 	names := make(map[string]struct{}, len(c.Proxies))
 	for i, proxy := range c.Proxies {

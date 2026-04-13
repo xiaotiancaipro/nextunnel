@@ -16,6 +16,7 @@ type ServerConfigs struct {
 
 type ServerTLSConfigs struct {
 	Enabled  bool   `toml:"enabled"`
+	CAFile   string `toml:"ca_file"`
 	CertFile string `toml:"cert_file"`
 	KeyFile  string `toml:"key_file"`
 }
@@ -47,6 +48,9 @@ func (c *ServerConfigs) Validate() error {
 		}
 		if strings.TrimSpace(c.TLS.KeyFile) == "" {
 			return fmt.Errorf("tls.key_file is required when tls is enabled")
+		}
+		if strings.TrimSpace(c.TLS.CAFile) == "" {
+			return fmt.Errorf("tls.ca_file is required when tls is enabled")
 		}
 	}
 	return nil

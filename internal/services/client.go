@@ -43,6 +43,8 @@ type ClientTLSConfig struct {
 	Enabled            bool
 	ServerName         string
 	CAFile             string
+	CertFile           string
+	KeyFile            string
 	InsecureSkipVerify bool
 }
 
@@ -179,6 +181,9 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		config.ServerName = c.tls.ServerName
 	}
 	if c.tls.CAFile == "" {
+		if err := c.loadClientCertificate(config); err != nil {
+			return nil, err
+		}
 		return config, nil
 	}
 
@@ -195,8 +200,23 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("failed to append tls ca_file to cert pool")
 	}
 	config.RootCAs = pool
+	if err := c.loadClientCertificate(config); err != nil {
+		return nil, err
+	}
 	return config, nil
 
+}
+
+func (c *Client) loadClientCertificate(config *tls.Config) error {
+	if c.tls.CertFile == "" || c.tls.KeyFile == "" {
+		return fmt.Errorf("tls cert_file and key_file are required when tls is enabled")
+	}
+	cert, err := tls.LoadX509KeyPair(c.tls.CertFile, c.tls.KeyFile)
+	if err != nil {
+		return fmt.Errorf("failed to load client tls certificate: %w", err)
+	}
+	config.Certificates = []tls.Certificate{cert}
+	return nil
 }
 
 func (c *Client) releaseControlConn(conn net.Conn) bool {

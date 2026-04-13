@@ -54,6 +54,7 @@ func (s *Server) Run() error {
 		Token:    s.Configs.Token,
 		TLS: services.ServerTLSConfig{
 			Enabled:  s.Configs.TLS.Enabled,
+			CAFile:   s.Configs.TLS.CAFile,
 			CertFile: s.Configs.TLS.CertFile,
 			KeyFile:  s.Configs.TLS.KeyFile,
 		},

@@ -2,8 +2,10 @@ package services
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -21,6 +23,7 @@ type ServerParams struct {
 
 type ServerTLSConfig struct {
 	Enabled  bool
+	CAFile   string
 	CertFile string
 	KeyFile  string
 }
@@ -94,13 +97,26 @@ func (s *Server) listen() (net.Listener, error) {
 	if s.tls.CertFile == "" || s.tls.KeyFile == "" {
 		return nil, fmt.Errorf("tls cert_file and key_file are required when tls is enabled")
 	}
+	if s.tls.CAFile == "" {
+		return nil, fmt.Errorf("tls ca_file is required when tls is enabled")
+	}
 	cert, err := tls.LoadX509KeyPair(s.tls.CertFile, s.tls.KeyFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load tls certificate: %w", err)
 	}
+	caCert, err := os.ReadFile(s.tls.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tls ca_file: %w", err)
+	}
+	clientCAs := x509.NewCertPool()
+	if ok := clientCAs.AppendCertsFromPEM(caCert); !ok {
+		return nil, fmt.Errorf("failed to append tls ca_file to client cert pool")
+	}
 	config := &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    clientCAs,
 	}
 	return tls.Listen("tcp", addr, config)
 }

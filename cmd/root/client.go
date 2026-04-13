@@ -68,6 +68,8 @@ func (c *Client) Run() error {
 			Enabled:            c.Configs.TLS.Enabled,
 			ServerName:         c.Configs.TLS.ServerName,
 			CAFile:             c.Configs.TLS.CAFile,
+			CertFile:           c.Configs.TLS.CertFile,
+			KeyFile:            c.Configs.TLS.KeyFile,
 			InsecureSkipVerify: c.Configs.TLS.InsecureSkipVerify,
 		},
 		Proxies: proxies,

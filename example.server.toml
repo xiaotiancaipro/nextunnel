@@ -3,5 +3,6 @@ token = "your-secret-token"
 
 [tls]
 enabled = false
+ca_file = "./certs/ca.crt"
 cert_file = "./certs/server.crt"
 key_file = "./certs/server.key"

@@ -6,6 +6,8 @@ token = "your-secret-token"
 enabled = false
 server_name = "your-server-domain"
 ca_file = "./certs/ca.crt"
+cert_file = "./certs/client.crt"
+key_file = "./certs/client.key"
 insecure_skip_verify = false
 
 # Example 1
