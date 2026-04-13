@@ -37,6 +37,12 @@ type controlSession struct {
 	stopCh chan struct{}
 }
 
+func (s *controlSession) writeMsg(msgType byte, payload interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return utils.WriteMsg(s.conn, msgType, payload)
+}
+
 type proxyEntry struct {
 	name       string
 	remotePort int
@@ -150,7 +156,7 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 
 	defer s.removeClient(sess.runID)
 
-	if err := utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{RunID: sess.runID}); err != nil {
+	if err := sess.writeMsg(utils.MsgLoginResp, utils.LoginRespMsg{RunID: sess.runID}); err != nil {
 		s.logger.Errorf("Failed to send LoginResp: %v", err)
 		return
 	}
@@ -165,7 +171,10 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 		case utils.MsgNewProxy:
 			s.handleNewProxy(sess, payload)
 		case utils.MsgPing:
-			_ = utils.WriteMsg(sess.conn, utils.MsgPong, utils.PongMsg{})
+			if err := sess.writeMsg(utils.MsgPong, utils.PongMsg{}); err != nil {
+				s.logger.Errorf("Failed to send Pong: %v", err)
+				return
+			}
 		default:
 			s.logger.Warnf("Unknown message received on control connection 0x%02x runID=%s", msgType, sess.runID)
 		}
@@ -225,12 +234,12 @@ func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
 }
 
 func (s *Server) sendProxyResp(sess *controlSession, name, errMsg string) {
-	sess.mu.Lock()
-	defer sess.mu.Unlock()
-	_ = utils.WriteMsg(sess.conn, utils.MsgNewProxyResp, utils.NewProxyRespMsg{
+	if err := sess.writeMsg(utils.MsgNewProxyResp, utils.NewProxyRespMsg{
 		Name:  name,
 		Error: errMsg,
-	})
+	}); err != nil {
+		s.logger.Errorf("Failed to send NewProxyResp runID=%s proxy=%s: %v", sess.runID, name, err)
+	}
 }
 
 func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *controlSession) {
@@ -279,13 +288,11 @@ func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *cont
 		s.pendingWorkMu.Unlock()
 	}()
 
-	sess.mu.Lock()
-	err := utils.WriteMsg(sess.conn, utils.MsgNewWorkConn, utils.NewWorkConnMsg{
+	msg := utils.NewWorkConnMsg{
 		WorkID:    workID,
 		ProxyName: entry.name,
-	})
-	sess.mu.Unlock()
-	if err != nil {
+	}
+	if err := sess.writeMsg(utils.MsgNewWorkConn, msg); err != nil {
 		s.logger.Errorf("Failed to send NewWorkConn: %v", err)
 		return
 	}
