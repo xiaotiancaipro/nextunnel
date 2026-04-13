@@ -1,8 +1,11 @@
 package services
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -31,14 +34,23 @@ type ClientParams struct {
 	ServerAddr string
 	ServerPort int
 	Token      string
+	TLS        ClientTLSConfig
 	Proxies    []ProxyConfig
 	Logger     *logrus.Logger
+}
+
+type ClientTLSConfig struct {
+	Enabled            bool
+	ServerName         string
+	CAFile             string
+	InsecureSkipVerify bool
 }
 
 type Client struct {
 	serverAddr string
 	serverPort int
 	token      string
+	tls        ClientTLSConfig
 	proxies    []ProxyConfig
 	logger     *logrus.Logger
 	runID      string
@@ -53,19 +65,20 @@ type msgChan struct {
 	err     error
 }
 
-func NewClient(p *ClientParams) (*Client, error) {
-	if p.ServerAddr == "" {
+func NewClient(params *ClientParams) (*Client, error) {
+	if params.ServerAddr == "" {
 		return nil, fmt.Errorf("server address cannot be empty")
 	}
-	if p.ServerPort <= 0 || p.ServerPort > 65535 {
-		return nil, fmt.Errorf("invalid server port: %d", p.ServerPort)
+	if params.ServerPort <= 0 || params.ServerPort > 65535 {
+		return nil, fmt.Errorf("invalid server port: %d", params.ServerPort)
 	}
 	return &Client{
-		serverAddr: p.ServerAddr,
-		serverPort: p.ServerPort,
-		token:      p.Token,
-		proxies:    p.Proxies,
-		logger:     p.Logger,
+		serverAddr: params.ServerAddr,
+		serverPort: params.ServerPort,
+		token:      params.Token,
+		tls:        params.TLS,
+		proxies:    params.Proxies,
+		logger:     params.Logger,
 		stopCh:     make(chan struct{}),
 	}, nil
 }
@@ -89,7 +102,7 @@ func (c *Client) serverAddrStr() string {
 
 func (c *Client) connect() error {
 
-	conn, err := net.DialTimeout("tcp", c.serverAddrStr(), 10*time.Second)
+	conn, err := c.dialServer()
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
@@ -137,6 +150,49 @@ func (c *Client) connect() error {
 	go c.controlLoop(conn) // start control loop (heartbeat + handle NewWorkConn)
 
 	return nil
+
+}
+
+func (c *Client) dialServer() (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	addr := c.serverAddrStr()
+	if !c.tls.Enabled {
+		return dialer.Dial("tcp", addr)
+	}
+	config, err := c.tlsConfig()
+	if err != nil {
+		return nil, err
+	}
+	return tls.DialWithDialer(dialer, "tcp", addr, config)
+}
+
+func (c *Client) tlsConfig() (*tls.Config, error) {
+
+	config := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: c.tls.InsecureSkipVerify,
+	}
+	if c.tls.ServerName != "" {
+		config.ServerName = c.tls.ServerName
+	}
+	if c.tls.CAFile == "" {
+		return config, nil
+	}
+
+	caCert, err := os.ReadFile(c.tls.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tls ca_file: %w", err)
+	}
+
+	pool, err := x509.SystemCertPool()
+	if (err != nil) || (pool == nil) {
+		pool = x509.NewCertPool()
+	}
+	if ok := pool.AppendCertsFromPEM(caCert); !ok {
+		return nil, fmt.Errorf("failed to append tls ca_file to cert pool")
+	}
+	config.RootCAs = pool
+	return config, nil
 
 }
 
@@ -275,7 +331,7 @@ func (c *Client) handleWorkConn(msg utils.NewWorkConnMsg) {
 		return
 	}
 
-	workConn, err := net.DialTimeout("tcp", c.serverAddrStr(), 10*time.Second)
+	workConn, err := c.dialServer()
 	if err != nil {
 		c.logger.Errorf("Failed to establish work connection [%s]: %v", msg.ProxyName, err)
 		return

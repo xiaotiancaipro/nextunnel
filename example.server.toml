@@ -1,2 +1,7 @@
 bind_port = 7000
 token = "your-secret-token"
+
+[tls]
+enabled = false
+cert_file = "./certs/server.crt"
+key_file = "./certs/server.key"

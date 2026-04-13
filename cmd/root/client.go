@@ -61,8 +61,14 @@ func (c *Client) Run() error {
 		ServerAddr: c.Configs.ServerAddr,
 		ServerPort: c.Configs.ServerPort,
 		Token:      c.Configs.Token,
-		Proxies:    proxies,
-		Logger:     logger,
+		TLS: services.ClientTLSConfig{
+			Enabled:            c.Configs.TLS.Enabled,
+			ServerName:         c.Configs.TLS.ServerName,
+			CAFile:             c.Configs.TLS.CAFile,
+			InsecureSkipVerify: c.Configs.TLS.InsecureSkipVerify,
+		},
+		Proxies: proxies,
+		Logger:  logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize client: %w", err)
@@ -71,7 +77,7 @@ func (c *Client) Run() error {
 	if err := client.Start(); err != nil {
 		return fmt.Errorf("failed to start client: %w", err)
 	}
-	logger.Infof("Client started successfully, connected to server: %s:%d", c.Configs.ServerAddr, c.Configs.ServerPort)
+	logger.Infof("Client started successfully, connected to server: %s:%d, tls=%t", c.Configs.ServerAddr, c.Configs.ServerPort, c.Configs.TLS.Enabled)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

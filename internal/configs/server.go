@@ -7,8 +7,15 @@ import (
 )
 
 type ServerConfigs struct {
-	BindPort int    `toml:"bind_port"`
-	Token    string `toml:"token"`
+	BindPort int              `toml:"bind_port"`
+	Token    string           `toml:"token"`
+	TLS      ServerTLSConfigs `toml:"tls"`
+}
+
+type ServerTLSConfigs struct {
+	Enabled  bool   `toml:"enabled"`
+	CertFile string `toml:"cert_file"`
+	KeyFile  string `toml:"key_file"`
 }
 
 func NewServer(file string) (*ServerConfigs, error) {

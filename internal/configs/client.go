@@ -7,10 +7,18 @@ import (
 )
 
 type ClientConfigs struct {
-	ServerAddr string        `toml:"server_addr"`
-	ServerPort int           `toml:"server_port"`
-	Token      string        `toml:"token"`
-	Proxies    []ProxyConfig `toml:"proxies"`
+	ServerAddr string           `toml:"server_addr"`
+	ServerPort int              `toml:"server_port"`
+	Token      string           `toml:"token"`
+	TLS        ClientTLSConfigs `toml:"tls"`
+	Proxies    []ProxyConfig    `toml:"proxies"`
+}
+
+type ClientTLSConfigs struct {
+	Enabled            bool   `toml:"enabled"`
+	ServerName         string `toml:"server_name"`
+	CAFile             string `toml:"ca_file"`
+	InsecureSkipVerify bool   `toml:"insecure_skip_verify"`
 }
 
 type ProxyConfig struct {

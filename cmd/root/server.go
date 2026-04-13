@@ -49,7 +49,12 @@ func (s *Server) Run() error {
 	server, err := services.NewServer(&services.ServerParams{
 		BindPort: s.Configs.BindPort,
 		Token:    s.Configs.Token,
-		Logger:   logger,
+		TLS: services.ServerTLSConfig{
+			Enabled:  s.Configs.TLS.Enabled,
+			CertFile: s.Configs.TLS.CertFile,
+			KeyFile:  s.Configs.TLS.KeyFile,
+		},
+		Logger: logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
@@ -58,7 +63,7 @@ func (s *Server) Run() error {
 	if err := server.Start(); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
-	logger.Infof("Server started successfully, listening on port: %d", s.Configs.BindPort)
+	logger.Infof("Server started successfully, listening on port: %d, tls=%t", s.Configs.BindPort, s.Configs.TLS.Enabled)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

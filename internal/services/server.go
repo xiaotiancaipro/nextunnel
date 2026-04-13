@@ -1,6 +1,7 @@
 package services
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"sync"
@@ -14,12 +15,20 @@ import (
 type ServerParams struct {
 	BindPort int
 	Token    string
+	TLS      ServerTLSConfig
 	Logger   *logrus.Logger
+}
+
+type ServerTLSConfig struct {
+	Enabled  bool
+	CertFile string
+	KeyFile  string
 }
 
 type Server struct {
 	bindPort      int
 	token         string
+	tls           ServerTLSConfig
 	logger        *logrus.Logger
 	listener      net.Listener
 	mu            sync.RWMutex
@@ -50,14 +59,15 @@ type proxyEntry struct {
 	listener   net.Listener // server listener on remotePort
 }
 
-func NewServer(p *ServerParams) (*Server, error) {
-	if p.BindPort <= 0 || p.BindPort > 65535 {
-		return nil, fmt.Errorf("invalid bind port: %d", p.BindPort)
+func NewServer(params *ServerParams) (*Server, error) {
+	if params.BindPort <= 0 || params.BindPort > 65535 {
+		return nil, fmt.Errorf("invalid bind port: %d", params.BindPort)
 	}
 	return &Server{
-		bindPort:    p.BindPort,
-		token:       p.Token,
-		logger:      p.Logger,
+		bindPort:    params.BindPort,
+		token:       params.Token,
+		tls:         params.TLS,
+		logger:      params.Logger,
 		clients:     make(map[string]*controlSession),
 		proxies:     make(map[string]*proxyEntry),
 		pendingWork: make(map[string]chan net.Conn),
@@ -66,13 +76,32 @@ func NewServer(p *ServerParams) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.bindPort))
+	ln, err := s.listen()
 	if err != nil {
 		return fmt.Errorf("failed to listen on port %d: %w", s.bindPort, err)
 	}
 	s.listener = ln
 	go s.acceptLoop()
 	return nil
+}
+
+func (s *Server) listen() (net.Listener, error) {
+	addr := fmt.Sprintf(":%d", s.bindPort)
+	if !s.tls.Enabled {
+		return net.Listen("tcp", addr)
+	}
+	if s.tls.CertFile == "" || s.tls.KeyFile == "" {
+		return nil, fmt.Errorf("tls cert_file and key_file are required when tls is enabled")
+	}
+	cert, err := tls.LoadX509KeyPair(s.tls.CertFile, s.tls.KeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tls certificate: %w", err)
+	}
+	config := &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{cert},
+	}
+	return tls.Listen("tcp", addr, config)
 }
 
 func (s *Server) Stop() {
