@@ -45,6 +45,9 @@ func NewServer() *cobra.Command {
 func (s *Server) Run() error {
 
 	logger := utils.NewLogger("server")
+	if !s.Configs.TLS.Enabled {
+		logger.Warn("TLS is disabled; control and work connections will be transmitted in plaintext. Do not expose this server directly to untrusted networks.")
+	}
 
 	server, err := services.NewServer(&services.ServerParams{
 		BindPort: s.Configs.BindPort,

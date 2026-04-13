@@ -45,6 +45,9 @@ func NewClient() *cobra.Command {
 func (c *Client) Run() error {
 
 	logger := utils.NewLogger("client")
+	if !c.Configs.TLS.Enabled {
+		logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
+	}
 
 	proxies := make([]services.ProxyConfig, 0, len(c.Configs.Proxies))
 	for _, p := range c.Configs.Proxies {
