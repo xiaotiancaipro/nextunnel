@@ -200,13 +200,32 @@ func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
 		return
 	}
 
+	entry := &proxyEntry{
+		name:       msg.Name,
+		remotePort: msg.RemotePort,
+		runID:      sess.runID,
+	}
+
 	s.mu.Lock()
 	if _, exists := s.proxies[msg.Name]; exists {
 		s.mu.Unlock()
 		s.sendProxyResp(sess, msg.Name, "proxy name already exists")
 		return
 	}
+	s.proxies[msg.Name] = entry
 	s.mu.Unlock()
+
+	registered := false
+	defer func() {
+		if registered {
+			return
+		}
+		s.mu.Lock()
+		if current, ok := s.proxies[msg.Name]; ok && current == entry {
+			delete(s.proxies, msg.Name)
+		}
+		s.mu.Unlock()
+	}()
 
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", msg.RemotePort))
 	if err != nil {
@@ -215,16 +234,16 @@ func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
 		return
 	}
 
-	entry := &proxyEntry{
-		name:       msg.Name,
-		remotePort: msg.RemotePort,
-		runID:      sess.runID,
-		listener:   ln,
-	}
-
 	s.mu.Lock()
-	s.proxies[msg.Name] = entry
+	current, ok := s.proxies[msg.Name]
+	if !ok || current != entry {
+		s.mu.Unlock()
+		_ = ln.Close()
+		return
+	}
+	entry.listener = ln
 	s.mu.Unlock()
+	registered = true
 
 	s.logger.Infof("Proxy registered successfully: name=%s, remotePort=%d, runID=%s", msg.Name, msg.RemotePort, sess.runID)
 	s.sendProxyResp(sess, msg.Name, "")
@@ -247,7 +266,9 @@ func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *controlSession) {
 	defer func() {
 		_ = entry.listener.Close()
 		s.mu.Lock()
-		delete(s.proxies, entry.name)
+		if current, ok := s.proxies[entry.name]; ok && current == entry {
+			delete(s.proxies, entry.name)
+		}
 		s.mu.Unlock()
 		s.logger.Infof("Proxy stopped: name=%s", entry.name)
 	}()
@@ -341,7 +362,9 @@ func (s *Server) removeClient(runID string) {
 	}
 	for name, proxy := range s.proxies {
 		if proxy.runID == runID {
-			_ = proxy.listener.Close()
+			if proxy.listener != nil {
+				_ = proxy.listener.Close()
+			}
 			delete(s.proxies, name)
 			s.logger.Infof("Proxy removed: name=%s (client disconnected)", name)
 		}
