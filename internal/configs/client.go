@@ -15,10 +15,10 @@ type ClientConfigs struct {
 
 type ProxyConfig struct {
 	Name       string `toml:"name"`
-	Type       string `toml:"type"`        // 当前只支持 "tcp"
-	RemotePort int    `toml:"remote_port"` // 服务端暴露的端口
-	LocalIP    string `toml:"local_ip"`    // 本地服务 IP
-	LocalPort  int    `toml:"local_port"`  // 本地服务端口
+	Type       string `toml:"type"`        // currently only "tcp" is supported
+	RemotePort int    `toml:"remote_port"` // port exposed by the server
+	LocalIP    string `toml:"local_ip"`    // local service IP
+	LocalPort  int    `toml:"local_port"`  // local service port
 }
 
 func NewClient(file string) (*ClientConfigs, error) {

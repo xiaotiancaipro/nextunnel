@@ -19,21 +19,21 @@ const (
 	MsgPong          byte = 0x08 // server → client
 )
 
-const maxMsgSize = 1 << 20 // 1MB 消息大小上限
+const maxMsgSize = 1 << 20 // 1MB max message size
 
 type LoginMsg struct {
 	Token string `json:"token"`
 }
 
 type LoginRespMsg struct {
-	RunID string `json:"run_id,omitempty"` // 分配给 client 的唯一标识
+	RunID string `json:"run_id,omitempty"` // unique identifier assigned to the client
 	Error string `json:"error,omitempty"`
 }
 
 type NewProxyMsg struct {
 	Name       string `json:"name"`
-	Type       string `json:"type"`        // 当前支持 "tcp"
-	RemotePort int    `json:"remote_port"` // 服务端监听端口
+	Type       string `json:"type"`        // currently supports "tcp"
+	RemotePort int    `json:"remote_port"` // server listening port
 }
 
 type NewProxyRespMsg struct {
@@ -42,8 +42,8 @@ type NewProxyRespMsg struct {
 }
 
 type NewWorkConnMsg struct {
-	WorkID    string `json:"work_id"`    // 唯一工作连接标识
-	ProxyName string `json:"proxy_name"` // 对应的代理名称
+	WorkID    string `json:"work_id"`    // unique work connection identifier
+	ProxyName string `json:"proxy_name"` // corresponding proxy name
 }
 
 type StartWorkConnMsg struct {
@@ -58,7 +58,7 @@ func WriteMsg(conn net.Conn, msgType byte, payload interface{}) error {
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("序列化消息失败: %w", err)
+		return fmt.Errorf("failed to serialize message: %w", err)
 	}
 
 	buf := make([]byte, 5+len(data))
@@ -82,7 +82,7 @@ func ReadMsg(conn net.Conn) (byte, []byte, error) {
 	length := binary.BigEndian.Uint32(header[1:5])
 
 	if length > maxMsgSize {
-		return 0, nil, fmt.Errorf("消息过大: %d bytes", length)
+		return 0, nil, fmt.Errorf("message too large: %d bytes", length)
 	}
 
 	payload := make([]byte, length)

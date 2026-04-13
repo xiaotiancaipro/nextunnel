@@ -22,23 +22,23 @@ func NewServer() *cobra.Command {
 		configFile, err1 := cmd.Flags().GetString("config")
 		configs_, err2 := configs.NewServer(configFile)
 		if err := errors.Join(err1, err2); err != nil {
-			cmd.PrintErrf("加载服务端配置失败, %v\n", err)
+			cmd.PrintErrf("Failed to load server config, %v\n", err)
 			os.Exit(1)
 		}
 		server := &Server{Configs: configs_}
 		if err := server.StartAndStop(); err != nil {
-			cmd.PrintErrf("服务端异常, %v\n", err)
+			cmd.PrintErrf("Server error, %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
 	}
 	c := &cobra.Command{
 		Use:   "server",
-		Short: "启动内网穿透服务端 (server)",
+		Short: "Start nextunnel server",
 		Args:  cobra.ExactArgs(0),
 		Run:   fc,
 	}
-	c.Flags().StringP("config", "c", "config/nextunnel-server.toml", "服务端配置文件路径")
+	c.Flags().StringP("config", "c", "config/nextunnel-server.toml", "Path to server config file")
 	return c
 }
 
@@ -52,22 +52,22 @@ func (s *Server) StartAndStop() error {
 		Logger:   logger,
 	})
 	if err != nil {
-		return fmt.Errorf("初始化服务端失败: %w", err)
+		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 
 	if err := server.Start(); err != nil {
-		return fmt.Errorf("启动服务端失败: %w", err)
+		return fmt.Errorf("failed to start server: %w", err)
 	}
-	logger.Infof("服务端启动成功, 监听端口: %d", s.Configs.BindPort)
+	logger.Infof("Server started successfully, listening on port: %d", s.Configs.BindPort)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-sigCh
-	logger.Infof("已收到信号 %v, 服务端正在关闭", sig)
+	logger.Infof("Received signal %v, server is shutting down", sig)
 
 	server.Stop()
-	logger.Infof("服务端已关闭")
+	logger.Infof("Server has stopped")
 
 	return nil
 
