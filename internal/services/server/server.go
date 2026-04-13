@@ -154,7 +154,6 @@ func (s *Server) Start() error {
 	s.listenerMu.Lock()
 	s.currentListener = state
 	s.listenerMu.Unlock()
-
 	go s.acceptLoop(state)
 	return nil
 }
@@ -483,6 +482,7 @@ func (s *Server) applyClientConfig(sess *ControlSession, proxies []utils.ApplyCo
 }
 
 func (s *Server) proxyAcceptLoop(entry *proxyEntry) {
+
 	defer func() {
 		_ = entry.listener.Close()
 		s.mu.Lock()
@@ -494,6 +494,7 @@ func (s *Server) proxyAcceptLoop(entry *proxyEntry) {
 	}()
 
 	for {
+
 		userConn, err := entry.listener.Accept()
 		if err != nil {
 			select {
@@ -524,11 +525,15 @@ func (s *Server) proxyAcceptLoop(entry *proxyEntry) {
 		}
 
 		s.logger.Infof("User connection arrived: proxy=%s, src=%s, ip=%s, runID=%s", entry.name, userConn.RemoteAddr(), srcIP, ownerRunID)
+
 		go s.bridgeUserConn(userConn, entry.name, sess)
+
 	}
+
 }
 
 func (s *Server) bridgeUserConn(userConn net.Conn, proxyName string, sess *ControlSession) {
+
 	defer func() { _ = userConn.Close() }()
 
 	workID := uuid.New().String()
@@ -560,9 +565,11 @@ func (s *Server) bridgeUserConn(userConn net.Conn, proxyName string, sess *Contr
 	case <-time.After(10 * time.Second):
 		s.logger.Warnf("Timed out waiting for work connection: workID=%s, proxy=%s", workID, proxyName)
 	}
+
 }
 
 func (s *Server) handleWorkConn(conn net.Conn, payload []byte) {
+
 	var msg utils.StartWorkConnMsg
 	if err := utils.Decode(payload, &msg); err != nil {
 		s.logger.Errorf("Failed to parse StartWorkConnMsg: %v", err)
@@ -581,9 +588,11 @@ func (s *Server) handleWorkConn(conn net.Conn, payload []byte) {
 	}
 
 	ch <- conn
+
 }
 
 func (s *Server) removeClient(runID string) {
+
 	var toClose []net.Listener
 
 	s.mu.Lock()
@@ -611,4 +620,5 @@ func (s *Server) removeClient(runID string) {
 	}
 
 	s.logger.Infof("Client session cleaned up: runID=%s", runID)
+
 }

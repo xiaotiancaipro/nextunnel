@@ -12,6 +12,7 @@ type IpFilter struct {
 }
 
 func (f *IpFilter) AllowIP(remoteAddr net.Addr) (bool, string, string) {
+
 	if len(f.Allow) == 0 && len(f.Deny) == 0 {
 		return true, "", ""
 	}
@@ -34,4 +35,5 @@ func (f *IpFilter) AllowIP(remoteAddr net.Addr) (bool, string, string) {
 		}
 	}
 	return true, ip, ""
+
 }

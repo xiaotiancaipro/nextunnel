@@ -10,16 +10,14 @@ import (
 )
 
 const (
-	MsgLogin           byte = 0x01 // client → server
-	MsgLoginResp       byte = 0x02 // server → client
-	MsgNewProxy        byte = 0x03 // client → server
-	MsgNewProxyResp    byte = 0x04 // server → client
-	MsgNewWorkConn     byte = 0x05 // server → client
-	MsgStartWorkConn   byte = 0x06 // client → server
-	MsgPing            byte = 0x07 // client → server
-	MsgPong            byte = 0x08 // server → client
-	MsgApplyConfig     byte = 0x09 // client → server
-	MsgApplyConfigResp byte = 0x0A // server → client
+	MsgLogin           byte = 0x01
+	MsgLoginResp       byte = 0x02
+	MsgApplyConfig     byte = 0x03
+	MsgApplyConfigResp byte = 0x04
+	MsgNewWorkConn     byte = 0x05
+	MsgStartWorkConn   byte = 0x06
+	MsgPing            byte = 0x07
+	MsgPong            byte = 0x08
 )
 
 const maxMsgSize = 1 << 20 // 1MB max message size
@@ -34,20 +32,8 @@ type LoginRespMsg struct {
 	Error string `json:"error,omitempty"`
 }
 
-type NewProxyMsg struct {
-	Name       string `json:"name"`
-	Type       string `json:"type"`        // currently supports "tcp"
-	RemotePort int    `json:"remote_port"` // server listening port
-}
-
-type NewProxyRespMsg struct {
-	Name  string `json:"name"`
-	Error string `json:"error,omitempty"`
-}
-
-type NewWorkConnMsg struct {
-	WorkID    string `json:"work_id"`    // unique work connection identifier
-	ProxyName string `json:"proxy_name"` // corresponding proxy name
+type ApplyConfigMsg struct {
+	Proxies []ApplyConfigProxyMsg `json:"proxies"`
 }
 
 type ApplyConfigProxyMsg struct {
@@ -56,12 +42,13 @@ type ApplyConfigProxyMsg struct {
 	RemotePort int    `json:"remote_port"`
 }
 
-type ApplyConfigMsg struct {
-	Proxies []ApplyConfigProxyMsg `json:"proxies"`
-}
-
 type ApplyConfigRespMsg struct {
 	Error string `json:"error,omitempty"`
+}
+
+type NewWorkConnMsg struct {
+	WorkID    string `json:"work_id"`    // unique work connection identifier
+	ProxyName string `json:"proxy_name"` // corresponding proxy name
 }
 
 type StartWorkConnMsg struct {
