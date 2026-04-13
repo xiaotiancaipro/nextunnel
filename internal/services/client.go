@@ -3,11 +3,20 @@ package services
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
+)
+
+const (
+	controlHeartbeatInterval = 30 * time.Second
+	controlWriteTimeout      = 10 * time.Second
+	controlReadTimeout       = 90 * time.Second
+	reconnectInitialBackoff  = 2 * time.Second
+	reconnectMaxBackoff      = 60 * time.Second
 )
 
 type ProxyConfig struct {
@@ -62,11 +71,7 @@ func NewClient(p *ClientParams) (*Client, error) {
 }
 
 func (c *Client) Start() error {
-	if err := c.connect(); err != nil {
-		return err
-	}
-	go c.reconnectLoop()
-	return nil
+	return c.connect()
 }
 
 func (c *Client) Stop() {
@@ -79,7 +84,7 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) serverAddrStr() string {
-	return fmt.Sprintf("%s:%d", c.serverAddr, c.serverPort)
+	return net.JoinHostPort(c.serverAddr, strconv.Itoa(c.serverPort))
 }
 
 func (c *Client) connect() error {
@@ -135,6 +140,26 @@ func (c *Client) connect() error {
 
 }
 
+func (c *Client) releaseControlConn(conn net.Conn) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ctrlCon != conn {
+		return false
+	}
+	c.ctrlCon = nil
+	c.runID = ""
+	return true
+}
+
+func (c *Client) handleDisconnect(conn net.Conn, reason string) {
+	if !c.releaseControlConn(conn) {
+		return
+	}
+	_ = conn.Close()
+	c.logger.Warnf("Control connection lost: %s", reason)
+	c.tryReconnect()
+}
+
 func (c *Client) registerProxy(conn net.Conn, proxy ProxyConfig) error {
 
 	msg := utils.NewProxyMsg{
@@ -171,15 +196,28 @@ func (c *Client) registerProxy(conn net.Conn, proxy ProxyConfig) error {
 
 func (c *Client) controlLoop(conn net.Conn) {
 
-	heartbeatTicker := time.NewTicker(30 * time.Second)
+	heartbeatTicker := time.NewTicker(controlHeartbeatInterval)
 	defer heartbeatTicker.Stop()
 
 	msgCh := make(chan msgChan, 1)
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
 	go func() {
 		for {
+			if err := conn.SetReadDeadline(time.Now().Add(controlReadTimeout)); err != nil {
+				select {
+				case msgCh <- msgChan{err: fmt.Errorf("failed to set read deadline: %w", err)}:
+				case <-doneCh:
+				}
+				return
+			}
 			msgType, payload, err := utils.ReadMsg(conn)
-			msgCh <- msgChan{msgType, payload, err}
+			select {
+			case msgCh <- msgChan{msgType, payload, err}:
+			case <-doneCh:
+				return
+			}
 			if err != nil {
 				return
 			}
@@ -189,14 +227,27 @@ func (c *Client) controlLoop(conn net.Conn) {
 	for {
 		select {
 		case <-c.stopCh:
+			_ = conn.Close()
 			return
 		case <-heartbeatTicker.C:
-			c.mu.Lock()
-			_ = utils.WriteMsg(conn, utils.MsgPing, utils.PingMsg{})
-			c.mu.Unlock()
+			if err := conn.SetWriteDeadline(time.Now().Add(controlWriteTimeout)); err != nil {
+				c.handleDisconnect(conn, fmt.Sprintf("failed to set write deadline: %v", err))
+				return
+			}
+			err := utils.WriteMsg(conn, utils.MsgPing, utils.PingMsg{})
+			_ = conn.SetWriteDeadline(time.Time{})
+			if err != nil {
+				c.handleDisconnect(conn, fmt.Sprintf("failed to send heartbeat: %v", err))
+				return
+			}
 		case result := <-msgCh:
 			if result.err != nil {
-				c.logger.Errorf("Failed to read control message: %v", result.err)
+				select {
+				case <-c.stopCh:
+					return
+				default:
+				}
+				c.handleDisconnect(conn, result.err.Error())
 				return
 			}
 			switch result.msgType {
@@ -238,7 +289,7 @@ func (c *Client) handleWorkConn(msg utils.NewWorkConnMsg) {
 	}
 
 	// connect to local service
-	localAddr := fmt.Sprintf("%s:%d", proxy.LocalIP, proxy.LocalPort)
+	localAddr := net.JoinHostPort(proxy.LocalIP, strconv.Itoa(proxy.LocalPort))
 	localConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
 	if err != nil {
 		c.logger.Errorf("Failed to connect to local service [%s → %s]: %v", msg.ProxyName, localAddr, err)
@@ -262,30 +313,8 @@ func (c *Client) findProxy(name string) *ProxyConfig {
 	return nil
 }
 
-func (c *Client) reconnectLoop() {
-	for {
-		select {
-		case <-c.stopCh:
-			return
-		case <-time.After(5 * time.Second):
-			c.mu.Lock()
-			conn := c.ctrlCon
-			c.mu.Unlock()
-			if conn == nil {
-				continue
-			}
-			if err := conn.SetDeadline(time.Now().Add(1 * time.Second)); err != nil {
-				c.logger.Infof("Control connection disconnected, attempting reconnect...")
-				c.tryReconnect()
-			}
-			_ = conn.SetDeadline(time.Time{})
-		}
-	}
-}
-
 func (c *Client) tryReconnect() {
-	backoff := 2 * time.Second
-	maxBackoff := 60 * time.Second
+	backoff := reconnectInitialBackoff
 	for {
 		select {
 		case <-c.stopCh:
@@ -295,8 +324,8 @@ func (c *Client) tryReconnect() {
 			if err := c.connect(); err != nil {
 				c.logger.Errorf("Reconnect failed: %v, will retry in %v", err, backoff)
 				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
+				if backoff > reconnectMaxBackoff {
+					backoff = reconnectMaxBackoff
 				}
 				continue
 			}
