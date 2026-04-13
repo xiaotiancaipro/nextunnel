@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -66,8 +67,10 @@ func WriteMsg(conn net.Conn, msgType byte, payload interface{}) error {
 	binary.BigEndian.PutUint32(buf[1:5], uint32(len(data)))
 	copy(buf[5:], data)
 
-	_, err = conn.Write(buf)
-	return err
+	if _, err := io.Copy(conn, bytes.NewReader(buf)); err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+	return nil
 
 }
 
