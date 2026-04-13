@@ -2,6 +2,7 @@ package configs
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -9,9 +10,10 @@ import (
 )
 
 type ServerConfigs struct {
-	BindPort int              `toml:"bind_port"`
-	Token    string           `toml:"token"`
-	TLS      ServerTLSConfigs `toml:"tls"`
+	BindPort int                   `toml:"bind_port"`
+	Token    string                `toml:"token"`
+	TLS      ServerTLSConfigs      `toml:"tls"`
+	IPFilter ServerIPFilterConfigs `toml:"ip_filter"`
 }
 
 type ServerTLSConfigs struct {
@@ -19,6 +21,11 @@ type ServerTLSConfigs struct {
 	CAFile   string `toml:"ca_file"`
 	CertFile string `toml:"cert_file"`
 	KeyFile  string `toml:"key_file"`
+}
+
+type ServerIPFilterConfigs struct {
+	Allow []string `toml:"allow"`
+	Deny  []string `toml:"deny"`
 }
 
 func NewServer(file string) (*ServerConfigs, error) {
@@ -51,6 +58,25 @@ func (c *ServerConfigs) Validate() error {
 		}
 		if strings.TrimSpace(c.TLS.CAFile) == "" {
 			return fmt.Errorf("tls.ca_file is required when tls is enabled")
+		}
+	}
+	if err := validateIPList("ip_filter.allow", c.IPFilter.Allow); err != nil {
+		return err
+	}
+	if err := validateIPList("ip_filter.deny", c.IPFilter.Deny); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateIPList(field string, ips []string) error {
+	for i, raw := range ips {
+		ip := strings.TrimSpace(raw)
+		if ip == "" {
+			return fmt.Errorf("%s[%d] cannot be empty", field, i)
+		}
+		if net.ParseIP(ip) == nil {
+			return fmt.Errorf("invalid %s[%d]: %s", field, i, raw)
 		}
 	}
 	return nil

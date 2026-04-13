@@ -6,3 +6,7 @@ enabled = false
 ca_file = "./certs/ca.crt"
 cert_file = "./certs/server.crt"
 key_file = "./certs/server.key"
+
+[ip_filter]
+allow = []
+deny = []

@@ -19,6 +19,7 @@ type Server struct {
 	bindPort      int
 	token         string
 	tls           configs.ServerTLSConfigs
+	ipFilter      *IpFilter
 	logger        *logrus.Logger
 	listener      net.Listener
 	mu            sync.RWMutex
@@ -34,6 +35,7 @@ type Params struct {
 	BindPort int
 	Token    string
 	TLS      configs.ServerTLSConfigs
+	IPFilter configs.ServerIPFilterConfigs
 	Logger   *logrus.Logger
 }
 
@@ -48,10 +50,23 @@ func NewServer(params *Params) (*Server, error) {
 	if params.BindPort <= 0 || params.BindPort > 65535 {
 		return nil, fmt.Errorf("invalid bind port: %d", params.BindPort)
 	}
+	allow, err := utils.NormalizeIPList(params.IPFilter.Allow)
+	if err != nil {
+		return nil, fmt.Errorf("invalid allow ip list: %w", err)
+	}
+	deny, err := utils.NormalizeIPList(params.IPFilter.Deny)
+	if err != nil {
+		return nil, fmt.Errorf("invalid deny ip list: %w", err)
+	}
+	filter := &IpFilter{
+		Allow: allow,
+		Deny:  deny,
+	}
 	return &Server{
 		bindPort:    params.BindPort,
 		token:       params.Token,
 		tls:         params.TLS,
+		ipFilter:    filter,
 		logger:      params.Logger,
 		clients:     make(map[string]*ControlSession),
 		proxies:     make(map[string]*proxyEntry),
@@ -317,7 +332,13 @@ func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *ControlSession) {
 				return
 			}
 		}
-		s.logger.Infof("User connection arrived: proxy=%s, src=%s", entry.name, userConn.RemoteAddr())
+		allowed, srcIP, reason := s.ipFilter.AllowIP(userConn.RemoteAddr())
+		if !allowed {
+			s.logger.Warnf("User connection rejected by ip filter: proxy=%s, src=%s, ip=%s, reason=%s", entry.name, userConn.RemoteAddr(), srcIP, reason)
+			_ = userConn.Close()
+			continue
+		}
+		s.logger.Infof("User connection arrived: proxy=%s, src=%s, ip=%s", entry.name, userConn.RemoteAddr(), srcIP)
 		go s.bridgeUserConn(userConn, entry, sess)
 	}
 

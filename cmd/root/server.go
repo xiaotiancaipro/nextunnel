@@ -58,6 +58,10 @@ func (s *Server) Run() error {
 			CertFile: s.Configs.TLS.CertFile,
 			KeyFile:  s.Configs.TLS.KeyFile,
 		},
+		IPFilter: configs.ServerIPFilterConfigs{
+			Allow: s.Configs.IPFilter.Allow,
+			Deny:  s.Configs.IPFilter.Deny,
+		},
 		Logger: logger,
 	})
 	if err != nil {
