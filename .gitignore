@@ -5,6 +5,7 @@ config/
 build/
 dist/
 logs/
+certs/
 .DS_Store
 *.log
 *.toml
