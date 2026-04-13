@@ -26,7 +26,7 @@ func NewClient() *cobra.Command {
 			os.Exit(1)
 		}
 		client := &Client{Configs: configs_}
-		if err := client.StartAndStop(); err != nil {
+		if err := client.Run(); err != nil {
 			cmd.PrintErrf("Client error, %v\n", err)
 			os.Exit(1)
 		}
@@ -38,11 +38,11 @@ func NewClient() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		Run:   fc,
 	}
-	c.Flags().StringP("config", "c", "config/nextunnel-client.toml", "Path to client config file")
+	c.Flags().StringP("config", "c", "client.toml", "Path to client config file")
 	return c
 }
 
-func (c *Client) StartAndStop() error {
+func (c *Client) Run() error {
 
 	logger := utils.NewLogger("client")
 

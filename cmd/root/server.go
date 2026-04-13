@@ -26,7 +26,7 @@ func NewServer() *cobra.Command {
 			os.Exit(1)
 		}
 		server := &Server{Configs: configs_}
-		if err := server.StartAndStop(); err != nil {
+		if err := server.Run(); err != nil {
 			cmd.PrintErrf("Server error, %v\n", err)
 			os.Exit(1)
 		}
@@ -38,11 +38,11 @@ func NewServer() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		Run:   fc,
 	}
-	c.Flags().StringP("config", "c", "config/nextunnel-server.toml", "Path to server config file")
+	c.Flags().StringP("config", "c", "server.toml", "Path to server config file")
 	return c
 }
 
-func (s *Server) StartAndStop() error {
+func (s *Server) Run() error {
 
 	logger := utils.NewLogger("server")
 
