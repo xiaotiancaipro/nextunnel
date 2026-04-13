@@ -1,4 +1,4 @@
-package services
+package client
 
 import (
 	"crypto/tls"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 )
 
@@ -22,38 +23,12 @@ const (
 	reconnectMaxBackoff      = 60 * time.Second
 )
 
-type ProxyConfig struct {
-	Name       string
-	Type       string // currently only "tcp" is supported
-	LocalIP    string
-	LocalPort  int
-	RemotePort int
-}
-
-type ClientParams struct {
-	ServerAddr string
-	ServerPort int
-	Token      string
-	TLS        ClientTLSConfig
-	Proxies    []ProxyConfig
-	Logger     *logrus.Logger
-}
-
-type ClientTLSConfig struct {
-	Enabled            bool
-	ServerName         string
-	CAFile             string
-	CertFile           string
-	KeyFile            string
-	InsecureSkipVerify bool
-}
-
 type Client struct {
 	serverAddr string
 	serverPort int
 	token      string
-	tls        ClientTLSConfig
-	proxies    []ProxyConfig
+	tls        configs.ClientTLSConfigs
+	proxies    []configs.ProxyConfig
 	logger     *logrus.Logger
 	runID      string
 	ctrlCon    net.Conn
@@ -62,13 +37,22 @@ type Client struct {
 	stopOnce   sync.Once
 }
 
+type Params struct {
+	ServerAddr string
+	ServerPort int
+	Token      string
+	TLS        configs.ClientTLSConfigs
+	Proxies    []configs.ProxyConfig
+	Logger     *logrus.Logger
+}
+
 type msgChan struct {
 	msgType byte
 	payload []byte
 	err     error
 }
 
-func NewClient(params *ClientParams) (*Client, error) {
+func NewClient(params *Params) (*Client, error) {
 	if params.ServerAddr == "" {
 		return nil, fmt.Errorf("server address cannot be empty")
 	}
@@ -239,7 +223,7 @@ func (c *Client) handleDisconnect(conn net.Conn, reason string) {
 	c.tryReconnect()
 }
 
-func (c *Client) registerProxy(conn net.Conn, proxy ProxyConfig) error {
+func (c *Client) registerProxy(conn net.Conn, proxy configs.ProxyConfig) error {
 
 	msg := utils.NewProxyMsg{
 		Name:       proxy.Name,
@@ -383,7 +367,7 @@ func (c *Client) handleWorkConn(msg utils.NewWorkConnMsg) {
 
 }
 
-func (c *Client) findProxy(name string) *ProxyConfig {
+func (c *Client) findProxy(name string) *configs.ProxyConfig {
 	for i := range c.proxies {
 		if c.proxies[i].Name == name {
 			return &c.proxies[i]

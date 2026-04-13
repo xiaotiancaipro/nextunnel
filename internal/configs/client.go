@@ -28,9 +28,9 @@ type ClientTLSConfigs struct {
 type ProxyConfig struct {
 	Name       string `toml:"name"`
 	Type       string `toml:"type"`        // currently only "tcp" is supported
-	RemotePort int    `toml:"remote_port"` // port exposed by the server
 	LocalIP    string `toml:"local_ip"`    // local service IP
 	LocalPort  int    `toml:"local_port"`  // local service port
+	RemotePort int    `toml:"remote_port"` // port exposed by the server
 }
 
 func NewClient(file string) (*ClientConfigs, error) {

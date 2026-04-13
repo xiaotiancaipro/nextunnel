@@ -9,8 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/services/client"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
 
 type Client struct {
@@ -25,8 +26,8 @@ func NewClient() *cobra.Command {
 			cmd.PrintErrf("Failed to load client config, %v\n", err)
 			os.Exit(1)
 		}
-		client := &Client{Configs: configs_}
-		if err := client.Run(); err != nil {
+		srv := &Client{Configs: configs_}
+		if err := srv.Run(); err != nil {
 			cmd.PrintErrf("Client error, %v\n", err)
 			os.Exit(1)
 		}
@@ -44,14 +45,14 @@ func NewClient() *cobra.Command {
 
 func (c *Client) Run() error {
 
-	logger := utils.NewLogger("client")
+	logger := logger_.NewLogger("client")
 	if !c.Configs.TLS.Enabled {
 		logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
 	}
 
-	proxies := make([]services.ProxyConfig, 0, len(c.Configs.Proxies))
+	proxies := make([]configs.ProxyConfig, 0, len(c.Configs.Proxies))
 	for _, p := range c.Configs.Proxies {
-		proxies = append(proxies, services.ProxyConfig{
+		proxies = append(proxies, configs.ProxyConfig{
 			Name:       p.Name,
 			Type:       p.Type,
 			RemotePort: p.RemotePort,
@@ -60,11 +61,11 @@ func (c *Client) Run() error {
 		})
 	}
 
-	client, err := services.NewClient(&services.ClientParams{
+	srv, err := client.NewClient(&client.Params{
 		ServerAddr: c.Configs.ServerAddr,
 		ServerPort: c.Configs.ServerPort,
 		Token:      c.Configs.Token,
-		TLS: services.ClientTLSConfig{
+		TLS: configs.ClientTLSConfigs{
 			Enabled:            c.Configs.TLS.Enabled,
 			ServerName:         c.Configs.TLS.ServerName,
 			CAFile:             c.Configs.TLS.CAFile,
@@ -79,7 +80,7 @@ func (c *Client) Run() error {
 		return fmt.Errorf("failed to initialize client: %w", err)
 	}
 
-	if err := client.Start(); err != nil {
+	if err := srv.Start(); err != nil {
 		return fmt.Errorf("failed to start client: %w", err)
 	}
 	logger.Infof("Client started successfully, connected to server: %s:%d, tls=%t", c.Configs.ServerAddr, c.Configs.ServerPort, c.Configs.TLS.Enabled)
@@ -90,7 +91,7 @@ func (c *Client) Run() error {
 	sig := <-sigCh
 	logger.Infof("Received signal %v, client is shutting down", sig)
 
-	client.Stop()
+	srv.Stop()
 	logger.Infof("Client has stopped")
 
 	return nil

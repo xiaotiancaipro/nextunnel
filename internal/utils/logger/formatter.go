@@ -1,4 +1,4 @@
-package utils
+package logger
 
 import (
 	"fmt"
@@ -10,15 +10,6 @@ import (
 type Formatter struct {
 	logrus.TextFormatter
 	module string
-}
-
-func NewLogger(module string) *logrus.Logger {
-	logger := logrus.New()
-	formatter := Formatter{module: module}
-	logger.SetFormatter(&formatter)
-	logger.SetReportCaller(true)
-	logger.SetLevel(logrus.InfoLevel)
-	return logger
 }
 
 func (f *Formatter) Format(entry *logrus.Entry) ([]byte, error) {

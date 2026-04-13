@@ -1,4 +1,4 @@
-package services
+package server
 
 import (
 	"crypto/tls"
@@ -11,31 +11,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 )
-
-type ServerParams struct {
-	BindPort int
-	Token    string
-	TLS      ServerTLSConfig
-	Logger   *logrus.Logger
-}
-
-type ServerTLSConfig struct {
-	Enabled  bool
-	CAFile   string
-	CertFile string
-	KeyFile  string
-}
 
 type Server struct {
 	bindPort      int
 	token         string
-	tls           ServerTLSConfig
+	tls           configs.ServerTLSConfigs
 	logger        *logrus.Logger
 	listener      net.Listener
 	mu            sync.RWMutex
-	clients       map[string]*controlSession // runID → control session
+	clients       map[string]*ControlSession // runID → control session
 	proxies       map[string]*proxyEntry     // proxyName → proxy entry
 	pendingWork   map[string]chan net.Conn
 	pendingWorkMu sync.Mutex
@@ -43,17 +30,11 @@ type Server struct {
 	stopOnce      sync.Once
 }
 
-type controlSession struct {
-	runID  string
-	conn   net.Conn
-	mu     sync.Mutex
-	stopCh chan struct{}
-}
-
-func (s *controlSession) writeMsg(msgType byte, payload interface{}) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return utils.WriteMsg(s.conn, msgType, payload)
+type Params struct {
+	BindPort int
+	Token    string
+	TLS      configs.ServerTLSConfigs
+	Logger   *logrus.Logger
 }
 
 type proxyEntry struct {
@@ -63,7 +44,7 @@ type proxyEntry struct {
 	listener   net.Listener // server listener on remotePort
 }
 
-func NewServer(params *ServerParams) (*Server, error) {
+func NewServer(params *Params) (*Server, error) {
 	if params.BindPort <= 0 || params.BindPort > 65535 {
 		return nil, fmt.Errorf("invalid bind port: %d", params.BindPort)
 	}
@@ -72,7 +53,7 @@ func NewServer(params *ServerParams) (*Server, error) {
 		token:       params.Token,
 		tls:         params.TLS,
 		logger:      params.Logger,
-		clients:     make(map[string]*controlSession),
+		clients:     make(map[string]*ControlSession),
 		proxies:     make(map[string]*proxyEntry),
 		pendingWork: make(map[string]chan net.Conn),
 		stopCh:      make(chan struct{}),
@@ -192,7 +173,7 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 		return
 	}
 
-	sess := &controlSession{
+	sess := &ControlSession{
 		runID:  uuid.New().String(),
 		conn:   conn,
 		stopCh: make(chan struct{}),
@@ -206,7 +187,7 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 
 	defer s.removeClient(sess.runID)
 
-	if err := sess.writeMsg(utils.MsgLoginResp, utils.LoginRespMsg{RunID: sess.runID}); err != nil {
+	if err := sess.WriteMsg(utils.MsgLoginResp, utils.LoginRespMsg{RunID: sess.runID}); err != nil {
 		s.logger.Errorf("Failed to send LoginResp: %v", err)
 		return
 	}
@@ -221,7 +202,7 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 		case utils.MsgNewProxy:
 			s.handleNewProxy(sess, payload)
 		case utils.MsgPing:
-			if err := sess.writeMsg(utils.MsgPong, utils.PongMsg{}); err != nil {
+			if err := sess.WriteMsg(utils.MsgPong, utils.PongMsg{}); err != nil {
 				s.logger.Errorf("Failed to send Pong: %v", err)
 				return
 			}
@@ -232,7 +213,7 @@ func (s *Server) handleControlConn(conn net.Conn, payload []byte) {
 
 }
 
-func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
+func (s *Server) handleNewProxy(sess *ControlSession, payload []byte) {
 
 	var msg utils.NewProxyMsg
 	if err := utils.Decode(payload, &msg); err != nil {
@@ -302,8 +283,8 @@ func (s *Server) handleNewProxy(sess *controlSession, payload []byte) {
 
 }
 
-func (s *Server) sendProxyResp(sess *controlSession, name, errMsg string) {
-	if err := sess.writeMsg(utils.MsgNewProxyResp, utils.NewProxyRespMsg{
+func (s *Server) sendProxyResp(sess *ControlSession, name, errMsg string) {
+	if err := sess.WriteMsg(utils.MsgNewProxyResp, utils.NewProxyRespMsg{
 		Name:  name,
 		Error: errMsg,
 	}); err != nil {
@@ -311,7 +292,7 @@ func (s *Server) sendProxyResp(sess *controlSession, name, errMsg string) {
 	}
 }
 
-func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *controlSession) {
+func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *ControlSession) {
 
 	defer func() {
 		_ = entry.listener.Close()
@@ -342,7 +323,7 @@ func (s *Server) proxyAcceptLoop(entry *proxyEntry, sess *controlSession) {
 
 }
 
-func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *controlSession) {
+func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *ControlSession) {
 
 	defer func() { _ = userConn.Close() }()
 
@@ -363,7 +344,7 @@ func (s *Server) bridgeUserConn(userConn net.Conn, entry *proxyEntry, sess *cont
 		WorkID:    workID,
 		ProxyName: entry.name,
 	}
-	if err := sess.writeMsg(utils.MsgNewWorkConn, msg); err != nil {
+	if err := sess.WriteMsg(utils.MsgNewWorkConn, msg); err != nil {
 		s.logger.Errorf("Failed to send NewWorkConn: %v", err)
 		return
 	}

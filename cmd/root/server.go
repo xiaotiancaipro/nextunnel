@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/services/server"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
 
 type Server struct {
@@ -25,8 +25,8 @@ func NewServer() *cobra.Command {
 			cmd.PrintErrf("Failed to load server config, %v\n", err)
 			os.Exit(1)
 		}
-		server := &Server{Configs: configs_}
-		if err := server.Run(); err != nil {
+		srv := &Server{Configs: configs_}
+		if err := srv.Run(); err != nil {
 			cmd.PrintErrf("Server error, %v\n", err)
 			os.Exit(1)
 		}
@@ -44,15 +44,15 @@ func NewServer() *cobra.Command {
 
 func (s *Server) Run() error {
 
-	logger := utils.NewLogger("server")
+	logger := logger_.NewLogger("server")
 	if !s.Configs.TLS.Enabled {
 		logger.Warn("TLS is disabled; control and work connections will be transmitted in plaintext. Do not expose this server directly to untrusted networks.")
 	}
 
-	server, err := services.NewServer(&services.ServerParams{
+	srv, err := server.NewServer(&server.Params{
 		BindPort: s.Configs.BindPort,
 		Token:    s.Configs.Token,
-		TLS: services.ServerTLSConfig{
+		TLS: configs.ServerTLSConfigs{
 			Enabled:  s.Configs.TLS.Enabled,
 			CAFile:   s.Configs.TLS.CAFile,
 			CertFile: s.Configs.TLS.CertFile,
@@ -64,7 +64,7 @@ func (s *Server) Run() error {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 
-	if err := server.Start(); err != nil {
+	if err := srv.Start(); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 	logger.Infof("Server started successfully, listening on port: %d, tls=%t", s.Configs.BindPort, s.Configs.TLS.Enabled)
@@ -75,7 +75,7 @@ func (s *Server) Run() error {
 	sig := <-sigCh
 	logger.Infof("Received signal %v, server is shutting down", sig)
 
-	server.Stop()
+	srv.Stop()
 	logger.Infof("Server has stopped")
 
 	return nil
