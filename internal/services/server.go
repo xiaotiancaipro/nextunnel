@@ -37,6 +37,7 @@ type Server struct {
 	pendingWork   map[string]chan net.Conn
 	pendingWorkMu sync.Mutex
 	stopCh        chan struct{}
+	stopOnce      sync.Once
 }
 
 type controlSession struct {
@@ -105,18 +106,22 @@ func (s *Server) listen() (net.Listener, error) {
 }
 
 func (s *Server) Stop() {
-	close(s.stopCh)
-	_ = s.listener.Close()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, proxy := range s.proxies {
-		if proxy.listener != nil {
-			_ = proxy.listener.Close()
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+		if s.listener != nil {
+			_ = s.listener.Close()
 		}
-	}
-	for _, sess := range s.clients {
-		_ = sess.conn.Close()
-	}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, proxy := range s.proxies {
+			if proxy.listener != nil {
+				_ = proxy.listener.Close()
+			}
+		}
+		for _, sess := range s.clients {
+			_ = sess.conn.Close()
+		}
+	})
 }
 
 func (s *Server) acceptLoop() {

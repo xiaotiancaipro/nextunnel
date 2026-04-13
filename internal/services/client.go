@@ -57,6 +57,7 @@ type Client struct {
 	ctrlCon    net.Conn
 	mu         sync.Mutex
 	stopCh     chan struct{}
+	stopOnce   sync.Once
 }
 
 type msgChan struct {
@@ -88,12 +89,14 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() {
-	close(c.stopCh)
-	c.mu.Lock()
-	if c.ctrlCon != nil {
-		_ = c.ctrlCon.Close()
-	}
-	c.mu.Unlock()
+	c.stopOnce.Do(func() {
+		close(c.stopCh)
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.ctrlCon != nil {
+			_ = c.ctrlCon.Close()
+		}
+	})
 }
 
 func (c *Client) serverAddrStr() string {
