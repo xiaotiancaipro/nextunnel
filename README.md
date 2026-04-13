@@ -2,18 +2,6 @@
 
 Next-Generation Intranet Tunneling Tool
 
-## Config Reload
-
-Both `nextunnel server` and `nextunnel client` watch their config file and automatically reload when it changes.
-
-- Poll interval: `2s`
-- Manual trigger: send `SIGHUP`
-- Reload scope: full config reload, including listener address, TLS, authentication, and proxy settings
-- Server reload behavior: listener/auth/ip filter updates are applied in place; existing accepted connections keep running
-- Client reload behavior: a new control session connects with the same `client_id`, takes over proxies, then the old session drains before exit
-- Client config requirement: `client_id` must be stable and unique per logical client
-- Safety behavior: if the new config is invalid or fails to start, the current working session/listener stays active
-
 ## Build
 
 Use the build script to compile `nextunnel` for multiple platforms at once:
