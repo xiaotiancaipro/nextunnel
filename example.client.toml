@@ -1,3 +1,4 @@
+client_id = "edge-client-1"
 server_addr = "x.x.x.x"
 server_port = 7000
 token = "your-secret-token"

@@ -8,10 +8,11 @@ import (
 )
 
 type ControlSession struct {
-	runID  string
-	conn   net.Conn
-	mu     sync.Mutex
-	stopCh chan struct{}
+	runID    string
+	clientID string
+	conn     net.Conn
+	mu       sync.Mutex
+	stopCh   chan struct{}
 }
 
 func (s *ControlSession) WriteMsg(msgType byte, payload interface{}) error {

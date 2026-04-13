@@ -9,6 +9,7 @@ import (
 )
 
 type ClientConfigs struct {
+	ClientID   string           `toml:"client_id"`
 	ServerAddr string           `toml:"server_addr"`
 	ServerPort int              `toml:"server_port"`
 	Token      string           `toml:"token"`
@@ -48,6 +49,9 @@ func NewClient(file string) (*ClientConfigs, error) {
 }
 
 func (c *ClientConfigs) Validate() error {
+	if strings.TrimSpace(c.ClientID) == "" {
+		return fmt.Errorf("client_id cannot be empty")
+	}
 	if strings.TrimSpace(c.ServerAddr) == "" {
 		return fmt.Errorf("server_addr cannot be empty")
 	}

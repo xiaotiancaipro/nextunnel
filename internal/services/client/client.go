@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,6 +25,7 @@ const (
 )
 
 type Client struct {
+	clientID   string
 	serverAddr string
 	serverPort int
 	token      string
@@ -35,9 +37,11 @@ type Client struct {
 	mu         sync.Mutex
 	stopCh     chan struct{}
 	stopOnce   sync.Once
+	retiring   atomic.Bool
 }
 
 type Params struct {
+	ClientID   string
 	ServerAddr string
 	ServerPort int
 	Token      string
@@ -53,6 +57,9 @@ type msgChan struct {
 }
 
 func NewClient(params *Params) (*Client, error) {
+	if params.ClientID == "" {
+		return nil, fmt.Errorf("client id cannot be empty")
+	}
 	if params.ServerAddr == "" {
 		return nil, fmt.Errorf("server address cannot be empty")
 	}
@@ -60,6 +67,7 @@ func NewClient(params *Params) (*Client, error) {
 		return nil, fmt.Errorf("invalid server port: %d", params.ServerPort)
 	}
 	return &Client{
+		clientID:   params.ClientID,
 		serverAddr: params.ServerAddr,
 		serverPort: params.ServerPort,
 		token:      params.Token,
@@ -72,6 +80,10 @@ func NewClient(params *Params) (*Client, error) {
 
 func (c *Client) Start() error {
 	return c.connect()
+}
+
+func (c *Client) Retire() {
+	c.retiring.Store(true)
 }
 
 func (c *Client) Stop() {
@@ -96,7 +108,10 @@ func (c *Client) connect() error {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 
-	if err := utils.WriteMsg(conn, utils.MsgLogin, utils.LoginMsg{Token: c.token}); err != nil {
+	if err := utils.WriteMsg(conn, utils.MsgLogin, utils.LoginMsg{
+		ClientID: c.clientID,
+		Token:    c.token,
+	}); err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("failed to send LoginMsg: %w", err)
 	}
@@ -123,20 +138,58 @@ func (c *Client) connect() error {
 		return fmt.Errorf("login failed: %s", loginResp.Error)
 	}
 
+	if err := c.applyConfig(conn); err != nil {
+		_ = conn.Close()
+		return err
+	}
+
 	c.mu.Lock()
 	c.ctrlCon = conn
 	c.runID = loginResp.RunID
 	c.mu.Unlock()
 
-	c.logger.Infof("Login successful, runID=%s", loginResp.RunID)
+	c.logger.Infof("Login successful, clientID=%s, runID=%s", c.clientID, loginResp.RunID)
+	go c.controlLoop(conn)
+	return nil
 
+}
+
+func (c *Client) applyConfig(conn net.Conn) error {
+
+	proxies := make([]utils.ApplyConfigProxyMsg, 0, len(c.proxies))
 	for _, proxy := range c.proxies {
-		if err := c.registerProxy(conn, proxy); err != nil {
-			c.logger.Errorf("Failed to register proxy [%s]: %v", proxy.Name, err)
-		}
+		proxies = append(proxies, utils.ApplyConfigProxyMsg{
+			Name:       proxy.Name,
+			Type:       proxy.Type,
+			RemotePort: proxy.RemotePort,
+		})
 	}
 
-	go c.controlLoop(conn) // start control loop (heartbeat + handle NewWorkConn)
+	if err := utils.WriteMsg(conn, utils.MsgApplyConfig, utils.ApplyConfigMsg{Proxies: proxies}); err != nil {
+		return fmt.Errorf("failed to send ApplyConfigMsg: %w", err)
+	}
+
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	msgType, payload, err := utils.ReadMsg(conn)
+	_ = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to read ApplyConfigResp: %w", err)
+	}
+	if msgType != utils.MsgApplyConfigResp {
+		return fmt.Errorf("expected ApplyConfigResp, got 0x%02x", msgType)
+	}
+
+	var resp utils.ApplyConfigRespMsg
+	if err := utils.Decode(payload, &resp); err != nil {
+		return fmt.Errorf("failed to parse ApplyConfigResp: %w", err)
+	}
+	if resp.Error != "" {
+		return fmt.Errorf("apply config rejected by server: %s", resp.Error)
+	}
+
+	for _, proxy := range c.proxies {
+		c.logger.Infof("Proxy applied successfully: name=%s, remotePort=%d -> %s:%d", proxy.Name, proxy.RemotePort, proxy.LocalIP, proxy.LocalPort)
+	}
 
 	return nil
 
@@ -177,7 +230,7 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	}
 
 	pool, err := x509.SystemCertPool()
-	if (err != nil) || (pool == nil) {
+	if err != nil || pool == nil {
 		pool = x509.NewCertPool()
 	}
 	if ok := pool.AppendCertsFromPEM(caCert); !ok {
@@ -220,41 +273,10 @@ func (c *Client) handleDisconnect(conn net.Conn, reason string) {
 	}
 	_ = conn.Close()
 	c.logger.Warnf("Control connection lost: %s", reason)
+	if c.retiring.Load() {
+		return
+	}
 	c.tryReconnect()
-}
-
-func (c *Client) registerProxy(conn net.Conn, proxy configs.ProxyConfig) error {
-
-	msg := utils.NewProxyMsg{
-		Name:       proxy.Name,
-		Type:       proxy.Type,
-		RemotePort: proxy.RemotePort,
-	}
-	if err := utils.WriteMsg(conn, utils.MsgNewProxy, msg); err != nil {
-		return fmt.Errorf("failed to send NewProxyMsg: %w", err)
-	}
-
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
-	msgType, payload, err := utils.ReadMsg(conn)
-	_ = conn.SetDeadline(time.Time{})
-	if err != nil {
-		return fmt.Errorf("failed to read NewProxyResp: %w", err)
-	}
-	if msgType != utils.MsgNewProxyResp {
-		return fmt.Errorf("expected NewProxyResp, got 0x%02x", msgType)
-	}
-
-	var resp utils.NewProxyRespMsg
-	if err := utils.Decode(payload, &resp); err != nil {
-		return fmt.Errorf("failed to parse NewProxyResp: %w", err)
-	}
-	if resp.Error != "" {
-		return fmt.Errorf("proxy rejected by server: %s", resp.Error)
-	}
-
-	c.logger.Infof("Proxy registered successfully: name=%s, remotePort=%d → %s:%d", proxy.Name, proxy.RemotePort, proxy.LocalIP, proxy.LocalPort)
-	return nil
-
 }
 
 func (c *Client) controlLoop(conn net.Conn) {
@@ -344,25 +366,22 @@ func (c *Client) handleWorkConn(msg utils.NewWorkConnMsg) {
 		return
 	}
 
-	// send StartWorkConn to inform server of this connection's workID
 	if err := utils.WriteMsg(workConn, utils.MsgStartWorkConn, utils.StartWorkConnMsg{WorkID: msg.WorkID}); err != nil {
 		c.logger.Errorf("Failed to send StartWorkConn: %v", err)
 		_ = workConn.Close()
 		return
 	}
 
-	// connect to local service
 	localAddr := net.JoinHostPort(proxy.LocalIP, strconv.Itoa(proxy.LocalPort))
 	localConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
 	if err != nil {
-		c.logger.Errorf("Failed to connect to local service [%s → %s]: %v", msg.ProxyName, localAddr, err)
+		c.logger.Errorf("Failed to connect to local service [%s -> %s]: %v", msg.ProxyName, localAddr, err)
 		_ = workConn.Close()
 		return
 	}
 
 	c.logger.Debugf("Work connection bridged: proxy=%s, workID=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr)
 
-	// bidirectional data forwarding
 	utils.Pipe(workConn, localConn)
 
 }
@@ -383,6 +402,9 @@ func (c *Client) tryReconnect() {
 		case <-c.stopCh:
 			return
 		case <-time.After(backoff):
+			if c.retiring.Load() {
+				return
+			}
 			c.logger.Infof("Reconnecting to server %s ...", c.serverAddrStr())
 			if err := c.connect(); err != nil {
 				c.logger.Errorf("Reconnect failed: %v, will retry in %v", err, backoff)

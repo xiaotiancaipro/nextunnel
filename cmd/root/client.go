@@ -1,12 +1,16 @@
 package root
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/services/client"
@@ -14,8 +18,11 @@ import (
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
 
+const clientReloadDrainGrace = 5 * time.Second
+
 type Client struct {
-	Configs *configs.ClientConfigs
+	Configs    *configs.ClientConfigs
+	ConfigPath string
 }
 
 func NewClient() *cobra.Command {
@@ -26,7 +33,7 @@ func NewClient() *cobra.Command {
 			cmd.PrintErrf("Failed to load client config, %v\n", err)
 			os.Exit(1)
 		}
-		srv := &Client{Configs: configs_}
+		srv := &Client{Configs: configs_, ConfigPath: configFile}
 		if err := srv.Run(); err != nil {
 			cmd.PrintErrf("Client error, %v\n", err)
 			os.Exit(1)
@@ -46,12 +53,87 @@ func NewClient() *cobra.Command {
 func (c *Client) Run() error {
 
 	logger := logger_.NewLogger("client")
-	if !c.Configs.TLS.Enabled {
+	srv, err := c.startClient(c.Configs, logger)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var mu sync.Mutex
+	currentClient := srv
+	var drainingClients []*client.Client
+	stopped := false
+
+	reloadClient := func(source string) {
+		cfg, err := configs.NewClient(c.ConfigPath)
+		if err != nil {
+			logger.Warnf("%s: failed to reload config: %v", source, err)
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if stopped {
+			return
+		}
+
+		prevClient := currentClient
+		logger.Infof("%s: applying zero-downtime client config reload", source)
+
+		nextClient, err := c.startClient(cfg, logger)
+		if err != nil {
+			logger.Errorf("%s: failed to start client with new config: %v", source, err)
+			return
+		}
+
+		currentClient = nextClient
+		c.Configs = cfg
+		if prevClient != nil {
+			prevClient.Retire()
+			drainingClients = append(drainingClients, prevClient)
+			time.AfterFunc(clientReloadDrainGrace, prevClient.Stop)
+		}
+		logger.Infof("%s: client config reloaded successfully", source)
+	}
+
+	go watchConfigChanges(ctx, c.ConfigPath, reloadClient, logger)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	for {
+		sig := <-sigCh
+		if sig == syscall.SIGHUP {
+			reloadClient("SIGHUP")
+			continue
+		}
+		logger.Infof("Received signal %v, client is shutting down", sig)
+		mu.Lock()
+		stopped = true
+		cancel()
+		if currentClient != nil {
+			currentClient.Stop()
+		}
+		for _, draining := range drainingClients {
+			draining.Stop()
+		}
+		mu.Unlock()
+		logger.Infof("Client has stopped")
+		return nil
+	}
+
+}
+
+func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) (*client.Client, error) {
+
+	if !cfg.TLS.Enabled {
 		logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
 	}
 
-	proxies := make([]configs.ProxyConfig, 0, len(c.Configs.Proxies))
-	for _, p := range c.Configs.Proxies {
+	proxies := make([]configs.ProxyConfig, 0, len(cfg.Proxies))
+	for _, p := range cfg.Proxies {
 		proxies = append(proxies, configs.ProxyConfig{
 			Name:       p.Name,
 			Type:       p.Type,
@@ -62,38 +144,29 @@ func (c *Client) Run() error {
 	}
 
 	srv, err := client.NewClient(&client.Params{
-		ServerAddr: c.Configs.ServerAddr,
-		ServerPort: c.Configs.ServerPort,
-		Token:      c.Configs.Token,
+		ClientID:   cfg.ClientID,
+		ServerAddr: cfg.ServerAddr,
+		ServerPort: cfg.ServerPort,
+		Token:      cfg.Token,
 		TLS: configs.ClientTLSConfigs{
-			Enabled:            c.Configs.TLS.Enabled,
-			ServerName:         c.Configs.TLS.ServerName,
-			CAFile:             c.Configs.TLS.CAFile,
-			CertFile:           c.Configs.TLS.CertFile,
-			KeyFile:            c.Configs.TLS.KeyFile,
-			InsecureSkipVerify: c.Configs.TLS.InsecureSkipVerify,
+			Enabled:            cfg.TLS.Enabled,
+			ServerName:         cfg.TLS.ServerName,
+			CAFile:             cfg.TLS.CAFile,
+			CertFile:           cfg.TLS.CertFile,
+			KeyFile:            cfg.TLS.KeyFile,
+			InsecureSkipVerify: cfg.TLS.InsecureSkipVerify,
 		},
 		Proxies: proxies,
 		Logger:  logger,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize client: %w", err)
+		return nil, fmt.Errorf("failed to initialize client: %w", err)
 	}
-
 	if err := srv.Start(); err != nil {
-		return fmt.Errorf("failed to start client: %w", err)
+		return nil, fmt.Errorf("failed to start client: %w", err)
 	}
-	logger.Infof("Client started successfully, connected to server: %s:%d, tls=%t", c.Configs.ServerAddr, c.Configs.ServerPort, c.Configs.TLS.Enabled)
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	sig := <-sigCh
-	logger.Infof("Received signal %v, client is shutting down", sig)
-
-	srv.Stop()
-	logger.Infof("Client has stopped")
-
-	return nil
+	logger.Infof("Client started successfully, client_id=%s, connected to server: %s:%d, tls=%t", cfg.ClientID, cfg.ServerAddr, cfg.ServerPort, cfg.TLS.Enabled)
+	return srv, nil
 
 }

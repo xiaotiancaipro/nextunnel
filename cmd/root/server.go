@@ -1,12 +1,14 @@
 package root
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/services/server"
@@ -14,7 +16,8 @@ import (
 )
 
 type Server struct {
-	Configs *configs.ServerConfigs
+	Configs    *configs.ServerConfigs
+	ConfigPath string
 }
 
 func NewServer() *cobra.Command {
@@ -25,7 +28,7 @@ func NewServer() *cobra.Command {
 			cmd.PrintErrf("Failed to load server config, %v\n", err)
 			os.Exit(1)
 		}
-		srv := &Server{Configs: configs_}
+		srv := &Server{Configs: configs_, ConfigPath: configFile}
 		if err := srv.Run(); err != nil {
 			cmd.PrintErrf("Server error, %v\n", err)
 			os.Exit(1)
@@ -45,43 +48,78 @@ func NewServer() *cobra.Command {
 func (s *Server) Run() error {
 
 	logger := logger_.NewLogger("server")
-	if !s.Configs.TLS.Enabled {
+	srv, err := s.startServer(s.Configs, logger)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	reloadServer := func(source string) {
+		cfg, err := configs.NewServer(s.ConfigPath)
+		if err != nil {
+			logger.Warnf("%s: failed to reload config: %v", source, err)
+			return
+		}
+		logger.Infof("%s: applying zero-downtime server config reload", source)
+		if err := srv.ApplyConfig(cfg); err != nil {
+			logger.Errorf("%s: failed to reload server config: %v", source, err)
+			return
+		}
+		s.Configs = cfg
+		logger.Infof("%s: server config reloaded successfully", source)
+	}
+
+	go watchConfigChanges(ctx, s.ConfigPath, reloadServer, logger)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	for {
+		sig := <-sigCh
+		if sig == syscall.SIGHUP {
+			reloadServer("SIGHUP")
+			continue
+		}
+		logger.Infof("Received signal %v, server is shutting down", sig)
+		cancel()
+		srv.Stop()
+		logger.Infof("Server has stopped")
+		return nil
+	}
+
+}
+
+func (s *Server) startServer(cfg *configs.ServerConfigs, logger *logrus.Logger) (*server.Server, error) {
+
+	if !cfg.TLS.Enabled {
 		logger.Warn("TLS is disabled; control and work connections will be transmitted in plaintext. Do not expose this server directly to untrusted networks.")
 	}
 
 	srv, err := server.NewServer(&server.Params{
-		BindPort: s.Configs.BindPort,
-		Token:    s.Configs.Token,
+		BindPort: cfg.BindPort,
+		Token:    cfg.Token,
 		TLS: configs.ServerTLSConfigs{
-			Enabled:  s.Configs.TLS.Enabled,
-			CAFile:   s.Configs.TLS.CAFile,
-			CertFile: s.Configs.TLS.CertFile,
-			KeyFile:  s.Configs.TLS.KeyFile,
+			Enabled:  cfg.TLS.Enabled,
+			CAFile:   cfg.TLS.CAFile,
+			CertFile: cfg.TLS.CertFile,
+			KeyFile:  cfg.TLS.KeyFile,
 		},
 		IPFilter: configs.ServerIPFilterConfigs{
-			Allow: s.Configs.IPFilter.Allow,
-			Deny:  s.Configs.IPFilter.Deny,
+			Allow: cfg.IPFilter.Allow,
+			Deny:  cfg.IPFilter.Deny,
 		},
 		Logger: logger,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize server: %w", err)
+		return nil, fmt.Errorf("failed to initialize server: %w", err)
 	}
-
 	if err := srv.Start(); err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+		return nil, fmt.Errorf("failed to start server: %w", err)
 	}
-	logger.Infof("Server started successfully, listening on port: %d, tls=%t", s.Configs.BindPort, s.Configs.TLS.Enabled)
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	sig := <-sigCh
-	logger.Infof("Received signal %v, server is shutting down", sig)
-
-	srv.Stop()
-	logger.Infof("Server has stopped")
-
-	return nil
+	logger.Infof("Server started successfully, listening on port: %d, tls=%t", cfg.BindPort, cfg.TLS.Enabled)
+	return srv, nil
 
 }
