@@ -4,8 +4,7 @@ bin/
 config/
 build/
 dist/
-logs/
-certs/
+test/
 .DS_Store
 *.log
 *.toml
