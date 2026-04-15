@@ -2,7 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/cmd/root"
+	"github.com/xiaotiancaipro/nextunnel/cmd/root/client"
+	"github.com/xiaotiancaipro/nextunnel/cmd/root/server"
 )
 
 func New() *cobra.Command {
@@ -12,7 +13,7 @@ func New() *cobra.Command {
 		Args:    cobra.ExactArgs(0),
 		Run:     func(cmd *cobra.Command, _ []string) { _ = cmd.Help() },
 	}
-	c.AddCommand(root.NewServer())
-	c.AddCommand(root.NewClient())
+	c.AddCommand(server.New())
+	c.AddCommand(client.NewClient())
 	return c
 }

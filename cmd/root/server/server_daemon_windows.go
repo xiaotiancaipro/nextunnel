@@ -1,6 +1,6 @@
 //go:build windows
 
-package root
+package server
 
 import "fmt"
 

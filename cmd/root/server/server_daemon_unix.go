@@ -1,6 +1,6 @@
 //go:build !windows
 
-package root
+package server
 
 import (
 	"fmt"
@@ -36,17 +36,21 @@ func ensureStalePidFileCleared(path string) error {
 }
 
 func runServerDaemonStart(configFile string, pidPath string) error {
+
 	if err := ensureStalePidFileCleared(pidPath); err != nil {
 		return err
 	}
+
 	absConfig, err := filepath.Abs(configFile)
 	if err != nil {
 		return fmt.Errorf("resolve config path: %w", err)
 	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
+
 	absExe, err := filepath.Abs(exe)
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)
