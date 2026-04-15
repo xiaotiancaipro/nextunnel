@@ -98,7 +98,7 @@ func (c *Client) Run() error {
 		logger.Infof("%s: client config reloaded successfully", source)
 	}
 
-	go watchConfigChanges(ctx, c.ConfigPath, reloadClient, logger)
+	go utils.WatchConfigChanges(ctx, c.ConfigPath, reloadClient, logger)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
