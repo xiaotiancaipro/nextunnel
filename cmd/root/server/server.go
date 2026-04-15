@@ -12,8 +12,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	configs_ "github.com/xiaotiancaipro/nextunnel/internal/configs"
-	server_ "github.com/xiaotiancaipro/nextunnel/internal/services/server"
+	configs_ "github.com/xiaotiancaipro/nextunnel/internal/server/configs"
+	server_ "github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
 

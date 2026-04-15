@@ -1,4 +1,4 @@
-package server
+package services
 
 import (
 	"crypto/tls"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 )
 

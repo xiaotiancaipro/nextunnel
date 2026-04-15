@@ -1,4 +1,4 @@
-package client
+package services
 
 import (
 	"crypto/tls"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 )
 

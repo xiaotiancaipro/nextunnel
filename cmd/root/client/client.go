@@ -12,8 +12,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/services/client"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
@@ -63,7 +63,7 @@ func (c *Client) Run() error {
 
 	var mu sync.Mutex
 	currentClient := srv
-	var drainingClients []*client.Client
+	var drainingClients []*services.Client
 	stopped := false
 
 	reloadClient := func(source string) {
@@ -126,7 +126,7 @@ func (c *Client) Run() error {
 
 }
 
-func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) (*client.Client, error) {
+func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) (*services.Client, error) {
 
 	if !cfg.TLS.Enabled {
 		logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
@@ -143,7 +143,7 @@ func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) 
 		})
 	}
 
-	srv, err := client.NewClient(&client.Params{
+	srv, err := services.NewClient(&services.Params{
 		ClientID:   cfg.ClientID,
 		ServerAddr: cfg.ServerAddr,
 		ServerPort: cfg.ServerPort,
