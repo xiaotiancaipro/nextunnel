@@ -86,7 +86,7 @@ func (s *server) run(cmd *cobra.Command, args []string) {
 
 	s.configs = configs
 	s.configPath = configFile
-	s.logger = logger_.NewLogger("nextunnel-server")
+	s.logger = logger_.New("nextunnel-server")
 	if err := s.startAndStop(); err != nil {
 		cmd.PrintErrf("Server error, %v\n", err)
 		os.Exit(1)
