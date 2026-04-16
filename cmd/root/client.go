@@ -52,7 +52,10 @@ func NewClient() *cobra.Command {
 
 func (c *Client) Run() error {
 
-	logger := logger_.New("client")
+	logger, err := logger_.New("client", utils.LogPathBesideConfig(c.ConfigPath))
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
 	srv, err := c.startClient(c.Configs, logger)
 	if err != nil {
 		return err

@@ -32,7 +32,7 @@ func NewServer() *cobra.Command {
 		Use:   "server",
 		Short: "Manage nextunnel server",
 		Args:  cobra.ExactArgs(0),
-		Run:   server{}.run,
+		Run:   new(server).run,
 	}
 	c.Flags().StringP("workdir", "w", ".nextunnel", "Working directory")
 	c.Flags().StringP("daemon", "d", "", "Daemon control: start, stop, reload")
@@ -89,7 +89,11 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 
 	s.configs = configs
 	s.configPath = configFile
-	s.logger = logger_.New("nextunnel-server")
+	s.logger, err = logger_.New("nextunnel-server", logFile)
+	if err != nil {
+		cmd.PrintErrf("Failed to init logger: %v\n", err)
+		os.Exit(1)
+	}
 	if err := s.startAndStop(); err != nil {
 		cmd.PrintErrf("Server error, %v\n", err)
 		os.Exit(1)
