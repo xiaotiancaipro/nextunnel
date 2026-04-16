@@ -6,9 +6,32 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
-// ResolvePidPath returns flagPid if set, otherwise configFile+".pid".
+func EnsureStalePidFileCleared(file string) error {
+	pid, err := ReadPidFile(file)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		_ = os.Remove(file)
+		return nil
+	}
+	if ProcessAlive(pid) {
+		return fmt.Errorf("server already running (pid %d)", pid)
+	}
+	return os.Remove(file)
+}
+
+func ProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil
+}
+
 func ResolvePidPath(configFile, flagPid string) string {
 	if flagPid != "" {
 		return flagPid
@@ -32,7 +55,6 @@ func WritePidFile(path string, pid int) error {
 	return os.WriteFile(path, []byte(fmt.Sprintf("%d\n", pid)), 0o600)
 }
 
-// LogPathBesideConfig returns a log file path next to the config (e.g. server.toml -> server.log).
 func LogPathBesideConfig(configFile string) string {
 	if abs, err := filepath.Abs(configFile); err == nil {
 		return logPathWithBase(abs)
