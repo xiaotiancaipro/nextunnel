@@ -1,4 +1,4 @@
-package server
+package root
 
 import (
 	"errors"
@@ -27,7 +27,7 @@ type server struct {
 	logger     *logrus.Logger
 }
 
-func New() *cobra.Command {
+func NewServer() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "server",
 		Short: "Manage nextunnel server",
