@@ -19,8 +19,6 @@ import (
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
 
-const serverDaemonPidEnvKey = "NEXTUNNEL_SERVER_PIDFILE"
-
 type server struct {
 	workdir    string
 	configFile string
@@ -99,17 +97,6 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	if err := s.startAndStop(); err != nil {
-		cmd.PrintErrf("Server error, %v\n", err)
-		os.Exit(1)
-	}
-
-	os.Exit(0)
-
-}
-
-func (s *server) startAndStop() error {
-
 	if !s.configs.TLS.Enabled {
 		s.logger.Warn("TLS is disabled; control and work connections will be transmitted in plaintext. Do not expose this server directly to untrusted networks.")
 	}
@@ -123,10 +110,12 @@ func (s *server) startAndStop() error {
 	}
 	srv, err := server_.NewServer(params)
 	if err != nil {
-		return fmt.Errorf("failed to initialize server: %w", err)
+		cmd.PrintErrf("failed to initialize server: %v", err)
+		os.Exit(1)
 	}
 	if err := srv.Start(); err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+		cmd.PrintErrf("failed to start server: %v", err)
+		os.Exit(1)
 	}
 	s.logger.Infof("Server started successfully, listening on port: %d, tls=%t", s.configs.BindPort, s.configs.TLS.Enabled)
 
@@ -157,7 +146,7 @@ func (s *server) startAndStop() error {
 		srv.Stop()
 		s.logger.Info("Server has stopped")
 
-		return nil
+		os.Exit(0)
 
 	}
 
@@ -181,20 +170,18 @@ func (s *server) daemonStart() error {
 
 	cmd := exec.Command(absExe, "server", "--workdir", s.workdir)
 	cmd.Stdin = nil
-	cmd.Stdout = s.logFile
-	cmd.Stderr = s.logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	if err := cmd.Start(); err != nil {
-		_ = s.logFile.Close()
 		return fmt.Errorf("start daemon process: %w", err)
 	}
-	_ = s.logFile.Close()
+
 	pid := cmd.Process.Pid
 	if err := utils.WritePidFile(s.pidFile, pid); err != nil {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 		return fmt.Errorf("write pid file: %w", err)
 	}
+
 	if err := cmd.Process.Release(); err != nil {
 		return fmt.Errorf("release process: %w", err)
 	}
