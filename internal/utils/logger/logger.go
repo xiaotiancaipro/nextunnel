@@ -17,10 +17,10 @@ const (
 	retentionAge = 30 * 24 * time.Hour
 )
 
-func New(module, file string) (*logrus.Logger, error) {
+func New(file string) (*logrus.Logger, error) {
 
 	logger := logrus.New()
-	logger.SetFormatter(&Formatter{module: module})
+	logger.SetFormatter(new(Formatter))
 	logger.SetReportCaller(true)
 	logger.SetLevel(logrus.InfoLevel)
 

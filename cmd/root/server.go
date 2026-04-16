@@ -53,7 +53,7 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	logger, err := logger_.New("nextunnel-server", logFile)
+	logger, err := logger_.New(logFile)
 	if err != nil {
 		cmd.PrintErrf("Failed to init logger: %v\n", err)
 		os.Exit(1)

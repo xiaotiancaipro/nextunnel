@@ -93,7 +93,7 @@ func (c *client) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	logger, err := logger_.New("nextunnel-client", logFile)
+	logger, err := logger_.New(logFile)
 	if err != nil {
 		utils.NotifyDaemonStartFailure(fmt.Errorf("init logger: %w", err))
 		cmd.PrintErrf("Failed to init logger: %v\n", err)
