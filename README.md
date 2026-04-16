@@ -2,28 +2,52 @@
 
 Next-Generation Intranet Tunneling Tool
 
-## Build
+## server configuration
 
-Use the build script to compile `nextunnel` for multiple platforms at once:
+```toml
+bind_port = 7000
+token = "your-secret-token"
 
-```bash
-./scripts/build.sh
+[tls]
+enabled = false
+ca_file = "./certs/ca.crt"
+cert_file = "./certs/server.crt"
+key_file = "./certs/server.key"
+
+[ip_filter]
+allow = []
+deny = []
 ```
 
-By default it builds:
+## client configuration
 
-- `darwin/amd64`
-- `darwin/arm64`
-- `linux/amd64`
-- `linux/arm64`
-- `windows/amd64`
-- `windows/arm64`
+```toml
+client_id = "edge-client-1"
+server_addr = "x.x.x.x"
+server_port = 7000
+token = "your-secret-token"
 
-Built binaries are written to `./bin`.
+[tls]
+enabled = false
+server_name = "your-server-domain"
+ca_file = "./certs/ca.crt"
+cert_file = "./certs/client.crt"
+key_file = "./certs/client.key"
+insecure_skip_verify = false
 
-Examples:
+# Example 1
+[[proxies]]
+name = "ssh"
+type = "tcp"
+local_ip = "127.0.0.1"
+local_port = 22
+remote_port = 6000
 
-```bash
-./scripts/build.sh --targets linux/amd64,linux/arm64
-./scripts/build.sh --output-dir ./dist
+# Example 2
+[[proxies]]
+name = "web"
+type = "tcp"
+local_ip = "127.0.0.1"
+local_port = 8080
+remote_port = 8000
 ```
