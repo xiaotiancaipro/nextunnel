@@ -2,12 +2,15 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
+
+const DaemonReadyEnv = "NEXTUNNEL_DAEMON_READY_FD"
 
 func EnsureStalePidFileCleared(file string) error {
 	pid, err := ReadPidFile(file)
@@ -32,13 +35,6 @@ func ProcessAlive(pid int) bool {
 	return err == nil
 }
 
-func ResolvePidPath(configFile, flagPid string) string {
-	if flagPid != "" {
-		return flagPid
-	}
-	return configFile + ".pid"
-}
-
 func ReadPidFile(path string) (int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -55,16 +51,66 @@ func WritePidFile(path string, pid int) error {
 	return os.WriteFile(path, []byte(fmt.Sprintf("%d\n", pid)), 0o600)
 }
 
-func LogPathBesideConfig(configFile string) string {
-	if abs, err := filepath.Abs(configFile); err == nil {
-		return logPathWithBase(abs)
-	}
-	return logPathWithBase(configFile)
+func NotifyDaemonReady() {
+	NotifyDaemonStartStatus("ready")
 }
 
-func logPathWithBase(cfgPath string) string {
-	base := filepath.Base(cfgPath)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	return filepath.Join(filepath.Dir(cfgPath), name+".log")
+func NotifyDaemonStartFailure(err error) {
+	if err == nil {
+		return
+	}
+	NotifyDaemonStartStatus("error: " + err.Error())
+}
+
+func NotifyDaemonStartStatus(status string) {
+	fdStr := strings.TrimSpace(os.Getenv(DaemonReadyEnv))
+	if fdStr == "" || status == "" {
+		return
+	}
+	fd, err := strconv.Atoi(fdStr)
+	if err != nil || fd < 0 {
+		return
+	}
+	pipe := os.NewFile(uintptr(fd), DaemonReadyEnv)
+	if pipe == nil {
+		return
+	}
+	_, _ = pipe.WriteString(status + "\n")
+	_ = pipe.Close()
+	_ = os.Unsetenv(DaemonReadyEnv)
+}
+
+func AwaitDaemonReady(readyR *os.File) error {
+	type daemonReadyResult struct {
+		status string
+		err    error
+	}
+
+	resultCh := make(chan daemonReadyResult, 1)
+	go func() {
+		data, err := io.ReadAll(readyR)
+		resultCh <- daemonReadyResult{
+			status: strings.TrimSpace(string(data)),
+			err:    err,
+		}
+	}()
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			return fmt.Errorf("read readiness status: %w", result.err)
+		}
+		switch {
+		case result.status == "ready":
+			return nil
+		case result.status == "":
+			return fmt.Errorf("process exited before reporting ready")
+		case strings.HasPrefix(result.status, "error: "):
+			return fmt.Errorf("process exited before reporting ready: %w", fmt.Errorf(strings.TrimSpace(strings.TrimPrefix(result.status, "error: "))))
+		default:
+			return fmt.Errorf("unexpected readiness status %q", result.status)
+		}
+	case <-time.After(15 * time.Second):
+		return fmt.Errorf("timed out waiting for daemon readiness")
+	}
 }

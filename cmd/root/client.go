@@ -24,6 +24,8 @@ import (
 type client struct {
 	workdir string
 	pidFile string
+	configs *configs_.ClientConfigs
+	logger  *logrus.Logger
 }
 
 func NewClient() *cobra.Command {
@@ -43,24 +45,13 @@ func (c *client) run(cmd *cobra.Command, _ []string) {
 	workdir, err1 := cmd.Flags().GetString("workdir")
 	daemonOp, err2 := cmd.Flags().GetString("daemon")
 	if err := errors.Join(err1, err2); err != nil {
+		utils.NotifyDaemonStartFailure(fmt.Errorf("invalid flags: %w", err))
 		cmd.PrintErrf("Invalid flags: %v\n", err)
 		os.Exit(1)
 	}
 
 	configFile := path.Join(workdir, "nextunnel.toml")
 	logFile := path.Join(workdir, "logs", "nextunnel.log")
-
-	configs, err := configs_.NewClient(configFile)
-	if err != nil {
-		cmd.PrintErrf("Failed to load client config, %v\n", err)
-		os.Exit(1)
-	}
-
-	logger, err := logger_.New("nextunnel-client", logFile)
-	if err != nil {
-		cmd.PrintErrf("Failed to init logger: %v\n", err)
-		os.Exit(1)
-	}
 
 	c.workdir = workdir
 	c.pidFile = path.Join(workdir, "nextunnel.pid")
@@ -90,15 +81,35 @@ func (c *client) run(cmd *cobra.Command, _ []string) {
 		cmd.Println("nextunnel client reload signal sent (SIGHUP)")
 		return
 	default:
+		utils.NotifyDaemonStartFailure(errors.New("--daemon must be start, stop, or reload"))
 		cmd.PrintErrf("--daemon must be start, stop, or reload\n")
 		os.Exit(1)
 	}
 
-	srv, err := c.start(configs, logger)
+	configs, err := configs_.NewClient(configFile)
 	if err != nil {
+		utils.NotifyDaemonStartFailure(fmt.Errorf("load client config: %w", err))
+		cmd.PrintErrf("Failed to load client config, %v\n", err)
+		os.Exit(1)
+	}
+
+	logger, err := logger_.New("nextunnel-client", logFile)
+	if err != nil {
+		utils.NotifyDaemonStartFailure(fmt.Errorf("init logger: %w", err))
+		cmd.PrintErrf("Failed to init logger: %v\n", err)
+		os.Exit(1)
+	}
+
+	c.configs = configs
+	c.logger = logger
+
+	srv, err := c.start()
+	if err != nil {
+		utils.NotifyDaemonStartFailure(err)
 		cmd.PrintErrf("Failed to start client: %v\n", err)
 		os.Exit(1)
 	}
+	utils.NotifyDaemonReady()
 
 	var mu sync.Mutex
 	var drainingClients []*services.Client
@@ -123,7 +134,8 @@ func (c *client) run(cmd *cobra.Command, _ []string) {
 				continue
 			}
 			logger.Info("Applying zero-downtime client config reload")
-			nextClient, err := c.start(configsNew, logger)
+			c.configs = configsNew
+			nextClient, err := c.start()
 			if err != nil {
 				logger.Errorf("Failed to start client with new config: %v", err)
 				mu.Unlock()
@@ -160,14 +172,14 @@ func (c *client) run(cmd *cobra.Command, _ []string) {
 
 }
 
-func (c *client) start(cfg *configs_.ClientConfigs, logger *logrus.Logger) (*services.Client, error) {
+func (c *client) start() (*services.Client, error) {
 
-	if !cfg.TLS.Enabled {
-		logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
+	if !c.configs.TLS.Enabled {
+		c.logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
 	}
 
-	proxies := make([]configs_.ProxyConfig, 0, len(cfg.Proxies))
-	for _, p := range cfg.Proxies {
+	proxies := make([]configs_.ProxyConfig, 0, len(c.configs.Proxies))
+	for _, p := range c.configs.Proxies {
 		proxies = append(proxies, configs_.ProxyConfig{
 			Name:       p.Name,
 			Type:       p.Type,
@@ -178,13 +190,13 @@ func (c *client) start(cfg *configs_.ClientConfigs, logger *logrus.Logger) (*ser
 	}
 
 	params := &services.Params{
-		ClientID:   cfg.ClientID,
-		ServerAddr: cfg.ServerAddr,
-		ServerPort: cfg.ServerPort,
-		Token:      cfg.Token,
-		TLS:        cfg.TLS,
+		ClientID:   c.configs.ClientID,
+		ServerAddr: c.configs.ServerAddr,
+		ServerPort: c.configs.ServerPort,
+		Token:      c.configs.Token,
+		TLS:        c.configs.TLS,
 		Proxies:    proxies,
-		Logger:     logger,
+		Logger:     c.logger,
 	}
 	srv, err := services.NewClient(params)
 	if err != nil {
@@ -194,7 +206,7 @@ func (c *client) start(cfg *configs_.ClientConfigs, logger *logrus.Logger) (*ser
 		return nil, fmt.Errorf("failed to start client: %w", err)
 	}
 
-	logger.Infof("Client started successfully, client_id=%s, connected to server: %s:%d, tls=%t", cfg.ClientID, cfg.ServerAddr, cfg.ServerPort, cfg.TLS.Enabled)
+	c.logger.Infof("Client started successfully, client_id=%s, connected to server: %s:%d, tls=%t", c.configs.ClientID, c.configs.ServerAddr, c.configs.ServerPort, c.configs.TLS.Enabled)
 	return srv, nil
 
 }
@@ -215,18 +227,36 @@ func (c *client) daemonStart() error {
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 
+	readyR, readyW, err := os.Pipe()
+	if err != nil {
+		return fmt.Errorf("create daemon readiness pipe: %w", err)
+	}
+	defer func() { _ = readyR.Close() }()
+
 	cmd := exec.Command(absExe, "client", "--workdir", c.workdir)
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.ExtraFiles = []*os.File{readyW}
+	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%d", utils.DaemonReadyEnv, 3))
 
 	if err := cmd.Start(); err != nil {
+		_ = readyW.Close()
 		return fmt.Errorf("start daemon process: %w", err)
 	}
+	_ = readyW.Close()
 
 	pid := cmd.Process.Pid
 	if err := utils.WritePidFile(c.pidFile, pid); err != nil {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 		return fmt.Errorf("write pid file: %w", err)
+	}
+
+	if err := utils.AwaitDaemonReady(readyR); err != nil {
+		_ = os.Remove(c.pidFile)
+		if utils.ProcessAlive(pid) {
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+		}
+		return fmt.Errorf("daemon failed to become ready: %w", err)
 	}
 
 	if err := cmd.Process.Release(); err != nil {
