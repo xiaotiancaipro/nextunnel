@@ -22,8 +22,11 @@ import (
 const serverDaemonPidEnvKey = "NEXTUNNEL_SERVER_PIDFILE"
 
 type server struct {
+	workdir    string
+	configFile string
+	pidFile    string
+	logFile    string
 	configs    *configs_.ServerConfigs
-	configPath string
 	logger     *logrus.Logger
 }
 
@@ -48,29 +51,44 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	configFile := path.Join(workdir, "nextunnel.toml")
-	pidFile := path.Join(workdir, "nextunnel.pid")
-	logFile := path.Join(workdir, "logs", "nextunnel.log")
+	s.workdir = workdir
+	s.configFile = path.Join(workdir, "nextunnel.toml")
+	s.pidFile = path.Join(workdir, "nextunnel.pid")
+	s.logFile = path.Join(workdir, "logs", "nextunnel.log")
+
+	configs, err := configs_.NewServer(s.configFile)
+	if err != nil {
+		cmd.PrintErrf("Failed to load server config, %v\n", err)
+		os.Exit(1)
+	}
+	s.configs = configs
+
+	logger, err := logger_.New("nextunnel-server", s.logFile)
+	if err != nil {
+		cmd.PrintErrf("Failed to init logger: %v\n", err)
+		os.Exit(1)
+	}
+	s.logger = logger
 
 	daemonOp = strings.ToLower(strings.TrimSpace(daemonOp))
 	switch daemonOp {
 	case "":
 	case "start":
-		if err := daemonStart(configFile, pidFile); err != nil {
+		if err := s.daemonStart(); err != nil {
 			cmd.PrintErrf("Daemon start failed: %v\n", err)
 			os.Exit(1)
 		}
-		cmd.Printf("nextunnel server started (pid file %s, log %s)\n", pidFile, logFile)
+		cmd.Printf("nextunnel server started (pid file %s, log %s)\n", s.pidFile, s.logFile)
 		return
 	case "stop":
-		if err := daemonStop(pidFile); err != nil {
+		if err := s.daemonStop(); err != nil {
 			cmd.PrintErrf("Daemon stop failed: %v\n", err)
 			os.Exit(1)
 		}
 		cmd.Println("nextunnel server stop signal sent (SIGTERM)")
 		return
 	case "reload":
-		if err := daemonReload(pidFile); err != nil {
+		if err := s.daemonReload(); err != nil {
 			cmd.PrintErrf("Daemon reload failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -81,19 +99,6 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	configs, err := configs_.NewServer(configFile)
-	if err != nil {
-		cmd.PrintErrf("Failed to load server config, %v\n", err)
-		os.Exit(1)
-	}
-
-	s.configs = configs
-	s.configPath = configFile
-	s.logger, err = logger_.New("nextunnel-server", logFile)
-	if err != nil {
-		cmd.PrintErrf("Failed to init logger: %v\n", err)
-		os.Exit(1)
-	}
 	if err := s.startAndStop(); err != nil {
 		cmd.PrintErrf("Server error, %v\n", err)
 		os.Exit(1)
@@ -133,7 +138,7 @@ func (s *server) startAndStop() error {
 		sig := <-sigCh
 
 		if sig == syscall.SIGHUP {
-			cfg, err := configs_.NewServer(s.configPath)
+			cfg, err := configs_.NewServer(s.configFile)
 			if err != nil {
 				s.logger.Warnf("Failed to reload config: %v", err)
 				continue
@@ -158,15 +163,10 @@ func (s *server) startAndStop() error {
 
 }
 
-func daemonStart(configFile string, pidFile string) error {
+func (s *server) daemonStart() error {
 
-	if err := utils.EnsureStalePidFileCleared(pidFile); err != nil {
+	if err := utils.EnsureStalePidFileCleared(s.pidFile); err != nil {
 		return err
-	}
-
-	absConfig, err := filepath.Abs(configFile)
-	if err != nil {
-		return fmt.Errorf("resolve config path: %w", err)
 	}
 
 	exe, err := os.Executable()
@@ -179,36 +179,32 @@ func daemonStart(configFile string, pidFile string) error {
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 
-	logPath := utils.LogPathBesideConfig(absConfig)
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return fmt.Errorf("open log file %s: %w", logPath, err)
-	}
-
-	cmd := exec.Command(absExe, "server", "--config", absConfig)
-	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", serverDaemonPidEnvKey, pidFile))
+	cmd := exec.Command(absExe, "server", "--workdir", s.workdir)
 	cmd.Stdin = nil
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	cmd.Stdout = s.logFile
+	cmd.Stderr = s.logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
+		_ = s.logFile.Close()
 		return fmt.Errorf("start daemon process: %w", err)
 	}
-	_ = logFile.Close()
+	_ = s.logFile.Close()
 	pid := cmd.Process.Pid
-	if err := utils.WritePidFile(pidFile, pid); err != nil {
+	if err := utils.WritePidFile(s.pidFile, pid); err != nil {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 		return fmt.Errorf("write pid file: %w", err)
 	}
 	if err := cmd.Process.Release(); err != nil {
 		return fmt.Errorf("release process: %w", err)
 	}
+
 	return nil
+
 }
 
-func daemonStop(pidPath string) error {
-	pid, err := utils.ReadPidFile(pidPath)
+func (s *server) daemonStop() error {
+	pid, err := utils.ReadPidFile(s.pidFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -216,7 +212,7 @@ func daemonStop(pidPath string) error {
 		return fmt.Errorf("read pid file: %w", err)
 	}
 	if !utils.ProcessAlive(pid) {
-		_ = os.Remove(pidPath)
+		_ = os.Remove(s.pidFile)
 		return nil
 	}
 	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
@@ -225,11 +221,11 @@ func daemonStop(pidPath string) error {
 	return nil
 }
 
-func daemonReload(pidPath string) error {
-	pid, err := utils.ReadPidFile(pidPath)
+func (s *server) daemonReload() error {
+	pid, err := utils.ReadPidFile(s.pidFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("pid file not found: %s", pidPath)
+			return fmt.Errorf("pid file not found: %s", s.pidFile)
 		}
 		return fmt.Errorf("read pid file: %w", err)
 	}
