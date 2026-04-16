@@ -1,6 +1,7 @@
 .idea/
 .vscode/
-.nextunnel/
+.nextunnel-server/
+.nextunnel-client/
 bin/
 config/
 build/
