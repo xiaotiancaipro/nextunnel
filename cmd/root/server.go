@@ -30,7 +30,7 @@ func NewServer() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		Run:   new(server).run,
 	}
-	c.Flags().StringP("workdir", "w", ".nextunnel", "Working directory")
+	c.Flags().StringP("workdir", "w", ".nextunnel-server", "Working directory")
 	c.Flags().StringP("daemon", "d", "", "Daemon control: start, stop, reload")
 	return c
 }
