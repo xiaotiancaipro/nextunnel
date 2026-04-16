@@ -19,7 +19,7 @@ func EnsureStalePidFileCleared(file string) error {
 		return nil
 	}
 	if ProcessAlive(pid) {
-		return fmt.Errorf("server already running (pid %d)", pid)
+		return fmt.Errorf("already running (pid %d)", pid)
 	}
 	return os.Remove(file)
 }

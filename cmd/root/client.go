@@ -1,143 +1,174 @@
 package root
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
+	configs_ "github.com/xiaotiancaipro/nextunnel/internal/client/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/client/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
 )
 
-const clientReloadDrainGrace = 5 * time.Second
-
-type Client struct {
-	Configs    *configs.ClientConfigs
-	ConfigPath string
+type client struct {
+	workdir string
+	pidFile string
 }
 
 func NewClient() *cobra.Command {
-	fc := func(cmd *cobra.Command, _ []string) {
-		configFile, err1 := cmd.Flags().GetString("config")
-		configs_, err2 := configs.NewClient(configFile)
-		if err := errors.Join(err1, err2); err != nil {
-			cmd.PrintErrf("Failed to load client config, %v\n", err)
-			os.Exit(1)
-		}
-		srv := &Client{Configs: configs_, ConfigPath: configFile}
-		if err := srv.Run(); err != nil {
-			cmd.PrintErrf("Client error, %v\n", err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
 	c := &cobra.Command{
 		Use:   "client",
-		Short: "Start nextunnel client",
+		Short: "Manage nextunnel client",
 		Args:  cobra.ExactArgs(0),
-		Run:   fc,
+		Run:   new(client).run,
 	}
-	c.Flags().StringP("config", "c", "client.toml", "Path to client config file")
+	c.Flags().StringP("workdir", "w", ".nextunnel-client", "Working directory")
+	c.Flags().StringP("daemon", "d", "", "Daemon control: start, stop, reload")
 	return c
 }
 
-func (c *Client) Run() error {
+func (c *client) run(cmd *cobra.Command, _ []string) {
 
-	logger, err := logger_.New("client", utils.LogPathBesideConfig(c.ConfigPath))
-	if err != nil {
-		return fmt.Errorf("init logger: %w", err)
-	}
-	srv, err := c.startClient(c.Configs, logger)
-	if err != nil {
-		return err
+	workdir, err1 := cmd.Flags().GetString("workdir")
+	daemonOp, err2 := cmd.Flags().GetString("daemon")
+	if err := errors.Join(err1, err2); err != nil {
+		cmd.PrintErrf("Invalid flags: %v\n", err)
+		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	configFile := path.Join(workdir, "nextunnel.toml")
+	logFile := path.Join(workdir, "logs", "nextunnel.log")
+
+	configs, err := configs_.NewClient(configFile)
+	if err != nil {
+		cmd.PrintErrf("Failed to load client config, %v\n", err)
+		os.Exit(1)
+	}
+
+	logger, err := logger_.New("nextunnel-client", logFile)
+	if err != nil {
+		cmd.PrintErrf("Failed to init logger: %v\n", err)
+		os.Exit(1)
+	}
+
+	c.workdir = workdir
+	c.pidFile = path.Join(workdir, "nextunnel.pid")
+
+	daemonOp = strings.ToLower(strings.TrimSpace(daemonOp))
+	switch daemonOp {
+	case "":
+	case "start":
+		if err := c.daemonStart(); err != nil {
+			cmd.PrintErrf("Daemon start failed: %v\n", err)
+			os.Exit(1)
+		}
+		cmd.Printf("nextunnel client started (pid file %s, log %s)\n", c.pidFile, logFile)
+		return
+	case "stop":
+		if err := c.daemonStop(); err != nil {
+			cmd.PrintErrf("Daemon stop failed: %v\n", err)
+			os.Exit(1)
+		}
+		cmd.Println("nextunnel client stop signal sent (SIGTERM)")
+		return
+	case "reload":
+		if err := c.daemonReload(); err != nil {
+			cmd.PrintErrf("Daemon reload failed: %v\n", err)
+			os.Exit(1)
+		}
+		cmd.Println("nextunnel client reload signal sent (SIGHUP)")
+		return
+	default:
+		cmd.PrintErrf("--daemon must be start, stop, or reload\n")
+		os.Exit(1)
+	}
+
+	srv, err := c.start(configs, logger)
+	if err != nil {
+		cmd.PrintErrf("Failed to start client: %v\n", err)
+		os.Exit(1)
+	}
 
 	var mu sync.Mutex
-	currentClient := srv
 	var drainingClients []*services.Client
 	stopped := false
-
-	reloadClient := func(source string) {
-		cfg, err := configs.NewClient(c.ConfigPath)
-		if err != nil {
-			logger.Warnf("%s: failed to reload config: %v", source, err)
-			return
-		}
-
-		mu.Lock()
-		defer mu.Unlock()
-		if stopped {
-			return
-		}
-
-		prevClient := currentClient
-		logger.Infof("%s: applying zero-downtime client config reload", source)
-
-		nextClient, err := c.startClient(cfg, logger)
-		if err != nil {
-			logger.Errorf("%s: failed to start client with new config: %v", source, err)
-			return
-		}
-
-		currentClient = nextClient
-		c.Configs = cfg
-		if prevClient != nil {
-			prevClient.Retire()
-			drainingClients = append(drainingClients, prevClient)
-			time.AfterFunc(clientReloadDrainGrace, prevClient.Stop)
-		}
-		logger.Infof("%s: client config reloaded successfully", source)
-	}
-
-	go utils.WatchConfigChanges(ctx, c.ConfigPath, reloadClient, logger)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	for {
+
 		sig := <-sigCh
+
 		if sig == syscall.SIGHUP {
-			reloadClient("SIGHUP")
+			configsNew, err := configs_.NewClient(configFile)
+			if err != nil {
+				logger.Warnf("Failed to reload config: %v", err)
+				continue
+			}
+			mu.Lock()
+			if stopped {
+				mu.Unlock()
+				continue
+			}
+			logger.Info("Applying zero-downtime client config reload")
+			nextClient, err := c.start(configsNew, logger)
+			if err != nil {
+				logger.Errorf("Failed to start client with new config: %v", err)
+				mu.Unlock()
+				continue
+			}
+			prevClient := srv
+			srv = nextClient
+			configs = configsNew
+			if prevClient != nil {
+				prevClient.Retire()
+				drainingClients = append(drainingClients, prevClient)
+				time.AfterFunc(5*time.Second, prevClient.Stop)
+			}
+			mu.Unlock()
+			logger.Info("Client config reloaded successfully")
 			continue
 		}
+
 		logger.Infof("Received signal %v, client is shutting down", sig)
 		mu.Lock()
 		stopped = true
-		cancel()
-		if currentClient != nil {
-			currentClient.Stop()
+		if srv != nil {
+			srv.Stop()
 		}
 		for _, draining := range drainingClients {
 			draining.Stop()
 		}
 		mu.Unlock()
 		logger.Infof("Client has stopped")
-		return nil
+
+		os.Exit(0)
+
 	}
 
 }
 
-func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) (*services.Client, error) {
+func (c *client) start(cfg *configs_.ClientConfigs, logger *logrus.Logger) (*services.Client, error) {
 
 	if !cfg.TLS.Enabled {
 		logger.Warn("TLS is disabled; credentials and tunneled traffic may be exposed on the network. Only use this mode in trusted environments.")
 	}
 
-	proxies := make([]configs.ProxyConfig, 0, len(cfg.Proxies))
+	proxies := make([]configs_.ProxyConfig, 0, len(cfg.Proxies))
 	for _, p := range cfg.Proxies {
-		proxies = append(proxies, configs.ProxyConfig{
+		proxies = append(proxies, configs_.ProxyConfig{
 			Name:       p.Name,
 			Type:       p.Type,
 			RemotePort: p.RemotePort,
@@ -146,22 +177,16 @@ func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) 
 		})
 	}
 
-	srv, err := services.NewClient(&services.Params{
+	params := &services.Params{
 		ClientID:   cfg.ClientID,
 		ServerAddr: cfg.ServerAddr,
 		ServerPort: cfg.ServerPort,
 		Token:      cfg.Token,
-		TLS: configs.ClientTLSConfigs{
-			Enabled:            cfg.TLS.Enabled,
-			ServerName:         cfg.TLS.ServerName,
-			CAFile:             cfg.TLS.CAFile,
-			CertFile:           cfg.TLS.CertFile,
-			KeyFile:            cfg.TLS.KeyFile,
-			InsecureSkipVerify: cfg.TLS.InsecureSkipVerify,
-		},
-		Proxies: proxies,
-		Logger:  logger,
-	})
+		TLS:        cfg.TLS,
+		Proxies:    proxies,
+		Logger:     logger,
+	}
+	srv, err := services.NewClient(params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize client: %w", err)
 	}
@@ -172,4 +197,77 @@ func (c *Client) startClient(cfg *configs.ClientConfigs, logger *logrus.Logger) 
 	logger.Infof("Client started successfully, client_id=%s, connected to server: %s:%d, tls=%t", cfg.ClientID, cfg.ServerAddr, cfg.ServerPort, cfg.TLS.Enabled)
 	return srv, nil
 
+}
+
+func (c *client) daemonStart() error {
+
+	if err := utils.EnsureStalePidFileCleared(c.pidFile); err != nil {
+		return err
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	absExe, err := filepath.Abs(exe)
+	if err != nil {
+		return fmt.Errorf("resolve executable path: %w", err)
+	}
+
+	cmd := exec.Command(absExe, "client", "--workdir", c.workdir)
+	cmd.Stdin = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start daemon process: %w", err)
+	}
+
+	pid := cmd.Process.Pid
+	if err := utils.WritePidFile(c.pidFile, pid); err != nil {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		return fmt.Errorf("write pid file: %w", err)
+	}
+
+	if err := cmd.Process.Release(); err != nil {
+		return fmt.Errorf("release process: %w", err)
+	}
+
+	return nil
+
+}
+
+func (c *client) daemonStop() error {
+	pid, err := utils.ReadPidFile(c.pidFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read pid file: %w", err)
+	}
+	if !utils.ProcessAlive(pid) {
+		_ = os.Remove(c.pidFile)
+		return nil
+	}
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		return fmt.Errorf("signal TERM to pid %d: %w", pid, err)
+	}
+	return nil
+}
+
+func (c *client) daemonReload() error {
+	pid, err := utils.ReadPidFile(c.pidFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("pid file not found: %s", c.pidFile)
+		}
+		return fmt.Errorf("read pid file: %w", err)
+	}
+	if !utils.ProcessAlive(pid) {
+		return fmt.Errorf("no process with pid %d", pid)
+	}
+	if err := syscall.Kill(pid, syscall.SIGHUP); err != nil {
+		return fmt.Errorf("signal HUP to pid %d: %w", pid, err)
+	}
+	return nil
 }
