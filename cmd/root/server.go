@@ -11,7 +11,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	configs_ "github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	server_ "github.com/xiaotiancaipro/nextunnel/internal/server/services"
@@ -20,12 +19,8 @@ import (
 )
 
 type server struct {
-	workdir    string
-	configFile string
-	pidFile    string
-	logFile    string
-	configs    *configs_.ServerConfigs
-	logger     *logrus.Logger
+	workdir string
+	pidFile string
 }
 
 func NewServer() *cobra.Command {
@@ -49,24 +44,23 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	s.workdir = workdir
-	s.configFile = path.Join(workdir, "nextunnel.toml")
-	s.pidFile = path.Join(workdir, "nextunnel.pid")
-	s.logFile = path.Join(workdir, "logs", "nextunnel.log")
+	configFile := path.Join(workdir, "nextunnel.toml")
+	logFile := path.Join(workdir, "logs", "nextunnel.log")
 
-	configs, err := configs_.NewServer(s.configFile)
+	configs, err := configs_.NewServer(configFile)
 	if err != nil {
 		cmd.PrintErrf("Failed to load server config, %v\n", err)
 		os.Exit(1)
 	}
-	s.configs = configs
 
-	logger, err := logger_.New("nextunnel-server", s.logFile)
+	logger, err := logger_.New("nextunnel-server", logFile)
 	if err != nil {
 		cmd.PrintErrf("Failed to init logger: %v\n", err)
 		os.Exit(1)
 	}
-	s.logger = logger
+
+	s.workdir = workdir
+	s.pidFile = path.Join(workdir, "nextunnel.pid")
 
 	daemonOp = strings.ToLower(strings.TrimSpace(daemonOp))
 	switch daemonOp {
@@ -76,7 +70,7 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 			cmd.PrintErrf("Daemon start failed: %v\n", err)
 			os.Exit(1)
 		}
-		cmd.Printf("nextunnel server started (pid file %s, log %s)\n", s.pidFile, s.logFile)
+		cmd.Printf("nextunnel server started (pid file %s, log %s)\n", s.pidFile, logFile)
 		return
 	case "stop":
 		if err := s.daemonStop(); err != nil {
@@ -97,16 +91,16 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	if !s.configs.TLS.Enabled {
-		s.logger.Warn("TLS is disabled; control and work connections will be transmitted in plaintext. Do not expose this server directly to untrusted networks.")
+	if !configs.TLS.Enabled {
+		logger.Warn("TLS is disabled; control and work connections will be transmitted in plaintext. Do not expose this server directly to untrusted networks.")
 	}
 
 	params := &server_.Params{
-		BindPort: s.configs.BindPort,
-		Token:    s.configs.Token,
-		TLS:      s.configs.TLS,
-		IPFilter: s.configs.IPFilter,
-		Logger:   s.logger,
+		BindPort: configs.BindPort,
+		Token:    configs.Token,
+		TLS:      configs.TLS,
+		IPFilter: configs.IPFilter,
+		Logger:   logger,
 	}
 	srv, err := server_.NewServer(params)
 	if err != nil {
@@ -117,7 +111,7 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		cmd.PrintErrf("failed to start server: %v", err)
 		os.Exit(1)
 	}
-	s.logger.Infof("Server started successfully, listening on port: %d, tls=%t", s.configs.BindPort, s.configs.TLS.Enabled)
+	logger.Infof("Server started successfully, listening on port: %d, tls=%t", configs.BindPort, configs.TLS.Enabled)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -127,24 +121,24 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 		sig := <-sigCh
 
 		if sig == syscall.SIGHUP {
-			cfg, err := configs_.NewServer(s.configFile)
+			configsNew, err := configs_.NewServer(configFile)
 			if err != nil {
-				s.logger.Warnf("Failed to reload config: %v", err)
+				logger.Warnf("Failed to reload config: %v", err)
 				continue
 			}
-			s.logger.Info("Applying zero-downtime server config reload")
-			if err := srv.ApplyConfig(cfg); err != nil {
-				s.logger.Errorf("Failed to reload config: %v", err)
+			logger.Info("Applying zero-downtime server config reload")
+			if err := srv.ApplyConfig(configsNew); err != nil {
+				logger.Errorf("Failed to reload config: %v", err)
 				continue
 			}
-			s.configs = cfg
-			s.logger.Info("Server config reloaded successfully")
+			configs = configsNew
+			logger.Info("Server config reloaded successfully")
 			continue
 		}
 
-		s.logger.Info("Server is shutting down")
+		logger.Info("Server is shutting down")
 		srv.Stop()
-		s.logger.Info("Server has stopped")
+		logger.Info("Server has stopped")
 
 		os.Exit(0)
 
