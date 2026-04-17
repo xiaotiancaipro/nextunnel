@@ -46,11 +46,8 @@ type listenerState struct {
 }
 
 type Params struct {
-	BindPort int
-	Token    string
-	TLS      configs.ServerTLSConfigs
-	IPFilter configs.ServerIPFilterConfigs
-	Logger   *logrus.Logger
+	Config configs.ServerConfigs
+	Logger *logrus.Logger
 }
 
 type proxyEntry struct {
@@ -62,15 +59,10 @@ type proxyEntry struct {
 }
 
 func NewServer(params *Params) (*Server, error) {
-	if params.BindPort <= 0 || params.BindPort > 65535 {
-		return nil, fmt.Errorf("invalid bind port: %d", params.BindPort)
+	if params.Config.BindPort <= 0 || params.Config.BindPort > 65535 {
+		return nil, fmt.Errorf("invalid bind port: %d", params.Config.BindPort)
 	}
-	rt, err := buildRuntimeConfig(&configs.ServerConfigs{
-		BindPort: params.BindPort,
-		Token:    params.Token,
-		TLS:      params.TLS,
-		IPFilter: params.IPFilter,
-	})
+	rt, err := buildRuntimeConfig(&params.Config)
 	if err != nil {
 		return nil, err
 	}

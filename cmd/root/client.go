@@ -189,14 +189,11 @@ func (c *client) start() (*services.Client, error) {
 		})
 	}
 
+	config := *c.configs
+	config.Proxies = proxies
 	params := &services.Params{
-		ClientID:   c.configs.ClientID,
-		ServerAddr: c.configs.ServerAddr,
-		ServerPort: c.configs.ServerPort,
-		Token:      c.configs.Token,
-		TLS:        c.configs.TLS,
-		Proxies:    proxies,
-		Logger:     c.logger,
+		Config: config,
+		Logger: c.logger,
 	}
 	srv, err := services.NewClient(params)
 	if err != nil {

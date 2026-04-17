@@ -96,11 +96,8 @@ func (s *server) run(cmd *cobra.Command, _ []string) {
 	}
 
 	params := &server_.Params{
-		BindPort: configs.BindPort,
-		Token:    configs.Token,
-		TLS:      configs.TLS,
-		IPFilter: configs.IPFilter,
-		Logger:   logger,
+		Config: *configs,
+		Logger: logger,
 	}
 	srv, err := server_.NewServer(params)
 	if err != nil {

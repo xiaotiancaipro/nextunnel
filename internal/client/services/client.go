@@ -25,29 +25,19 @@ const (
 )
 
 type Client struct {
-	clientID   string
-	serverAddr string
-	serverPort int
-	token      string
-	tls        configs.ClientTLSConfigs
-	proxies    []configs.ProxyConfig
-	logger     *logrus.Logger
-	runID      string
-	ctrlCon    net.Conn
-	mu         sync.Mutex
-	stopCh     chan struct{}
-	stopOnce   sync.Once
-	retiring   atomic.Bool
+	config   configs.ClientConfigs
+	logger   *logrus.Logger
+	runID    string
+	ctrlCon  net.Conn
+	mu       sync.Mutex
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	retiring atomic.Bool
 }
 
 type Params struct {
-	ClientID   string
-	ServerAddr string
-	ServerPort int
-	Token      string
-	TLS        configs.ClientTLSConfigs
-	Proxies    []configs.ProxyConfig
-	Logger     *logrus.Logger
+	Config configs.ClientConfigs
+	Logger *logrus.Logger
 }
 
 type msgChan struct {
@@ -57,24 +47,19 @@ type msgChan struct {
 }
 
 func NewClient(params *Params) (*Client, error) {
-	if params.ClientID == "" {
+	if params.Config.ClientID == "" {
 		return nil, fmt.Errorf("client id cannot be empty")
 	}
-	if params.ServerAddr == "" {
+	if params.Config.ServerAddr == "" {
 		return nil, fmt.Errorf("server address cannot be empty")
 	}
-	if params.ServerPort <= 0 || params.ServerPort > 65535 {
-		return nil, fmt.Errorf("invalid server port: %d", params.ServerPort)
+	if params.Config.ServerPort <= 0 || params.Config.ServerPort > 65535 {
+		return nil, fmt.Errorf("invalid server port: %d", params.Config.ServerPort)
 	}
 	return &Client{
-		clientID:   params.ClientID,
-		serverAddr: params.ServerAddr,
-		serverPort: params.ServerPort,
-		token:      params.Token,
-		tls:        params.TLS,
-		proxies:    params.Proxies,
-		logger:     params.Logger,
-		stopCh:     make(chan struct{}),
+		config: params.Config,
+		logger: params.Logger,
+		stopCh: make(chan struct{}),
 	}, nil
 }
 
@@ -98,7 +83,7 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) serverAddrStr() string {
-	return net.JoinHostPort(c.serverAddr, strconv.Itoa(c.serverPort))
+	return net.JoinHostPort(c.config.ServerAddr, strconv.Itoa(c.config.ServerPort))
 }
 
 func (c *Client) connect() error {
@@ -109,8 +94,8 @@ func (c *Client) connect() error {
 	}
 
 	if err := utils.WriteMsg(conn, utils.MsgLogin, utils.LoginMsg{
-		ClientID: c.clientID,
-		Token:    c.token,
+		ClientID: c.config.ClientID,
+		Token:    c.config.Token,
 	}); err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("failed to send LoginMsg: %w", err)
@@ -148,7 +133,7 @@ func (c *Client) connect() error {
 	c.runID = loginResp.RunID
 	c.mu.Unlock()
 
-	c.logger.Infof("Login successful, clientID=%s, runID=%s", c.clientID, loginResp.RunID)
+	c.logger.Infof("Login successful, clientID=%s, runID=%s", c.config.ClientID, loginResp.RunID)
 	go c.controlLoop(conn)
 	return nil
 
@@ -156,8 +141,8 @@ func (c *Client) connect() error {
 
 func (c *Client) applyConfig(conn net.Conn) error {
 
-	proxies := make([]utils.ApplyConfigProxyMsg, 0, len(c.proxies))
-	for _, proxy := range c.proxies {
+	proxies := make([]utils.ApplyConfigProxyMsg, 0, len(c.config.Proxies))
+	for _, proxy := range c.config.Proxies {
 		proxies = append(proxies, utils.ApplyConfigProxyMsg{
 			Name:       proxy.Name,
 			Type:       proxy.Type,
@@ -187,7 +172,7 @@ func (c *Client) applyConfig(conn net.Conn) error {
 		return fmt.Errorf("apply config rejected by server: %s", resp.Error)
 	}
 
-	for _, proxy := range c.proxies {
+	for _, proxy := range c.config.Proxies {
 		c.logger.Infof("Proxy applied successfully: name=%s, remotePort=%d -> %s:%d", proxy.Name, proxy.RemotePort, proxy.LocalIP, proxy.LocalPort)
 	}
 
@@ -198,7 +183,7 @@ func (c *Client) applyConfig(conn net.Conn) error {
 func (c *Client) dialServer() (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	addr := c.serverAddrStr()
-	if !c.tls.Enabled {
+	if !c.config.TLS.Enabled {
 		return dialer.Dial("tcp", addr)
 	}
 	config, err := c.tlsConfig()
@@ -212,19 +197,19 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 
 	config := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: c.tls.InsecureSkipVerify,
+		InsecureSkipVerify: c.config.TLS.InsecureSkipVerify,
 	}
-	if c.tls.ServerName != "" {
-		config.ServerName = c.tls.ServerName
+	if c.config.TLS.ServerName != "" {
+		config.ServerName = c.config.TLS.ServerName
 	}
-	if c.tls.CAFile == "" {
+	if c.config.TLS.CAFile == "" {
 		if err := c.loadClientCertificate(config); err != nil {
 			return nil, err
 		}
 		return config, nil
 	}
 
-	caCert, err := os.ReadFile(c.tls.CAFile)
+	caCert, err := os.ReadFile(c.config.TLS.CAFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read tls ca_file: %w", err)
 	}
@@ -245,10 +230,10 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 }
 
 func (c *Client) loadClientCertificate(config *tls.Config) error {
-	if c.tls.CertFile == "" || c.tls.KeyFile == "" {
+	if c.config.TLS.CertFile == "" || c.config.TLS.KeyFile == "" {
 		return fmt.Errorf("tls cert_file and key_file are required when tls is enabled")
 	}
-	cert, err := tls.LoadX509KeyPair(c.tls.CertFile, c.tls.KeyFile)
+	cert, err := tls.LoadX509KeyPair(c.config.TLS.CertFile, c.config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to load client tls certificate: %w", err)
 	}
@@ -387,9 +372,9 @@ func (c *Client) handleWorkConn(msg utils.NewWorkConnMsg) {
 }
 
 func (c *Client) findProxy(name string) *configs.ProxyConfig {
-	for i := range c.proxies {
-		if c.proxies[i].Name == name {
-			return &c.proxies[i]
+	for i := range c.config.Proxies {
+		if c.config.Proxies[i].Name == name {
+			return &c.config.Proxies[i]
 		}
 	}
 	return nil
