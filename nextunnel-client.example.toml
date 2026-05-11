@@ -1,0 +1,3 @@
+[logs]
+file = "logs/nextunnel-client.log"
+level = "info"

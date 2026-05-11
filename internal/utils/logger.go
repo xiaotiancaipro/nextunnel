@@ -14,13 +14,14 @@ import (
 func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
 	encoderConfig := zapcore.EncoderConfig{
-		TimeKey:       "time",
-		LevelKey:      "level",
-		NameKey:       "logger",
-		CallerKey:     "caller",
-		MessageKey:    "msg",
-		StacktraceKey: "stacktrace",
-		LineEnding:    zapcore.DefaultLineEnding,
+		TimeKey:          "time",
+		LevelKey:         "level",
+		NameKey:          "logger",
+		CallerKey:        "caller",
+		MessageKey:       "msg",
+		StacktraceKey:    "stacktrace",
+		LineEnding:       zapcore.DefaultLineEnding,
+		ConsoleSeparator: " - ",
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.Format("2006-01-02 15:04:05"))
 		},
@@ -48,10 +49,10 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
 	level, err := zapcore.ParseLevel(config.Level)
 	if err != nil {
-		return nil, fmt.Errorf("invalid log level '%s', error: %v. Using default 'info' level", config.Level, err)
+		return nil, fmt.Errorf("invalid log level '%s', error: %v", config.Level, err)
 	}
 
 	core := zapcore.NewCore(encoder, writeSyncer, level)
-	return zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)), nil
+	return zap.New(core, zap.AddCaller()), nil
 
 }
