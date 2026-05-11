@@ -1,0 +1,15 @@
+.git/
+.idea/
+.vscode/
+.nextunnel-server/
+.nextunnel-client/
+bin/
+config/
+build/
+dist/
+test/
+.DS_Store
+.gitignore
+*.md
+*.log
+*.toml
