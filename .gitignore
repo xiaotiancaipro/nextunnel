@@ -5,7 +5,8 @@ config/
 build/
 dist/
 test/
+logs/
 .DS_Store
 *.log
 *.toml
-!nextunnel.example.toml
+!nextunnel-client.example.toml

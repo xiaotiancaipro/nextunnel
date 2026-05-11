@@ -1,15 +1,17 @@
-package logger
+package utils
 
 import (
+	"fmt"
 	"os"
 	"time"
 
 	"github.com/natefinch/lumberjack"
+	"github.com/xiaotiancaipro/nextunnel-client/internal/configs"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-func New(logPath string, level zapcore.Level) *zap.Logger {
+func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:       "time",
@@ -31,7 +33,7 @@ func New(logPath string, level zapcore.Level) *zap.Logger {
 	encoder := zapcore.NewConsoleEncoder(encoderConfig)
 
 	dailyRotate := &lumberjack.Logger{
-		Filename:   logPath,
+		Filename:   config.File,
 		MaxSize:    100,
 		MaxBackups: 30,
 		MaxAge:     7,
@@ -44,7 +46,12 @@ func New(logPath string, level zapcore.Level) *zap.Logger {
 		zapcore.AddSync(os.Stdout),
 	)
 
+	level, err := zapcore.ParseLevel(config.Level)
+	if err != nil {
+		return nil, fmt.Errorf("invalid log level '%s', error: %v. Using default 'info' level", config.Level, err)
+	}
+
 	core := zapcore.NewCore(encoder, writeSyncer, level)
-	return zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
+	return zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)), nil
 
 }
