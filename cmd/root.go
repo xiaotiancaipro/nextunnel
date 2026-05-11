@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -28,7 +27,6 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 
 	logger, err := utils.NewLogger(configs.Logs)
 	if err != nil {
-		utils.ProcessNotifyDaemonStartFailure(fmt.Errorf("failed to initialize logging: %w", err))
 		cmd.PrintErrf("Failed to initialize logging: %v\n", err)
 		os.Exit(1)
 	}
