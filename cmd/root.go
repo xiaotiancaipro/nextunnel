@@ -38,6 +38,4 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	// TODO
-
 }
