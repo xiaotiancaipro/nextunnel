@@ -43,6 +43,15 @@ func (a *App) Start() error {
 		return fmt.Errorf("failed to login")
 	}
 
+	runIdP, err := a.clientService.LoginResponse(conn)
+	if err != nil {
+		_ = conn.Close()
+		a.logger.Error(fmt.Sprintf("Failed to login: %s", err))
+		return fmt.Errorf("failed to login")
+	}
+	runId := *runIdP
+	a.logger.Info(fmt.Sprintf("Running with id: %s", runId))
+
 	// TODO
 
 }

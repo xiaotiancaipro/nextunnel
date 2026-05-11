@@ -9,13 +9,24 @@ import (
 	"net"
 )
 
+const MaxMsgSize = 1 << 20
+
 const (
 	MsgLogin byte = 0x01
 )
 
+const (
+	MsgLoginResp byte = 0x11
+)
+
 type LoginMsg struct {
-	ClientID string `json:"client_id"`
-	Token    string `json:"token"`
+	Id    string `json:"id"`
+	Token string `json:"token"`
+}
+
+type LoginRespMsg struct {
+	RunID string `json:"run_id,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 func WriteMsg(conn net.Conn, msgType byte, payload interface{}) error {
@@ -35,4 +46,31 @@ func WriteMsg(conn net.Conn, msgType byte, payload interface{}) error {
 	}
 	return nil
 
+}
+
+func ReadMsg(conn net.Conn) (byte, []byte, error) {
+
+	header := make([]byte, 5)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return 0, nil, err
+	}
+
+	msgType := header[0]
+	length := binary.BigEndian.Uint32(header[1:5])
+
+	if length > MaxMsgSize {
+		return 0, nil, fmt.Errorf("message too large: %d bytes", length)
+	}
+
+	payload := make([]byte, length)
+	if _, err := io.ReadFull(conn, payload); err != nil {
+		return 0, nil, err
+	}
+
+	return msgType, payload, nil
+
+}
+
+func Decode(payload []byte, v interface{}) error {
+	return json.Unmarshal(payload, v)
 }
