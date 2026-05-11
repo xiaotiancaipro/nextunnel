@@ -1,8 +1,6 @@
 .git/
 .idea/
 .vscode/
-.nextunnel-server/
-.nextunnel-client/
 bin/
 config/
 build/
