@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel-client/cmd/args"
+	"github.com/xiaotiancaipro/nextunnel-client/internal"
 	"github.com/xiaotiancaipro/nextunnel-client/internal/utils"
 )
 
@@ -31,6 +32,12 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	logger.Info("Starting nextunnel-client")
+	app := internal.NewApp(configs, logger)
+	if err = app.Start(); err != nil {
+		cmd.PrintErrf("Failed to start server: %v\n", err)
+		os.Exit(1)
+	}
+
+	// TODO
 
 }
