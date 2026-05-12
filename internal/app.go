@@ -83,21 +83,49 @@ func (a *App) Start() error {
 }
 
 func (a *App) acceptedConn(conn net.Conn) {
+
+	defer func() { _ = conn.Close() }()
+
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	msgType, payload, err := utils.ReadMsg(conn)
 	if err != nil {
 		a.logger.Error(fmt.Sprintf("Failed to read first message [%s]: %v", conn.RemoteAddr(), err))
-		_ = conn.Close()
 		return
 	}
 	_ = conn.SetDeadline(time.Time{})
+
 	switch msgType {
 	case utils.MsgLogin:
-		// TODO
+		clientIdP, runIdP, err := a.serverService.Login(conn, payload)
+		if err != nil {
+			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
+			return
+		}
+		for {
+			msgType_, payload_, err := utils.ReadMsg(conn)
+			if err != nil {
+				a.logger.Error(fmt.Sprintf("Client control connection disconnected, clientID=%s, runID=%s: %v", *clientIdP, *runIdP, err))
+				return
+			}
+			switch msgType_ {
+			case utils.MsgProxiesApply:
+				if err := a.serverService.ProxiesApply(conn, payload_, clientIdP); err != nil {
+					a.logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
+					return
+				}
+			case utils.MsgHeartbeat:
+				if err := utils.WriteMsg(conn, utils.MsgHeartbeat, utils.HeartbeatRespMsg{}); err != nil {
+					a.logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
+					return
+				}
+			default:
+				a.logger.Error(fmt.Sprintf("Unknown message received on control connection 0x%02x runID=%s", msgType_, *runIdP))
+			}
+		}
 	case utils.MsgStartWorkConn:
 		// TODO
 	default:
 		a.logger.Error(fmt.Sprintf("Unknown first message type 0x%02x [%s]", msgType, conn.RemoteAddr()))
-		_ = conn.Close()
 	}
+
 }
