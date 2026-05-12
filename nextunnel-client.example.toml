@@ -1,3 +1,24 @@
+[server]
+addr = "127.0.0.1"
+port = 25930
+
+[client]
+id = ""
+token = ""
+
 [logs]
 file = "logs/nextunnel-client.log"
 level = "info"
+
+[tls]
+server_name = "127.0.0.1"
+ca_file = "ca.crt"
+cert_file = "server.crt"
+key_file = "server.key"
+
+[[proxies]]
+name = "ssh"
+type = "tcp"
+local_ip = "127.0.0.1"
+local_port = 22
+remote_port = 8022

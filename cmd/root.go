@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel-client/cmd/args"
 	"github.com/xiaotiancaipro/nextunnel-client/internal"
-	"github.com/xiaotiancaipro/nextunnel-client/internal/utils"
 )
 
 type root struct{}
@@ -26,13 +25,12 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 
 	configs := new(args.Config).New(cmd)
 
-	logger, err := utils.NewLogger(configs.Logs)
+	app, err := internal.NewApp(configs)
 	if err != nil {
-		cmd.PrintErrf("Failed to initialize logging: %v\n", err)
+		cmd.PrintErr(err)
 		os.Exit(1)
 	}
 
-	app := internal.NewApp(configs, logger)
 	if err = app.Start(); err != nil {
 		cmd.PrintErrf("Failed to start server: %v\n", err)
 		os.Exit(1)

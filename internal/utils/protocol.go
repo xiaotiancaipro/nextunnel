@@ -12,13 +12,17 @@ import (
 const MsgMaxSize = 1 << 20
 
 const (
-	MsgLogin        byte = 0x01
-	MsgProxiesApply byte = 0x02
+	MsgLogin         byte = 0x01
+	MsgProxiesApply  byte = 0x02
+	MsgNewWorkConn   byte = 0x03
+	MsgHeartbeat     byte = 0x04
+	MsgStartWorkConn byte = 0x05
 )
 
 const (
 	MsgLoginResp        byte = 0x11
 	MsgProxiesApplyResp byte = 0x12
+	MsgHeartbeatResp    byte = 0x13
 )
 
 type LoginMsg struct {
@@ -43,6 +47,19 @@ type ProxiesApplyMsgItem struct {
 
 type ProxiesApplyRespMsg struct {
 	Error string `json:"error,omitempty"`
+}
+
+type NewWorkConnMsg struct {
+	WorkID    string `json:"work_id"`
+	ProxyName string `json:"proxy_name"`
+}
+
+type HeartbeatMsg struct{}
+
+type HeartbeatRespMsg struct{}
+
+type StartWorkConnMsg struct {
+	WorkID string `json:"work_id"`
 }
 
 func WriteMsg(conn net.Conn, msgType byte, payload interface{}) error {

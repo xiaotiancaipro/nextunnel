@@ -2,7 +2,9 @@ package services
 
 import (
 	"fmt"
+	"io"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-client/internal/configs"
@@ -109,4 +111,52 @@ func (c *Client) ProxiesApplyResponse() error {
 	}
 	return nil
 
+}
+
+func (c *Client) WorkConn(msg utils.NewWorkConnMsg) {
+
+	proxy := c.FindProxy(msg.ProxyName)
+	if proxy == nil {
+		c.Logger.Error(fmt.Sprintf("Received work connection request for unknown proxy: %s", msg.ProxyName))
+		return
+	}
+
+	payload := utils.StartWorkConnMsg{WorkID: msg.WorkID}
+	if err := utils.WriteMsg(c.Conn, utils.MsgStartWorkConn, payload); err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to send StartWorkConn: %v", err))
+		return
+	}
+
+	localAddr := net.JoinHostPort(proxy.LocalIP, strconv.Itoa(proxy.LocalPort))
+	localConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
+	if err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to connect to local service [%s -> %s]: %v", msg.ProxyName, localAddr, err))
+		return
+	}
+	c.Logger.Info(fmt.Sprintf("Work connection bridged: proxy=%s, workID=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
+
+	c.Pipe(c.Conn, localConn)
+
+}
+
+func (c *Client) FindProxy(name string) *configs.Proxy {
+	for i := range c.Proxies {
+		if c.Proxies[i].Name == name {
+			return &c.Proxies[i]
+		}
+	}
+	return nil
+}
+
+func (c *Client) Pipe(a, b net.Conn) {
+	defer func() { _ = a.Close() }()
+	defer func() { _ = b.Close() }()
+	done := make(chan struct{}, 2)
+	copyFn := func(dst, src net.Conn) {
+		_, _ = io.Copy(dst, src)
+		done <- struct{}{}
+	}
+	go copyFn(a, b)
+	go copyFn(b, a)
+	<-done
 }
