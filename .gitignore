@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+bin/
+config/
+build/
+dist/
+test/
+logs/
+.DS_Store
+*.log
+*.toml
+!nextunnel-client.example.toml
