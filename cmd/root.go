@@ -22,18 +22,13 @@ func New() *cobra.Command {
 }
 
 func (c *root) run(cmd *cobra.Command, _ []string) {
-
 	configs := new(args.Config).New(cmd)
-
 	app, err := internal.NewApp(configs)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)
 	}
-
 	if err = app.Start(); err != nil {
-		cmd.PrintErrf("Failed to start server: %v\n", err)
 		os.Exit(1)
 	}
-
 }
