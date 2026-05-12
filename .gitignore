@@ -9,4 +9,4 @@ logs/
 .DS_Store
 *.log
 *.toml
-!nextunnel-client.example.toml
+!nextunnel-server.example.toml
