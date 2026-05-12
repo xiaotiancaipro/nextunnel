@@ -48,6 +48,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 
 	app := App{
 		logger:        logger,
+		stopCh:        make(chan struct{}),
 		tlsService:    &tls,
 		serverService: &server,
 		clientService: &client,
