@@ -10,7 +10,6 @@ file = "logs/nextunnel-client.log"
 level = "info"
 
 [tls]
-server_name = "127.0.0.1"
 ca_file = "ca.crt"
 cert_file = "server.crt"
 key_file = "server.key"
