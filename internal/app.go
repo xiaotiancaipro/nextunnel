@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-client/internal/configs"
@@ -14,6 +15,9 @@ import (
 type App struct {
 	logger        *zap.Logger
 	stopCh        chan struct{}
+	stopOnce      sync.Once
+	ctrlMu        sync.Mutex
+	ctrlConn      net.Conn
 	tlsService    *services.Tls
 	serverService *services.Server
 	clientService *services.Client
@@ -75,7 +79,19 @@ func (a *App) Start() error {
 		a.logger.Error(fmt.Sprintf("Failed to connect to server: %s", err))
 		return fmt.Errorf("failed to connect to server")
 	}
-	defer func() { _ = conn.Close() }()
+	a.ctrlMu.Lock()
+	a.ctrlConn = conn
+	a.ctrlMu.Unlock()
+	defer func() {
+		a.ctrlMu.Lock()
+		c := a.ctrlConn
+		a.ctrlConn = nil
+		a.ctrlMu.Unlock()
+		if c != nil {
+			_ = c.Close()
+		}
+	}()
+
 	a.clientService.Conn = conn
 	a.logger.Info("Successfully connected to the server")
 
@@ -97,7 +113,7 @@ func (a *App) Start() error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	go a.controlLoop(conn, msgCh, doneCh)
+	go a.controlLoop(conn, msgCh, doneCh, a.stopCh)
 
 	for {
 		select {
@@ -141,6 +157,20 @@ func (a *App) Start() error {
 
 }
 
+func (a *App) Stop() {
+	a.stopOnce.Do(func() {
+		close(a.stopCh)
+		a.ctrlMu.Lock()
+		c := a.ctrlConn
+		a.ctrlConn = nil
+		a.ctrlMu.Unlock()
+		if c != nil {
+			_ = c.Close()
+		}
+		a.logger.Info("Shutting down gracefully")
+	})
+}
+
 func (a *App) clientLogin() (*string, error) {
 
 	if err := a.clientService.Login(); err != nil {
@@ -170,11 +200,12 @@ func (a *App) clientProxiesApply() error {
 	return nil
 }
 
-func (a *App) controlLoop(conn net.Conn, msgCh chan msgChan, doneCh chan struct{}) {
+func (a *App) controlLoop(conn net.Conn, msgCh chan msgChan, doneCh chan struct{}, stopNotify <-chan struct{}) {
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(90 * time.Second)); err != nil {
 			select {
 			case msgCh <- msgChan{err: fmt.Errorf("failed to set read deadline: %w", err)}:
+			case <-stopNotify:
 			case <-doneCh:
 			}
 			return
@@ -182,6 +213,8 @@ func (a *App) controlLoop(conn net.Conn, msgCh chan msgChan, doneCh chan struct{
 		msgType, payload, err := utils.ReadMsg(conn)
 		select {
 		case msgCh <- msgChan{msgType, payload, err}:
+		case <-stopNotify:
+			return
 		case <-doneCh:
 			return
 		}
