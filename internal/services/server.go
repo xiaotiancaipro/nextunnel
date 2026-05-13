@@ -77,7 +77,7 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 
 }
 
-func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, stopCh chan struct{}) error {
+func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, serverStopCh, clientStopCh chan struct{}) error {
 
 	var msg utils.ProxiesApplyMsg
 	if err := utils.Decode(payload, &msg); err != nil {
@@ -135,7 +135,15 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, 
 	}
 
 	for name, listener := range opened {
-		go s.ProxyAcceptLoop(conn, name, listener, stopCh)
+		ln := listener
+		go func() {
+			select {
+			case <-serverStopCh:
+			case <-clientStopCh:
+			}
+			_ = ln.Close()
+		}()
+		go s.ProxyAcceptLoop(conn, name, ln, serverStopCh, clientStopCh)
 	}
 
 	_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: ""})
@@ -144,7 +152,7 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, 
 
 }
 
-func (s *Server) ProxyAcceptLoop(controlConn net.Conn, proxyName string, listener net.Listener, stopCh chan struct{}) {
+func (s *Server) ProxyAcceptLoop(controlConn net.Conn, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
 
 	defer func() {
 		_ = listener.Close()
@@ -156,7 +164,9 @@ func (s *Server) ProxyAcceptLoop(controlConn net.Conn, proxyName string, listene
 		conn, err := listener.Accept()
 		if err != nil {
 			select {
-			case <-stopCh:
+			case <-serverStopCh:
+				return
+			case <-clientStopCh:
 				return
 			default:
 				s.Logger.Error(fmt.Sprintf("Proxy [%s] accept loop exiting: %v", proxyName, err))
@@ -177,7 +187,7 @@ func (s *Server) ProxyAcceptLoop(controlConn net.Conn, proxyName string, listene
 
 		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s", proxyName, ip))
 
-		go s.BridgeClientConn(controlConn, conn, proxyName, stopCh)
+		go s.BridgeClientConn(controlConn, conn, proxyName, serverStopCh, clientStopCh)
 
 	}
 
@@ -205,13 +215,18 @@ func (s *Server) AllowIP(addr net.Addr) (*string, error) {
 
 }
 
-func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, stopCh chan struct{}) {
+func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
 
 	workID := uuid.New().String()
 	s.RegisterPendingWork(workID, conn)
 
 	select {
-	case <-stopCh:
+	case <-serverStopCh:
+		if c := s.TakePendingConn(workID); c != nil {
+			_ = c.Close()
+		}
+		return
+	case <-clientStopCh:
 		if c := s.TakePendingConn(workID); c != nil {
 			_ = c.Close()
 		}

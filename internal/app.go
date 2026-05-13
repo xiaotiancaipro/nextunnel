@@ -128,6 +128,8 @@ func (a *App) acceptedConn(conn net.Conn) {
 			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
 			return
 		}
+		clientStopCh := make(chan struct{})
+		defer close(clientStopCh)
 		for {
 			msgType_, payload_, err := utils.ReadMsg(conn)
 			if err != nil {
@@ -136,7 +138,7 @@ func (a *App) acceptedConn(conn net.Conn) {
 			}
 			switch msgType_ {
 			case utils.MsgProxiesApply:
-				if err := a.serverService.ProxiesApply(conn, payload_, clientIdP, a.stopCh); err != nil {
+				if err := a.serverService.ProxiesApply(conn, payload_, clientIdP, a.stopCh, clientStopCh); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
 					return
 				}
