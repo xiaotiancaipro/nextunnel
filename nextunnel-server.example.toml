@@ -8,6 +8,4 @@ file = "logs/nextunnel-server.log"
 level = "info"
 
 [tls]
-ca_file = "certs/ca.crt"
-cert_file = "certs/server.crt"
-key_file = "certs/server.key"
+dir = "certs"
