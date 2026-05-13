@@ -22,8 +22,7 @@ type Client struct {
 
 func (c *Client) Login() error {
 	payload := utils.LoginMsg{
-		Id:    c.Config.Id,
-		Token: c.Config.Token,
+		Id: c.Config.Id,
 	}
 	if err := utils.WriteMsg(c.Conn, utils.MsgLogin, payload); err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to write login msg: %v", err))

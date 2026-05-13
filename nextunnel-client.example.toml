@@ -4,7 +4,6 @@ port = 25930
 
 [client]
 id = ""
-token = ""
 
 [logs]
 file = "logs/nextunnel-client.log"

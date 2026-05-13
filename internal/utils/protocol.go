@@ -26,8 +26,7 @@ const (
 )
 
 type LoginMsg struct {
-	Id    string `json:"id"`
-	Token string `json:"token"`
+	Id string `json:"id"`
 }
 
 type LoginRespMsg struct {
