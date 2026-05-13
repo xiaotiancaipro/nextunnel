@@ -1,0 +1,14 @@
+[server]
+addr = "127.0.0.1"
+port = 30985
+token = ""
+ip_blacklist = []
+
+[logs]
+file = "logs/nextunnel-server.log"
+level = "info"
+
+[tls]
+ca_file = "certs/ca.crt"
+cert_file = "certs/server.crt"
+key_file = "certs/server.key"

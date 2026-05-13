@@ -26,7 +26,7 @@ func (*Config) New(cmd *cobra.Command) *configs.Configs {
 
 	c, err := configs.NewConfigs(file)
 	if err != nil {
-		cmd.PrintErrf("Failed to load client config, %v\n", err)
+		cmd.PrintErrf("Failed to load config, %v\n", err)
 		os.Exit(1)
 	}
 	return c

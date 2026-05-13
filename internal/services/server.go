@@ -3,6 +3,7 @@ package services
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -14,8 +15,9 @@ import (
 )
 
 type Server struct {
-	Config *configs.Server
-	Logger *zap.Logger
+	Config     *configs.Server
+	IpBlackMap map[string]bool
+	Logger     *zap.Logger
 }
 
 func (s *Server) Listen() (net.Listener, error) {
@@ -72,7 +74,7 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 
 }
 
-func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string) error {
+func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, stopCh chan struct{}) error {
 
 	var msg utils.ProxiesApplyMsg
 	if err := utils.Decode(payload, &msg); err != nil {
@@ -129,10 +131,120 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string) 
 		opened[proxy.Name] = ln
 	}
 
-	// TODO
+	for name, listener := range opened {
+		go s.ProxyAcceptLoop(name, listener, stopCh)
+	}
 
 	_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: ""})
 	s.Logger.Info(fmt.Sprintf("Client config applied: clientID=%s", *clientIdP))
 	return nil
 
+}
+
+func (s *Server) ProxyAcceptLoop(proxyName string, listener net.Listener, stopCh chan struct{}) {
+
+	defer func() {
+		_ = listener.Close()
+		s.Logger.Info(fmt.Sprintf("Proxy stopped: name=%s", proxyName))
+	}()
+
+	for {
+
+		conn, err := listener.Accept()
+		if err != nil {
+			select {
+			case <-stopCh:
+				return
+			default:
+				s.Logger.Error(fmt.Sprintf("Proxy [%s] accept loop exiting: %v", proxyName, err))
+				return
+			}
+		}
+
+		ipP, err := s.AllowIP(conn.RemoteAddr())
+		if err != nil {
+			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, reason=%s", proxyName, *ipP, err.Error()))
+			_ = conn.Close()
+			continue
+		}
+
+		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s", proxyName, *ipP))
+
+		go s.BridgeClientConn(conn, proxyName, stopCh)
+
+	}
+
+}
+
+func (s *Server) AllowIP(addr net.Addr) (*string, error) {
+
+	if len(s.IpBlackMap) == 0 {
+		return nil, nil
+	}
+
+	host := addr.String()
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+
+	ipP, err := utils.NormalizeIP(host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse remote ip")
+	}
+
+	if _, ok := s.IpBlackMap[*ipP]; ok {
+		return ipP, fmt.Errorf("matched deny list")
+	}
+
+	return ipP, nil
+
+}
+
+func (s *Server) BridgeClientConn(conn net.Conn, proxyName string, stopCh chan struct{}) {
+
+	defer func() { _ = conn.Close() }()
+
+	workID := uuid.New().String()
+	msg := utils.NewWorkConnMsg{
+		WorkID:    workID,
+		ProxyName: proxyName,
+	}
+	if err := utils.WriteMsg(conn, utils.MsgNewWorkConn, msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to send NewWorkConn: %v", err))
+		return
+	}
+
+	workCh := make(chan net.Conn, 1)
+	select {
+	case <-stopCh:
+		return
+	case workConn := <-workCh:
+		s.Pipe(conn, workConn)
+	case <-time.After(10 * time.Second):
+		s.Logger.Warn(fmt.Sprintf("Timed out waiting for work connection: workID=%s, proxy=%s", workID, proxyName))
+	}
+
+}
+
+func (s *Server) Pipe(a, b net.Conn) {
+	defer func() { _ = a.Close() }()
+	defer func() { _ = b.Close() }()
+	done := make(chan struct{}, 2)
+	copyFn := func(dst, src net.Conn) {
+		_, _ = io.Copy(dst, src)
+		done <- struct{}{}
+	}
+	go copyFn(a, b)
+	go copyFn(b, a)
+	<-done
+}
+
+func (s *Server) StartWorkConn(payload []byte) error {
+	var msg utils.StartWorkConnMsg
+	if err := utils.Decode(payload, &msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
+		return fmt.Errorf("failed to parse StartWorkConnMsg")
+	}
+	_ = msg.WorkID // TODO work_id verification
+	return nil
 }

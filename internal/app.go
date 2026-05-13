@@ -30,8 +30,9 @@ func NewApp(config *configs.Configs) (*App, error) {
 		Logger: logger,
 	}
 	serverService := services.Server{
-		Config: config.Server,
-		Logger: logger,
+		Config:     config.Server,
+		IpBlackMap: utils.SetupLookupMap(config.Server.IpBlacklist),
+		Logger:     logger,
 	}
 
 	app := App{
@@ -109,12 +110,12 @@ func (a *App) acceptedConn(conn net.Conn) {
 			}
 			switch msgType_ {
 			case utils.MsgProxiesApply:
-				if err := a.serverService.ProxiesApply(conn, payload_, clientIdP); err != nil {
+				if err := a.serverService.ProxiesApply(conn, payload_, clientIdP, a.stopCh); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
 					return
 				}
 			case utils.MsgHeartbeat:
-				if err := utils.WriteMsg(conn, utils.MsgHeartbeat, utils.HeartbeatRespMsg{}); err != nil {
+				if err := utils.WriteMsg(conn, utils.MsgHeartbeatResp, utils.HeartbeatRespMsg{}); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
 					return
 				}
@@ -123,7 +124,10 @@ func (a *App) acceptedConn(conn net.Conn) {
 			}
 		}
 	case utils.MsgStartWorkConn:
-		// TODO
+		if err := a.serverService.StartWorkConn(payload); err != nil {
+			a.logger.Error("Failed to start work connection")
+			return
+		}
 	default:
 		a.logger.Error(fmt.Sprintf("Unknown first message type 0x%02x [%s]", msgType, conn.RemoteAddr()))
 	}

@@ -12,12 +12,12 @@ type root struct{}
 
 func New() *cobra.Command {
 	c := &cobra.Command{
-		Short:   "nextunnel-client",
+		Short:   "nextunnel-server",
 		Version: "v0.0.1",
 		Args:    cobra.ExactArgs(0),
 		Run:     new(root).run,
 	}
-	c.Flags().StringP("config", "c", "nextunnel-client.toml", "Configuration File Path")
+	c.Flags().StringP("config", "c", "nextunnel-server.toml", "Configuration File Path")
 	return c
 }
 
