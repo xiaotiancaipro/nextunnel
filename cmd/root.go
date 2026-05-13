@@ -19,13 +19,24 @@ func New() *cobra.Command {
 		Args:    cobra.ExactArgs(0),
 		Run:     new(root).run,
 	}
-	c.Flags().StringP("config", "c", "nextunnel-server.toml", "Configuration File Path")
+	c.Flags().StringP("config", "c", "nextunnel-server.toml", "configuration file Path")
+	c.Flags().StringP("generate-certs", "g", "", "output directory for client.crt and client.key (uses [tls] CA from config); ignored if flag not set or path is empty")
 	return c
 }
 
 func (c *root) run(cmd *cobra.Command, _ []string) {
 
 	configs := new(args.Config).New(cmd)
+
+	ran, err := new(args.GenerateCerts).New(cmd, configs)
+	if err != nil {
+		cmd.PrintErr(err)
+		os.Exit(1)
+	}
+	if ran {
+		return
+	}
+
 	app, err := internal.NewApp(configs)
 	if err != nil {
 		cmd.PrintErr(err)
