@@ -13,10 +13,11 @@ import (
 )
 
 type Client struct {
-	Config  *configs.Client
-	Proxies []configs.Proxy
-	Logger  *zap.Logger
-	Conn    net.Conn
+	Config   *configs.Client
+	Proxies  []configs.Proxy
+	Logger   *zap.Logger
+	Conn     net.Conn
+	DialWork func() (net.Conn, error)
 }
 
 func (c *Client) Login() error {
@@ -121,9 +122,21 @@ func (c *Client) WorkConn(msg utils.NewWorkConnMsg) {
 		return
 	}
 
+	if c.DialWork == nil {
+		c.Logger.Error("DialWork is not configured; cannot open work channel")
+		return
+	}
+
+	workTLS, err := c.DialWork()
+	if err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to dial work TLS connection: %v", err))
+		return
+	}
+
 	payload := utils.StartWorkConnMsg{WorkID: msg.WorkID}
-	if err := utils.WriteMsg(c.Conn, utils.MsgStartWorkConn, payload); err != nil {
+	if err := utils.WriteMsg(workTLS, utils.MsgStartWorkConn, payload); err != nil {
 		c.Logger.Error(fmt.Sprintf("Failed to send StartWorkConn: %v", err))
+		_ = workTLS.Close()
 		return
 	}
 
@@ -131,11 +144,12 @@ func (c *Client) WorkConn(msg utils.NewWorkConnMsg) {
 	localConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
 	if err != nil {
 		c.Logger.Error(fmt.Sprintf("Failed to connect to local service [%s -> %s]: %v", msg.ProxyName, localAddr, err))
+		_ = workTLS.Close()
 		return
 	}
 	c.Logger.Info(fmt.Sprintf("Work connection bridged: proxy=%s, workID=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
 
-	c.Pipe(c.Conn, localConn)
+	c.Pipe(workTLS, localConn)
 
 }
 

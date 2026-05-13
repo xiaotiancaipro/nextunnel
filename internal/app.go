@@ -60,11 +60,23 @@ func NewApp(config *configs.Configs) (*App, error) {
 
 func (a *App) Start() error {
 
-	conn, err := a.serverConn()
+	tlsCfg, err := a.tlsService.Init()
 	if err != nil {
+		a.logger.Error(fmt.Sprintf("failed to initialize TLS: %v", err))
 		return err
 	}
+
+	a.clientService.DialWork = func() (net.Conn, error) {
+		return a.serverService.DialServer(tlsCfg)
+	}
+
+	conn, err := a.clientService.DialWork()
+	if err != nil {
+		a.logger.Error(fmt.Sprintf("Failed to connect to server: %s", err))
+		return fmt.Errorf("failed to connect to server")
+	}
 	defer func() { _ = conn.Close() }()
+	a.clientService.Conn = conn
 	a.logger.Info("Successfully connected to the server")
 
 	runIdP, err := a.clientLogin()
@@ -126,24 +138,6 @@ func (a *App) Start() error {
 			}
 		}
 	}
-
-}
-
-func (a *App) serverConn() (net.Conn, error) {
-
-	c, err := a.tlsService.Init()
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := a.serverService.DialServer(c)
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to connect to server: %s", err))
-		return nil, fmt.Errorf("failed to connect to server")
-	}
-
-	a.clientService.Conn = conn
-	return conn, nil
 
 }
 
