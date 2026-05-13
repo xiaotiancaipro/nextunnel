@@ -15,7 +15,7 @@ type root struct{}
 func New() *cobra.Command {
 	c := &cobra.Command{
 		Short:   "nextunnel-server",
-		Version: "v0.0.1",
+		Version: "v0.1.0",
 		Args:    cobra.ExactArgs(0),
 		Run:     new(root).run,
 	}
