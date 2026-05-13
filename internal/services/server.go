@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,9 +16,11 @@ import (
 )
 
 type Server struct {
-	Config     *configs.Server
-	IpBlackMap map[string]bool
-	Logger     *zap.Logger
+	Config       *configs.Server
+	IpBlackMap   map[string]bool
+	Logger       *zap.Logger
+	pendingMu    sync.Mutex
+	pendingWorks map[string]net.Conn
 }
 
 func (s *Server) Listen() (net.Listener, error) {
@@ -132,7 +135,7 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, 
 	}
 
 	for name, listener := range opened {
-		go s.ProxyAcceptLoop(name, listener, stopCh)
+		go s.ProxyAcceptLoop(conn, name, listener, stopCh)
 	}
 
 	_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: ""})
@@ -141,7 +144,7 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, 
 
 }
 
-func (s *Server) ProxyAcceptLoop(proxyName string, listener net.Listener, stopCh chan struct{}) {
+func (s *Server) ProxyAcceptLoop(controlConn net.Conn, proxyName string, listener net.Listener, stopCh chan struct{}) {
 
 	defer func() {
 		_ = listener.Close()
@@ -162,25 +165,25 @@ func (s *Server) ProxyAcceptLoop(proxyName string, listener net.Listener, stopCh
 		}
 
 		ipP, err := s.AllowIP(conn.RemoteAddr())
+		ip := "(unknown)"
+		if ipP != nil {
+			ip = *ipP
+		}
 		if err != nil {
-			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, reason=%s", proxyName, *ipP, err.Error()))
+			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, reason=%s", proxyName, ip, err.Error()))
 			_ = conn.Close()
 			continue
 		}
 
-		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s", proxyName, *ipP))
+		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s", proxyName, ip))
 
-		go s.BridgeClientConn(conn, proxyName, stopCh)
+		go s.BridgeClientConn(controlConn, conn, proxyName, stopCh)
 
 	}
 
 }
 
 func (s *Server) AllowIP(addr net.Addr) (*string, error) {
-
-	if len(s.IpBlackMap) == 0 {
-		return nil, nil
-	}
 
 	host := addr.String()
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
@@ -192,38 +195,103 @@ func (s *Server) AllowIP(addr net.Addr) (*string, error) {
 		return nil, fmt.Errorf("failed to parse remote ip")
 	}
 
-	if _, ok := s.IpBlackMap[*ipP]; ok {
-		return ipP, fmt.Errorf("matched deny list")
+	if len(s.IpBlackMap) > 0 {
+		if _, ok := s.IpBlackMap[*ipP]; ok {
+			return ipP, fmt.Errorf("matched deny list")
+		}
 	}
 
 	return ipP, nil
 
 }
 
-func (s *Server) BridgeClientConn(conn net.Conn, proxyName string, stopCh chan struct{}) {
-
-	defer func() { _ = conn.Close() }()
+func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, stopCh chan struct{}) {
 
 	workID := uuid.New().String()
+	s.RegisterPendingWork(workID, conn)
+
+	select {
+	case <-stopCh:
+		if c := s.TakePendingConn(workID); c != nil {
+			_ = c.Close()
+		}
+		return
+	default:
+	}
+
 	msg := utils.NewWorkConnMsg{
 		WorkID:    workID,
 		ProxyName: proxyName,
 	}
-	if err := utils.WriteMsg(conn, utils.MsgNewWorkConn, msg); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to send NewWorkConn: %v", err))
+	if err := utils.WriteMsg(controlConn, utils.MsgNewWorkConn, msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
+		if c := s.TakePendingConn(workID); c != nil {
+			_ = c.Close()
+		}
 		return
 	}
 
-	workCh := make(chan net.Conn, 1)
-	select {
-	case <-stopCh:
-		return
-	case workConn := <-workCh:
-		s.Pipe(conn, workConn)
-	case <-time.After(10 * time.Second):
-		s.Logger.Warn(fmt.Sprintf("Timed out waiting for work connection: workID=%s, proxy=%s", workID, proxyName))
-	}
+}
 
+func (s *Server) RegisterPendingWork(workID string, conn net.Conn) {
+
+	s.pendingMu.Lock()
+	if s.pendingWorks == nil {
+		s.pendingWorks = make(map[string]net.Conn)
+	}
+	s.pendingMu.Unlock()
+
+	s.pendingMu.Lock()
+	s.pendingWorks[workID] = conn
+	s.pendingMu.Unlock()
+
+	time.AfterFunc(15*time.Second, func() {
+		s.pendingMu.Lock()
+		c, ok := s.pendingWorks[workID]
+		if ok {
+			delete(s.pendingWorks, workID)
+		}
+		s.pendingMu.Unlock()
+		if ok {
+			_ = c.Close()
+			s.Logger.Warn(fmt.Sprintf("Timed out waiting for work channel; closed user connection: workID=%s", workID))
+		}
+	})
+
+}
+
+func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
+	var msg utils.StartWorkConnMsg
+	if err := utils.Decode(payload, &msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
+		return fmt.Errorf("failed to parse StartWorkConnMsg")
+	}
+	if msg.WorkID == "" {
+		_ = workTLS.Close()
+		return fmt.Errorf("work_id is empty")
+	}
+	userConn := s.TakePendingConn(msg.WorkID)
+	if userConn == nil {
+		s.Logger.Warn(fmt.Sprintf("No pending user connection for work_id=%s", msg.WorkID))
+		_ = workTLS.Close()
+		return fmt.Errorf("unknown or expired work_id")
+	}
+	go s.Pipe(userConn, workTLS)
+	return nil
+}
+
+func (s *Server) TakePendingConn(workID string) net.Conn {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	if s.pendingWorks == nil {
+		return nil
+	}
+	c, ok := s.pendingWorks[workID]
+	if !ok {
+		return nil
+	}
+	delete(s.pendingWorks, workID)
+	return c
 }
 
 func (s *Server) Pipe(a, b net.Conn) {
@@ -237,14 +305,4 @@ func (s *Server) Pipe(a, b net.Conn) {
 	go copyFn(a, b)
 	go copyFn(b, a)
 	<-done
-}
-
-func (s *Server) StartWorkConn(payload []byte) error {
-	var msg utils.StartWorkConnMsg
-	if err := utils.Decode(payload, &msg); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
-		return fmt.Errorf("failed to parse StartWorkConnMsg")
-	}
-	_ = msg.WorkID // TODO work_id verification
-	return nil
 }

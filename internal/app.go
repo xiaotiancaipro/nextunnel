@@ -85,18 +85,18 @@ func (a *App) Start() error {
 
 func (a *App) acceptedConn(conn net.Conn) {
 
-	defer func() { _ = conn.Close() }()
-
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	msgType, payload, err := utils.ReadMsg(conn)
 	if err != nil {
 		a.logger.Error(fmt.Sprintf("Failed to read first message [%s]: %v", conn.RemoteAddr(), err))
+		_ = conn.Close()
 		return
 	}
 	_ = conn.SetDeadline(time.Time{})
 
 	switch msgType {
 	case utils.MsgLogin:
+		defer func() { _ = conn.Close() }()
 		clientIdP, runIdP, err := a.serverService.Login(conn, payload)
 		if err != nil {
 			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
@@ -124,12 +124,15 @@ func (a *App) acceptedConn(conn net.Conn) {
 			}
 		}
 	case utils.MsgStartWorkConn:
-		if err := a.serverService.StartWorkConn(payload); err != nil {
-			a.logger.Error("Failed to start work connection")
+		if err := a.serverService.StartWorkConn(conn, payload); err != nil {
+			a.logger.Error(fmt.Sprintf("Failed to start work connection: %v", err))
+			_ = conn.Close()
 			return
 		}
+		return
 	default:
 		a.logger.Error(fmt.Sprintf("Unknown first message type 0x%02x [%s]", msgType, conn.RemoteAddr()))
+		_ = conn.Close()
 	}
 
 }
