@@ -61,12 +61,6 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 		return nil, nil, fmt.Errorf("client_id is empty")
 	}
 
-	if loginMsg.Token != s.Config.Token {
-		s.Logger.Warn(fmt.Sprintf("Authentication failed [%s]: token mismatch", conn.RemoteAddr()))
-		_ = utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{Error: "authentication failed"})
-		return nil, nil, fmt.Errorf("authentication failed")
-	}
-
 	runID := uuid.New().String()
 	if err := utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{RunID: runID}); err != nil {
 		s.Logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
