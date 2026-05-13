@@ -74,85 +74,37 @@ func (a *App) Start() error {
 		return a.serverService.DialServer(tlsCfg)
 	}
 
-	conn, err := a.clientService.DialWork()
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to connect to server: %s", err))
-		return fmt.Errorf("failed to connect to server")
-	}
-	a.ctrlMu.Lock()
-	a.ctrlConn = conn
-	a.ctrlMu.Unlock()
-	defer func() {
-		a.ctrlMu.Lock()
-		c := a.ctrlConn
-		a.ctrlConn = nil
-		a.ctrlMu.Unlock()
-		if c != nil {
-			_ = c.Close()
-		}
-	}()
-
-	a.clientService.Conn = conn
-	a.logger.Info("Successfully connected to the server")
-
-	runIdP, err := a.clientLogin()
-	if err != nil {
-		return err
-	}
-	a.logger.Info(fmt.Sprintf("Running with id: %s", *runIdP))
-
-	if err = a.clientProxiesApply(); err != nil {
-		return err
-	}
-	a.logger.Info("Client proxies configuration application successful")
-
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
-
-	msgCh := make(chan msgChan, 1)
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	go a.controlLoop(conn, msgCh, doneCh, a.stopCh)
+	const (
+		reconnectMinDelay = 2 * time.Second
+		reconnectMaxDelay = 30 * time.Second
+	)
+	nextRetryDelay := reconnectMinDelay
 
 	for {
+
 		select {
 		case <-a.stopCh:
 			return nil
-		case <-heartbeatTicker.C:
-			if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
-				a.logger.Error(fmt.Sprintf("failed to set write deadline: %v", err))
-				return nil
-			}
-			err := utils.WriteMsg(conn, utils.MsgHeartbeat, utils.HeartbeatMsg{})
-			_ = conn.SetWriteDeadline(time.Time{})
-			if err != nil {
-				a.logger.Error(fmt.Sprintf("failed to send heartbeat: %v", err))
-				return nil
-			}
-		case result := <-msgCh:
-			if result.err != nil {
-				select {
-				case <-a.stopCh:
-					return nil
-				default:
-				}
-				a.logger.Error(fmt.Sprintf("Error: %v", result.err.Error()))
-				return nil
-			}
-			switch result.msgType {
-			case utils.MsgNewWorkConn:
-				var msg utils.NewWorkConnMsg
-				if err := utils.Decode(result.payload, &msg); err != nil {
-					a.logger.Error(fmt.Sprintf("Failed to parse NewWorkConnMsg: %v", err))
-					continue
-				}
-				go a.clientService.WorkConn(msg)
-			case utils.MsgHeartbeatResp:
-			default:
-				a.logger.Warn(fmt.Sprintf("Received unknown control message 0x%02x", result.msgType))
-			}
+		default:
 		}
+
+		stopped := a.runSession(&nextRetryDelay, reconnectMinDelay)
+		if stopped {
+			return nil
+		}
+
+		select {
+		case <-a.stopCh:
+			return nil
+		case <-time.After(nextRetryDelay):
+		}
+
+		if grow := nextRetryDelay * 2; grow > reconnectMaxDelay {
+			nextRetryDelay = reconnectMaxDelay
+		} else {
+			nextRetryDelay = grow
+		}
+
 	}
 
 }
@@ -169,6 +121,95 @@ func (a *App) Stop() {
 		}
 		a.logger.Info("Shutting down gracefully")
 	})
+}
+
+func (a *App) runSession(nextRetryDelay *time.Duration, reconnectMin time.Duration) (stopped bool) {
+
+	conn, err := a.clientService.DialWork()
+	if err != nil {
+		a.logger.Warn(fmt.Sprintf("connect to server failed: %v", err))
+		return false
+	}
+
+	a.ctrlMu.Lock()
+	a.ctrlConn = conn
+	a.ctrlMu.Unlock()
+	defer func() {
+		a.ctrlMu.Lock()
+		if a.ctrlConn == conn {
+			a.ctrlConn = nil
+		}
+		a.ctrlMu.Unlock()
+		_ = conn.Close()
+	}()
+
+	a.clientService.Conn = conn
+	a.logger.Info("Successfully connected to the server")
+
+	runIdP, err := a.clientLogin()
+	if err != nil {
+		a.logger.Warn(fmt.Sprintf("login failed: %v", err))
+		return false
+	}
+	a.logger.Info(fmt.Sprintf("Running with id: %s", *runIdP))
+
+	if err = a.clientProxiesApply(); err != nil {
+		a.logger.Warn(fmt.Sprintf("proxy registration failed: %v", err))
+		return false
+	}
+	a.logger.Info("Client proxies configuration application successful")
+
+	*nextRetryDelay = reconnectMin
+
+	heartbeatTicker := time.NewTicker(30 * time.Second)
+	defer heartbeatTicker.Stop()
+
+	msgCh := make(chan msgChan, 1)
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	go a.controlLoop(conn, msgCh, doneCh, a.stopCh)
+
+	for {
+		select {
+		case <-a.stopCh:
+			return true
+		case <-heartbeatTicker.C:
+			if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				a.logger.Warn(fmt.Sprintf("heartbeat: set write deadline failed: %v", err))
+				return false
+			}
+			err := utils.WriteMsg(conn, utils.MsgHeartbeat, utils.HeartbeatMsg{})
+			_ = conn.SetWriteDeadline(time.Time{})
+			if err != nil {
+				a.logger.Warn(fmt.Sprintf("heartbeat send failed: %v", err))
+				return false
+			}
+		case result := <-msgCh:
+			if result.err != nil {
+				select {
+				case <-a.stopCh:
+					return true
+				default:
+				}
+				a.logger.Warn(fmt.Sprintf("control read failed: %v", result.err))
+				return false
+			}
+			switch result.msgType {
+			case utils.MsgNewWorkConn:
+				var msg utils.NewWorkConnMsg
+				if err := utils.Decode(result.payload, &msg); err != nil {
+					a.logger.Error(fmt.Sprintf("Failed to parse NewWorkConnMsg: %v", err))
+					continue
+				}
+				go a.clientService.WorkConn(msg)
+			case utils.MsgHeartbeatResp:
+			default:
+				a.logger.Warn(fmt.Sprintf("Received unknown control message 0x%02x", result.msgType))
+			}
+		}
+	}
+
 }
 
 func (a *App) clientLogin() (*string, error) {
