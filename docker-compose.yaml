@@ -1,0 +1,10 @@
+services:
+  nextunnel-client:
+    build: .
+    container_name: nextunnel-client
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./volumes/config:/usr/local/nextunnel/config
+      - ./volumes/certs:/usr/local/nextunnel/certs
+      - ./volumes/logs:/usr/local/nextunnel/logs
