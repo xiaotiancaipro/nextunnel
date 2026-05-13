@@ -27,7 +27,5 @@ WORKDIR /usr/local/nextunnel
 
 COPY --from=builder /out/nextunnel-client /usr/local/nextunnel/bin/nextunnel-client
 
-EXPOSE 30985/tcp
-
 ENTRYPOINT ["/usr/local/nextunnel/bin/nextunnel-client"]
 CMD ["--config", "config/nextunnel-client.toml"]
