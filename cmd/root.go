@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel-server/cmd/args"
@@ -22,13 +24,38 @@ func New() *cobra.Command {
 }
 
 func (c *root) run(cmd *cobra.Command, _ []string) {
+
 	configs := new(args.Config).New(cmd)
 	app, err := internal.NewApp(configs)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)
 	}
-	if err = app.Start(); err != nil {
-		os.Exit(1)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- app.Start()
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err = <-errCh:
+		signal.Stop(sigCh)
+		if err != nil {
+			cmd.PrintErr(err)
+			os.Exit(1)
+		}
+		return
+	case <-sigCh:
+		signal.Stop(sigCh)
+		app.Stop()
+		if err = <-errCh; err != nil {
+			cmd.PrintErr(err)
+			os.Exit(1)
+		}
+		return
 	}
+
 }

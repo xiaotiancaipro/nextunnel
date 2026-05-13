@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
@@ -13,9 +15,12 @@ import (
 
 type App struct {
 	logger        *zap.Logger
-	stopCh        chan struct{}
 	tlsService    *services.Tls
 	serverService *services.Server
+	stopCh        chan struct{}
+	stopOnce      sync.Once
+	listenerMu    sync.Mutex
+	listener      net.Listener
 }
 
 func NewApp(config *configs.Configs) (*App, error) {
@@ -37,9 +42,9 @@ func NewApp(config *configs.Configs) (*App, error) {
 
 	app := App{
 		logger:        logger,
-		stopCh:        make(chan struct{}),
 		tlsService:    &tlsService,
 		serverService: &serverService,
+		stopCh:        make(chan struct{}),
 	}
 
 	return &app, nil
@@ -52,6 +57,10 @@ func (a *App) Start() error {
 	if err != nil {
 		return err
 	}
+	a.listenerMu.Lock()
+	a.listener = listener
+	a.listenerMu.Unlock()
+
 	a.logger.Info("Listening on " + listener.Addr().String())
 
 	tlsConfig, err := a.tlsService.Init()
@@ -69,8 +78,11 @@ func (a *App) Start() error {
 				return nil
 			default:
 			}
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
 			a.logger.Error(fmt.Sprintf("Failed to accept connection: %v", err))
-			return nil
+			return err
 		}
 		conn, err := a.serverService.EstablishConn(connRaw, tlsConfig)
 		if err != nil {
@@ -81,6 +93,20 @@ func (a *App) Start() error {
 		go a.acceptedConn(conn)
 	}
 
+}
+
+func (a *App) Stop() {
+	a.stopOnce.Do(func() {
+		close(a.stopCh)
+		a.listenerMu.Lock()
+		ln := a.listener
+		a.listener = nil
+		a.listenerMu.Unlock()
+		if ln != nil {
+			_ = ln.Close()
+		}
+		a.logger.Info("Shutting down gracefully")
+	})
 }
 
 func (a *App) acceptedConn(conn net.Conn) {
