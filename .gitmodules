@@ -1,0 +1,3 @@
+[submodule "nextunnel-server"]
+	path = nextunnel-server
+	url = git@github.com:xiaotiancaipro/nextunnel-server.git
