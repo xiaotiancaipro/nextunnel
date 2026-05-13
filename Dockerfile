@@ -21,16 +21,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata \
-	&& addgroup -S nextunnel \
-	&& adduser -S -G nextunnel -h /usr/local/nextunnel nextunnel \
-	&& mkdir -p /usr/local/nextunnel/bin /usr/local/nextunnel/config \
-	&& chown -R nextunnel:nextunnel /usr/local/nextunnel
+	&& mkdir -p /usr/local/nextunnel/bin /usr/local/nextunnel/config /usr/local/nextunnel/certs /usr/local/nextunnel/logs
 
 WORKDIR /usr/local/nextunnel
 
-COPY --from=builder --chown=nextunnel:nextunnel /out/nextunnel-server /usr/local/nextunnel/bin/nextunnel-server
-
-USER nextunnel
+COPY --from=builder /out/nextunnel-server /usr/local/nextunnel/bin/nextunnel-server
 
 EXPOSE 30985/tcp
 
