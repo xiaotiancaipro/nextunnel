@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -16,11 +18,16 @@ import (
 )
 
 type Server struct {
-	Config       *configs.Server
-	IpBlackMap   map[string]bool
-	Logger       *zap.Logger
-	pendingMu    sync.Mutex
-	pendingWorks map[string]net.Conn
+	Config      *configs.Server
+	IpBlackMap  map[string]bool
+	Logger      *zap.Logger
+	pendingMu   sync.Mutex
+	pendingWork map[string]*pendingWorkItem
+}
+
+type pendingWorkItem struct {
+	userConn net.Conn
+	certFP   [sha256.Size]byte
 }
 
 func (s *Server) Listen() (net.Listener, error) {
@@ -211,17 +218,24 @@ func (s *Server) AllowIP(addr net.Addr) (*string, error) {
 
 func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
 
+	certFP, err := s.clientLeafCertSHA256(controlConn)
+	if err != nil {
+		s.Logger.Warn(fmt.Sprintf("Cannot bind work channel to control TLS cert: %v", err))
+		_ = conn.Close()
+		return
+	}
+
 	workID := uuid.New().String()
-	s.RegisterPendingWork(workID, conn)
+	s.registerPendingWork(workID, conn, certFP)
 
 	select {
 	case <-serverStopCh:
-		if c := s.TakePendingConn(workID); c != nil {
+		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()
 		}
 		return
 	case <-clientStopCh:
-		if c := s.TakePendingConn(workID); c != nil {
+		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()
 		}
 		return
@@ -234,38 +248,11 @@ func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, 
 	}
 	if err := utils.WriteMsg(controlConn, utils.MsgNewWorkConn, msg); err != nil {
 		s.Logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
-		if c := s.TakePendingConn(workID); c != nil {
+		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()
 		}
 		return
 	}
-
-}
-
-func (s *Server) RegisterPendingWork(workID string, conn net.Conn) {
-
-	s.pendingMu.Lock()
-	if s.pendingWorks == nil {
-		s.pendingWorks = make(map[string]net.Conn)
-	}
-	s.pendingMu.Unlock()
-
-	s.pendingMu.Lock()
-	s.pendingWorks[workID] = conn
-	s.pendingMu.Unlock()
-
-	time.AfterFunc(15*time.Second, func() {
-		s.pendingMu.Lock()
-		c, ok := s.pendingWorks[workID]
-		if ok {
-			delete(s.pendingWorks, workID)
-		}
-		s.pendingMu.Unlock()
-		if ok {
-			_ = c.Close()
-			s.Logger.Warn(fmt.Sprintf("Timed out waiting for work channel; closed user connection: workID=%s", workID))
-		}
-	})
 
 }
 
@@ -279,31 +266,94 @@ func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
 		_ = workTLS.Close()
 		return fmt.Errorf("work_id is empty")
 	}
-	userConn := s.TakePendingConn(msg.WorkID)
-	if userConn == nil {
-		s.Logger.Warn(fmt.Sprintf("No pending user connection for work_id=%s", msg.WorkID))
+	userConn, ok := s.takePendingIfCertMatches(msg.WorkID, workTLS)
+	if !ok {
+		s.Logger.Warn(fmt.Sprintf("No matching pending work or client certificate mismatch for work_id=%s", msg.WorkID))
 		_ = workTLS.Close()
-		return fmt.Errorf("unknown or expired work_id")
+		return fmt.Errorf("unknown or expired work_id, or certificate mismatch")
 	}
-	go s.Pipe(userConn, workTLS)
+	go s.pipe(userConn, workTLS)
 	return nil
 }
 
-func (s *Server) TakePendingConn(workID string) net.Conn {
+func (s *Server) registerPendingWork(workID string, userConn net.Conn, certFP [sha256.Size]byte) {
+
+	s.pendingMu.Lock()
+	if s.pendingWork == nil {
+		s.pendingWork = make(map[string]*pendingWorkItem)
+	}
+	s.pendingWork[workID] = &pendingWorkItem{
+		userConn: userConn,
+		certFP:   certFP,
+	}
+	s.pendingMu.Unlock()
+
+	time.AfterFunc(15*time.Second, func() {
+		s.pendingMu.Lock()
+		p, ok := s.pendingWork[workID]
+		if ok {
+			delete(s.pendingWork, workID)
+		}
+		s.pendingMu.Unlock()
+		if ok {
+			_ = p.userConn.Close()
+			s.Logger.Warn(fmt.Sprintf("Timed out waiting for work channel; closed user connection: workID=%s", workID))
+		}
+	})
+
+}
+
+func (s *Server) removePendingWork(workID string) net.Conn {
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
-	if s.pendingWorks == nil {
+	if s.pendingWork == nil {
 		return nil
 	}
-	c, ok := s.pendingWorks[workID]
+	p, ok := s.pendingWork[workID]
 	if !ok {
 		return nil
 	}
-	delete(s.pendingWorks, workID)
-	return c
+	delete(s.pendingWork, workID)
+	return p.userConn
 }
 
-func (s *Server) Pipe(a, b net.Conn) {
+func (s *Server) takePendingIfCertMatches(workID string, workTLS net.Conn) (net.Conn, bool) {
+	workFP, err := s.clientLeafCertSHA256(workTLS)
+	if err != nil {
+		s.Logger.Warn(fmt.Sprintf("StartWorkConn: read work TLS client cert: %v", err))
+		return nil, false
+	}
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	if s.pendingWork == nil {
+		return nil, false
+	}
+	p, ok := s.pendingWork[workID]
+	if !ok {
+		return nil, false
+	}
+	if subtle.ConstantTimeCompare(p.certFP[:], workFP[:]) != 1 {
+		s.Logger.Warn(fmt.Sprintf("StartWorkConn rejected: client certificate does not match control channel (work_id=%s)", workID))
+		return nil, false
+	}
+	delete(s.pendingWork, workID)
+	return p.userConn, true
+}
+
+func (s *Server) clientLeafCertSHA256(conn net.Conn) ([sha256.Size]byte, error) {
+	var z [sha256.Size]byte
+	tc, ok := conn.(*tls.Conn)
+	if !ok {
+		return z, fmt.Errorf("not a TLS connection")
+	}
+	state := tc.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return z, fmt.Errorf("no peer certificate")
+	}
+	return sha256.Sum256(state.PeerCertificates[0].Raw), nil
+}
+
+func (s *Server) pipe(a, b net.Conn) {
 	defer func() { _ = a.Close() }()
 	defer func() { _ = b.Close() }()
 	done := make(chan struct{}, 2)
