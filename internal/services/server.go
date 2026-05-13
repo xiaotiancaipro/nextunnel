@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -40,7 +39,7 @@ func (s *Server) Listen() (net.Listener, error) {
 }
 
 func (s *Server) AddrStr() string {
-	return net.JoinHostPort(s.Config.Addr, strconv.Itoa(s.Config.Port))
+	return fmt.Sprintf(":%d", s.Config.Port)
 }
 
 func (s *Server) EstablishConn(connRaw net.Conn, tlsConfig *tls.Config) (net.Conn, error) {
