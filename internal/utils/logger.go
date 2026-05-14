@@ -52,7 +52,21 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 		return nil, fmt.Errorf("invalid log level '%s', error: %v", config.Level, err)
 	}
 
+	go scheduleDailyLogRotation(dailyRotate)
+
 	core := zapcore.NewCore(encoder, writeSyncer, level)
 	return zap.New(core, zap.AddCaller()), nil
 
+}
+
+func scheduleDailyLogRotation(logger *lumberjack.Logger) {
+	loc := time.Local
+	for {
+		now := time.Now().In(loc)
+		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+		time.Sleep(time.Until(next))
+		if err := logger.Rotate(); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "logger: daily rotate: %v\n", err)
+		}
+	}
 }
