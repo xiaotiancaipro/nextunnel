@@ -12,7 +12,7 @@ Reverse tunnel · outbound-first · transport-layer mTLS by default · single Go
 <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
 <a href="./README_zh.md"><img alt="简体中文文件" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
 
-[**Quick start**](#requirements) · [**Comparison**](#compare-matrix) · [**Roadmap**](#Future roadmap)
+[**Quick start**](#requirements) · [**Comparison**](#comparison) · [**Roadmap**](#roadmap)
 
 </div>
 
@@ -36,7 +36,7 @@ the server uses RequireAndVerifyClientCert, so admission is gated by client cert
 3. **Resilience**: after control-channel loss the client auto-reconnects with 2s–30s exponential backoff; `ip_blacklist`
    gives coarse client IP filtering on the server.
 
-## Comparison with other open-source projects
+## Comparison
 
 | Capability                                            | **Nextunnel** | **frp** ([fatedier/frp](https://github.com/fatedier/frp)) | **nps** ([ehang-io/nps](https://github.com/ehang-io/nps)) |
 |:------------------------------------------------------|:-------------:|:---------------------------------------------------------:|:---------------------------------------------------------:|
@@ -143,7 +143,7 @@ Default container commands:
 
 Place host-side TOML and PEM material under `volumes/config` and `volumes/certs`.
 
-## Future roadmap
+## Roadmap
 
 - **Proxy types**: UDP, HTTP/HTTPS, and related modes.
 - **Auth & keys**: richer issuance workflows; validity windows, revocation-aware checks, and policy knobs.
