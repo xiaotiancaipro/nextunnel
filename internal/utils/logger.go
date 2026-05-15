@@ -3,6 +3,9 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/natefinch/lumberjack"
@@ -10,6 +13,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+const moduleImportPath = "github.com/xiaotiancaipro/nextunnel-client"
+
+var repoRootDir string
 
 func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
@@ -26,7 +33,7 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 			enc.AppendString(t.Format("2006-01-02 15:04:05"))
 		},
 		EncodeLevel:    zapcore.CapitalLevelEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
+		EncodeCaller:   repoRelativeCallerEncoder,
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeName:     zapcore.FullNameEncoder,
 	}
@@ -57,6 +64,60 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 	core := zapcore.NewCore(encoder, writeSyncer, level)
 	return zap.New(core, zap.AddCaller()), nil
 
+}
+
+func init() {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return
+	}
+	repoRootDir = findRepoRoot(filepath.Dir(file))
+}
+
+func findRepoRoot(dir string) string {
+	for {
+		st, err := os.Stat(filepath.Join(dir, "go.mod"))
+		if err == nil && !st.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+func repoRelativeCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
+	if !caller.Defined {
+		enc.AppendString("undefined")
+		return
+	}
+	enc.AppendString(formatRepoRelativeCaller(caller.File, caller.Line))
+}
+
+func formatRepoRelativeCaller(file string, line int) string {
+	if rel, ok := pathRelativeToRepoRoot(file); ok {
+		return fmt.Sprintf("%s:%d", rel, line)
+	}
+	return zapcore.EntryCaller{Defined: true, File: file, Line: line}.TrimmedPath()
+}
+
+func pathRelativeToRepoRoot(file string) (string, bool) {
+	mod := moduleImportPath + "/"
+	if strings.HasPrefix(file, mod) {
+		return filepath.ToSlash(strings.TrimPrefix(file, mod)), true
+	}
+	if i := strings.Index(file, mod); i >= 0 {
+		return filepath.ToSlash(file[i+len(mod):]), true
+	}
+	if repoRootDir != "" && filepath.IsAbs(file) {
+		rel, err := filepath.Rel(repoRootDir, file)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel), true
+		}
+	}
+	return "", false
 }
 
 func scheduleDailyLogRotation(logger *lumberjack.Logger) {
