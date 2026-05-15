@@ -8,7 +8,7 @@ test/
 dist/
 logs/
 data/
-volumes/
+docker/
 .DS_Store
 *.toml
 *.log
