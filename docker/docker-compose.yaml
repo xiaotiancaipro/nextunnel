@@ -18,8 +18,6 @@ services:
     restart: always
     ports:
       - ${DB_PORT}:5432
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       PGUSER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
