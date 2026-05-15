@@ -38,7 +38,7 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 		MaxSize:    100,
 		MaxBackups: 30,
 		MaxAge:     7,
-		Compress:   true,
+		Compress:   false,
 		LocalTime:  true,
 	}
 
