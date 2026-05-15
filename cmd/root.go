@@ -12,10 +12,10 @@ import (
 
 type root struct{}
 
-func New() *cobra.Command {
+func New(version string) *cobra.Command {
 	c := &cobra.Command{
 		Short:   "nextunnel-server",
-		Version: "v0.1.4",
+		Version: version,
 		Args:    cobra.ExactArgs(0),
 		Run:     new(root).run,
 	}
