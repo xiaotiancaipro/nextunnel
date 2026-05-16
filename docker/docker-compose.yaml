@@ -1,8 +1,8 @@
 services:
   nextunnel-client:
-    build: .
+    build: ..
     container_name: nextunnel-client
-    restart: unless-stopped
+    restart: always
     network_mode: host
     volumes:
       - ./volumes/config:/usr/local/nextunnel/config

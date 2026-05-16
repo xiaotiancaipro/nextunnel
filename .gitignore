@@ -8,6 +8,7 @@ test/
 logs/
 volumes/
 .DS_Store
+.env
 *.log
 *.toml
 !nextunnel-client.example.toml
