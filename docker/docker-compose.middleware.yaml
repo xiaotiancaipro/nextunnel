@@ -1,16 +1,4 @@
 services:
-  nextunnel-server:
-    build: ..
-    container_name: nextunnel-server
-    restart: always
-    network_mode: host
-    volumes:
-      - ./volumes/nextunnel/config:/usr/local/nextunnel/config
-      - ./volumes/nextunnel/certs:/usr/local/nextunnel/certs
-      - ./volumes/nextunnel/logs:/usr/local/nextunnel/logs
-    depends_on:
-      db:
-        condition: service_healthy
   db:
     image: postgres:18.4
     container_name: nextunnel-server-db
