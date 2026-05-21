@@ -9,3 +9,10 @@ level = "info"
 
 [tls]
 dir = "certs"
+
+[database]
+host = ""
+port = ""
+username = ""
+password = ""
+db = ""
