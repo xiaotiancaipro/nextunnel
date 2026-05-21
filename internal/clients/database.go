@@ -38,6 +38,9 @@ func (d *Database) Migrate() error {
 	if err != nil {
 		return fmt.Errorf("database connection failed: %v", err)
 	}
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
+		return fmt.Errorf("failed to enable uuid-ossp extension: %v", err)
+	}
 	for name, table := range d.Tables {
 		if err_ := db.AutoMigrate(&table); err_ != nil {
 			return fmt.Errorf("table migration failed, TableName=%s: %v", name, err_)
