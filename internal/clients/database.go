@@ -5,11 +5,16 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+var tables = map[string]any{
+	models.IpAddressTable: models.IpAddress{},
+}
 
 type Database struct {
 	Config        *configs.Database
@@ -18,11 +23,25 @@ type Database struct {
 	SlowThreshold time.Duration
 }
 
+func InitDB(config *configs.Database, logger *zap.Logger) *Database {
+	return &Database{
+		Config: config,
+		Tables: tables,
+		Logger: logger,
+	}
+}
+
 func (d *Database) New() (*gorm.DB, error) {
+
 	db, err := d.connect()
 	if err != nil {
 		return nil, fmt.Errorf("database connection failed: %v", err)
 	}
+
+	if err := d.Migrate(); err != nil {
+		return nil, fmt.Errorf("database migration failed, %v", err)
+	}
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get underlying SQL.DB: %v", err)
@@ -30,7 +49,9 @@ func (d *Database) New() (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+
 	return db, nil
+
 }
 
 func (d *Database) Migrate() error {

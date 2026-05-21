@@ -9,12 +9,10 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 type App struct {
@@ -35,15 +33,22 @@ func NewApp(config *configs.Configs) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize logging: %v", err)
 	}
 
+	dbClient := clients.InitDB(config.Database, logger)
+
+	db, err := dbClient.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize database: %v", err)
+	}
+
 	tlsService := services.Tls{
 		Config:     config.Tls,
 		ServerAddr: config.Server.Addr,
 		Logger:     logger,
 	}
 	serverService := services.Server{
-		Config:     config.Server,
-		IpBlackMap: utils.SetupLookupMap(config.Server.IpBlacklist),
-		Logger:     logger,
+		Config: config.Server,
+		Logger: logger,
+		DB:     db,
 	}
 
 	app := App{
@@ -59,11 +64,6 @@ func NewApp(config *configs.Configs) (*App, error) {
 }
 
 func (a *App) Start() error {
-
-	_, err := a.initDB(a.configs.Database) // TODO
-	if err != nil {
-		return err
-	}
 
 	listener, err := a.serverService.Listen()
 	if err != nil {
@@ -119,24 +119,6 @@ func (a *App) Stop() {
 		}
 		a.logger.Info("Shutting down gracefully")
 	})
-}
-
-func (a *App) initDB(config *configs.Database) (*gorm.DB, error) {
-	client := clients.Database{
-		Config: config,
-		Tables: map[string]any{
-			models.IpFilterTable: models.IpFilter{},
-		},
-		Logger: a.logger,
-	}
-	if err := client.Migrate(); err != nil {
-		return nil, fmt.Errorf("database migration failed, %v", err)
-	}
-	db, err := client.New()
-	if err != nil {
-		return nil, fmt.Errorf("database initialization failed, %v", err)
-	}
-	return db, nil
 }
 
 func (a *App) acceptedConn(conn net.Conn) {

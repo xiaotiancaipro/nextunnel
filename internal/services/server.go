@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,14 +13,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Server struct {
 	Config      *configs.Server
-	IpBlackMap  map[string]bool
 	Logger      *zap.Logger
+	DB          *gorm.DB
 	pendingMu   sync.Mutex
 	pendingWork map[string]*pendingWorkItem
 }
@@ -205,10 +209,46 @@ func (s *Server) AllowIP(addr net.Addr) (*string, error) {
 		return nil, fmt.Errorf("failed to parse remote ip")
 	}
 
-	if len(s.IpBlackMap) > 0 {
-		if _, ok := s.IpBlackMap[*ipP]; ok {
-			return ipP, fmt.Errorf("matched deny list")
+	var denyErr error
+	err = s.DB.Transaction(func(tx *gorm.DB) error {
+		var record models.IpAddress
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("is_delete = ? AND ip = ?", false, *ipP).
+			First(&record).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			result := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "ip"}},
+				DoNothing: true,
+			}).Create(&models.IpAddress{Ip: *ipP})
+			if result.Error != nil {
+				return fmt.Errorf("failed to record ip address")
+			}
+			if result.RowsAffected == 0 {
+				err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("is_delete = ? AND ip = ?", false, *ipP).
+					First(&record).Error
+				if err != nil {
+					return fmt.Errorf("failed to query ip address")
+				}
+			} else {
+				return nil
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed to query ip address")
 		}
+		if err := tx.Model(&record).UpdateColumn("count", gorm.Expr("count + ?", 1)).Error; err != nil {
+			return fmt.Errorf("failed to update ip count")
+		}
+		if record.Status == 0 {
+			denyErr = fmt.Errorf("matched deny list")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if denyErr != nil {
+		return ipP, denyErr
 	}
 
 	return ipP, nil
