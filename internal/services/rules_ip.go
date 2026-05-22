@@ -115,19 +115,12 @@ func (r *RulesIp) IsAllowed(ip, country, region, city string, isLocal bool) (boo
 	}
 
 	var best *models.RulesIp
-	bestScore := -1
 	for i := range rules {
 		rule := &rules[i]
 		if !r.ruleMatches(*rule, ip, country, region, city, isLocal) {
 			continue
 		}
-		score := r.ruleSpecificity(*rule)
-		if score > bestScore {
-			bestScore = score
-			best = rule
-			continue
-		}
-		if score == bestScore && best != nil && rule.Status == 0 {
+		if best == nil || r.isHigherPriorityRule(*rule, *best) {
 			best = rule
 		}
 	}
@@ -136,6 +129,19 @@ func (r *RulesIp) IsAllowed(ip, country, region, city string, isLocal bool) (boo
 	}
 	return best.Status == 1, nil
 
+}
+
+func (r *RulesIp) isHigherPriorityRule(candidate, current models.RulesIp) bool {
+	candidateScore := r.ruleSpecificity(candidate)
+	currentScore := r.ruleSpecificity(current)
+	if candidateScore != currentScore {
+		return candidateScore > currentScore
+	}
+	// Same specificity: Allow > Block
+	if candidate.Status == 1 && current.Status == 0 {
+		return true
+	}
+	return false
 }
 
 func (r *RulesIp) validateRuleTarget(target RuleTarget) error {
@@ -210,26 +216,26 @@ func (r *RulesIp) normalizeCategory(category string) (string, error) {
 }
 
 func (r *RulesIp) ruleSpecificity(rule models.RulesIp) int {
-	score := 0
+	// Priority: IP > City > Region > Country > Category global rule
 	if rule.Ip != nil {
-		score += 8
+		return 16
 	}
 	if rule.City != nil {
-		score += 4
+		return 8
 	}
 	if rule.Region != nil {
-		score += 2
+		return 4
 	}
 	if rule.Country != nil {
-		score += 1
+		return 2
 	}
-	if rule.Ip == nil && rule.Country == nil && rule.Region == nil && rule.City == nil && rule.Category != nil {
+	if rule.Category != nil {
 		switch strings.ToUpper(strings.TrimSpace(*rule.Category)) {
 		case models.RuleCategoryLocal:
-			score += 2
+			return 1
 		case models.RuleCategoryAll:
-			score += 1
+			return 0
 		}
 	}
-	return score
+	return -1
 }
