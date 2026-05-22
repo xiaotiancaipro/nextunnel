@@ -15,3 +15,6 @@ port = 5432
 username = "postgres"
 password = "nextunnel"
 db = "nextunnel"
+
+[geoip]
+db_path = "geoip/GeoLite2-City.mmdb"

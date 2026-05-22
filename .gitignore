@@ -11,4 +11,5 @@ volumes/
 .env
 *.log
 *.toml
+*.mmdb
 !nextunnel-server.example.toml

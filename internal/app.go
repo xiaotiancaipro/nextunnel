@@ -18,6 +18,7 @@ import (
 type App struct {
 	configs       *configs.Configs
 	logger        *zap.Logger
+	geoIP         *clients.GeoIP
 	tlsService    *services.Tls
 	serverService *services.Server
 	stopCh        chan struct{}
@@ -37,6 +38,13 @@ func NewApp(config *configs.Configs) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}
+	logger.Info("initialize database successfully")
+
+	geoIP, err := clients.NewGeoIP(config.GeoIP.DbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize geoip: %v", err)
+	}
+	logger.Info("GeoIP database loaded: " + config.GeoIP.DbPath)
 
 	tlsService := services.Tls{
 		Config:     config.Tls,
@@ -47,6 +55,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 		Config: config.Server,
 		Logger: logger,
 		DB:     db,
+		GeoIP:  geoIP,
 	}
 
 	app := App{
@@ -54,6 +63,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 		logger:        logger,
 		tlsService:    &tlsService,
 		serverService: &serverService,
+		geoIP:         geoIP,
 		stopCh:        make(chan struct{}),
 	}
 
@@ -114,6 +124,9 @@ func (a *App) Stop() {
 		a.listenerMu.Unlock()
 		if ln != nil {
 			_ = ln.Close()
+		}
+		if a.geoIP != nil {
+			_ = a.geoIP.Close()
 		}
 		a.logger.Info("Shutting down gracefully")
 	})

@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
@@ -20,10 +22,13 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const unknownIp = "UNKNOWN_IP"
+
 type Server struct {
 	Config      *configs.Server
 	Logger      *zap.Logger
 	DB          *gorm.DB
+	GeoIP       *clients.GeoIP
 	pendingMu   sync.Mutex
 	pendingWork map[string]*pendingWorkItem
 }
@@ -178,26 +183,46 @@ func (s *Server) ProxyAcceptLoop(controlConn net.Conn, proxyName string, listene
 			}
 		}
 
-		ipP, err := s.AllowIP(conn.RemoteAddr())
-		ip := "(unknown)"
+		ipP, region, err := s.ipFilter(conn.RemoteAddr())
+		ip := unknownIp
 		if ipP != nil {
 			ip = *ipP
 		}
 		if err != nil {
-			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, reason=%s", proxyName, ip, err.Error()))
+			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, region=%s, reason=%s", proxyName, ip, region, err.Error()))
 			_ = conn.Close()
 			continue
 		}
 
-		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s", proxyName, ip))
+		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
 
-		go s.BridgeClientConn(controlConn, conn, proxyName, serverStopCh, clientStopCh)
+		go s.bridgeClientConn(controlConn, conn, proxyName, serverStopCh, clientStopCh)
 
 	}
 
 }
 
-func (s *Server) AllowIP(addr net.Addr) (*string, error) {
+func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
+	var msg utils.StartWorkConnMsg
+	if err := utils.Decode(payload, &msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
+		return fmt.Errorf("failed to parse StartWorkConnMsg")
+	}
+	if msg.WorkID == "" {
+		_ = workTLS.Close()
+		return fmt.Errorf("work_id is empty")
+	}
+	userConn, ok := s.takePendingIfCertMatches(msg.WorkID, workTLS)
+	if !ok {
+		s.Logger.Warn(fmt.Sprintf("No matching pending work or client certificate mismatch for work_id=%s", msg.WorkID))
+		_ = workTLS.Close()
+		return fmt.Errorf("unknown or expired work_id, or certificate mismatch")
+	}
+	go s.pipe(userConn, workTLS)
+	return nil
+}
+
+func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
 
 	host := addr.String()
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
@@ -206,7 +231,7 @@ func (s *Server) AllowIP(addr net.Addr) (*string, error) {
 
 	ipP, err := utils.NormalizeIP(host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse remote ip")
+		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
 	}
 
 	var denyErr error
@@ -245,17 +270,60 @@ func (s *Server) AllowIP(addr net.Addr) (*string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
-	}
-	if denyErr != nil {
-		return ipP, denyErr
+		return nil, unknownIp, err
 	}
 
-	return ipP, nil
+	region := s.resolveRegion(*ipP)
+	if denyErr != nil {
+		return ipP, region, denyErr
+	}
+
+	return ipP, region, nil
 
 }
 
-func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
+func (s *Server) resolveRegion(ip string) string {
+
+	var record models.IpAddress
+	if err := s.DB.Where("is_delete = ? AND ip = ?", false, ip).First(&record).Error; err != nil {
+		return unknownIp
+	}
+
+	if record.Country != "" || record.Region != "" || record.City != "" {
+		return s.formatRegion(record.Country, record.Region, record.City)
+	}
+
+	geo := s.GeoIP.Lookup(ip)
+	if geo.Country == "" && geo.Region == "" && geo.City == "" {
+		return unknownIp
+	}
+	_ = s.DB.Model(&record).Updates(map[string]any{
+		"country": geo.Country,
+		"region":  geo.Region,
+		"city":    geo.City,
+	}).Error
+	return s.formatRegion(geo.Country, geo.Region, geo.City)
+
+}
+
+func (s *Server) formatRegion(country, region, city string) string {
+	parts := make([]string, 0, 3)
+	if country != "" {
+		parts = append(parts, country)
+	}
+	if region != "" {
+		parts = append(parts, region)
+	}
+	if city != "" {
+		parts = append(parts, city)
+	}
+	if len(parts) == 0 {
+		return unknownIp
+	}
+	return strings.Join(parts, "/")
+}
+
+func (s *Server) bridgeClientConn(controlConn, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
 
 	certFP, err := s.clientLeafCertSHA256(controlConn)
 	if err != nil {
@@ -293,26 +361,6 @@ func (s *Server) BridgeClientConn(controlConn, conn net.Conn, proxyName string, 
 		return
 	}
 
-}
-
-func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
-	var msg utils.StartWorkConnMsg
-	if err := utils.Decode(payload, &msg); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
-		return fmt.Errorf("failed to parse StartWorkConnMsg")
-	}
-	if msg.WorkID == "" {
-		_ = workTLS.Close()
-		return fmt.Errorf("work_id is empty")
-	}
-	userConn, ok := s.takePendingIfCertMatches(msg.WorkID, workTLS)
-	if !ok {
-		s.Logger.Warn(fmt.Sprintf("No matching pending work or client certificate mismatch for work_id=%s", msg.WorkID))
-		_ = workTLS.Close()
-		return fmt.Errorf("unknown or expired work_id, or certificate mismatch")
-	}
-	go s.pipe(userConn, workTLS)
-	return nil
 }
 
 func (s *Server) registerPendingWork(workID string, userConn net.Conn, certFP [sha256.Size]byte) {

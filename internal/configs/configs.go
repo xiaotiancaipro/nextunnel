@@ -11,6 +11,7 @@ type Configs struct {
 	Logs     *Logs     `toml:"logs"`
 	Tls      *Tls      `toml:"tls"`
 	Database *Database `toml:"database"`
+	GeoIP    *GeoIP    `toml:"geoip"`
 }
 
 func NewConfigs(file string) (*Configs, error) {
