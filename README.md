@@ -31,7 +31,7 @@ nextunnel-server
 nextunnel-server [flags]
 ```
 
-When no task flags are provided, the program starts the tunnel server in the foreground.
+When no task flags are provided, the program starts the server in the foreground.
 
 ### Flags
 
