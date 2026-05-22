@@ -39,7 +39,7 @@ func (*IpAllow) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err err
 		return true, fmt.Errorf("failed to initialize logging: %w", err)
 	}
 
-	db, err := clients.InitDB(cfg.Database, logger).New()
+	db, err := clients.NewDB(cfg.Database, logger)
 	if err != nil {
 		return true, fmt.Errorf("failed to initialize database: %w", err)
 	}

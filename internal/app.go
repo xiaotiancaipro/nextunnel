@@ -33,9 +33,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize logging: %v", err)
 	}
 
-	dbClient := clients.InitDB(config.Database, logger)
-
-	db, err := dbClient.New()
+	db, err := clients.NewDB(config.Database, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}

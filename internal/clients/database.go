@@ -23,15 +23,13 @@ type Database struct {
 	SlowThreshold time.Duration
 }
 
-func InitDB(config *configs.Database, logger *zap.Logger) *Database {
-	return &Database{
+func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
+
+	d := &Database{
 		Config: config,
 		Tables: tables,
 		Logger: logger,
 	}
-}
-
-func (d *Database) New() (*gorm.DB, error) {
 
 	db, err := d.connect()
 	if err != nil {
