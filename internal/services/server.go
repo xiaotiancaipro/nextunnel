@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -15,11 +14,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 const unknownIp = "UNKNOWN_IP"
@@ -234,79 +231,25 @@ func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
 		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
 	}
 
-	var denyErr error
-	err = s.DB.Transaction(func(tx *gorm.DB) error {
-		var record models.IpAddress
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("is_delete = ? AND ip = ?", false, *ipP).
-			First(&record).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			result := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "ip"}},
-				DoNothing: true,
-			}).Create(&models.IpAddress{Ip: *ipP})
-			if result.Error != nil {
-				return fmt.Errorf("failed to record ip address")
-			}
-			if result.RowsAffected == 0 {
-				err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-					Where("is_delete = ? AND ip = ?", false, *ipP).
-					First(&record).Error
-				if err != nil {
-					return fmt.Errorf("failed to query ip address")
-				}
-			} else {
-				return nil
-			}
-		} else if err != nil {
-			return fmt.Errorf("failed to query ip address")
-		}
-		if err := tx.Model(&record).UpdateColumn("count", gorm.Expr("count + ?", 1)).Error; err != nil {
-			return fmt.Errorf("failed to update ip count")
-		}
-		if record.Status == 0 {
-			denyErr = fmt.Errorf("matched deny list")
-		}
-		return nil
-	})
+	geo := s.GeoIP.Lookup(*ipP)
+	region := s.formatRegion(geo.Country, geo.Region, geo.City)
+
+	rulesSvc := &RulesIp{DB: s.DB}
+	allowed, err := rulesSvc.IsAllowed(*ipP, geo.Country, geo.Region, geo.City)
 	if err != nil {
-		return nil, unknownIp, err
+		return nil, region, err
 	}
 
-	region := s.resolveRegion(*ipP)
-	if denyErr != nil {
-		return ipP, region, denyErr
+	logsAccess := &LogsAccess{DB: s.DB}
+	if err := logsAccess.Record(*ipP, geo.Country, geo.Region, geo.City); err != nil {
+		s.Logger.Warn(fmt.Sprintf("Failed to record access log: ip=%s, err=%v", *ipP, err))
+	}
+
+	if !allowed {
+		return ipP, region, fmt.Errorf("matched deny list")
 	}
 
 	return ipP, region, nil
-
-}
-
-func (s *Server) resolveRegion(ip string) string {
-
-	var record models.IpAddress
-	if err := s.DB.Where("is_delete = ? AND ip = ?", false, ip).First(&record).Error; err != nil {
-		return unknownIp
-	}
-
-	if record.Country != nil || record.Region != nil || record.City != nil {
-		return s.formatRegion(
-			utils.DerefString(record.Country),
-			utils.DerefString(record.Region),
-			utils.DerefString(record.City),
-		)
-	}
-
-	geo := s.GeoIP.Lookup(ip)
-	if geo.Country == "" && geo.Region == "" && geo.City == "" {
-		return unknownIp
-	}
-	_ = s.DB.Model(&record).Updates(map[string]any{
-		"country": utils.NullIfEmpty(geo.Country),
-		"region":  utils.NullIfEmpty(geo.Region),
-		"city":    utils.NullIfEmpty(geo.City),
-	}).Error
-	return s.formatRegion(geo.Country, geo.Region, geo.City)
 
 }
 

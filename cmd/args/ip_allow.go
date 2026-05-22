@@ -44,10 +44,10 @@ func (*IpAllow) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err err
 		return true, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	service := services.IpAddress{
+	service := services.RulesIp{
 		DB: db,
 	}
-	if err := service.UpsertIPStatus(*ip, 1); err != nil {
+	if err := service.UpsertIPRule(*ip, 1); err != nil {
 		return true, err
 	}
 
