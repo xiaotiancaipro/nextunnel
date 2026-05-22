@@ -17,12 +17,11 @@ func (i *IpAddress) UpsertIPStatus(ip string, status int16) error {
 		var record models.IpAddress
 		err := tx.Where("is_delete = ? AND ip = ?", false, ip).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			newIpAAddress := models.IpAddress{
-				Ip:     ip,
-				Count:  0,
-				Status: status,
-			}
-			return tx.Create(&newIpAAddress).Error
+			return tx.Model(&models.IpAddress{}).Create(map[string]any{
+				"Ip":     ip,
+				"Count":  uint64(0),
+				"Status": status,
+			}).Error
 		}
 		if err != nil {
 			return fmt.Errorf("failed to query ip address: %w", err)
