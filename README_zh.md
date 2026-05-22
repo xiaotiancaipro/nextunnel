@@ -2,14 +2,15 @@
 
 <h1 style="border-bottom: none"><b>Nextunnel</b></h1>
 
-**下一代内网穿透工具（Next-Generation Intranet Tunnel）**
+**下一代内网穿透工具**
 
 反向隧道 · 出站即连 · 传输层 mTLS 原生内建 · Go 单体二进制
 
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-Apache%20License%20Version%202.0-blue)](./LICENSE)
 
-<br>
+<a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
+<a href="./README_zh.md"><img alt="简体中文文件" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
 
 [**快速开始**](#环境要求) · [**对比**](#与其他开源项目的对比) · [**未来特性**](#未来特性)
 
