@@ -1,6 +1,6 @@
 package configs
 
 type Server struct {
-	Addr string `toml:"addr"`
+	Host string `toml:"host"`
 	Port int    `toml:"port"`
 }

@@ -27,7 +27,7 @@ func (*GenerateCerts) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, e
 		return false, nil
 	}
 
-	if err := certs.GenerateClientToDir(cfg.Tls.Dir, cfg.Server.Addr, out); err != nil {
+	if err := certs.GenerateClientToDir(cfg.Tls.Dir, cfg.Server.Host, out); err != nil {
 		return true, err
 	}
 

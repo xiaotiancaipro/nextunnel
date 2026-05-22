@@ -40,7 +40,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 
 	tlsService := services.Tls{
 		Config:     config.Tls,
-		ServerAddr: config.Server.Addr,
+		ServerAddr: config.Server.Host,
 		Logger:     logger,
 	}
 	serverService := services.Server{
