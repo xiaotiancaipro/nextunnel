@@ -35,14 +35,14 @@ nextunnel-server [flags]
 
 ### 参数一览
 
-| 参数                 | 默认值                     | 说明                      |
-|--------------------|-------------------------|-------------------------|
-| `--config`         | `nextunnel-server.toml` | 配置文件路径（支持相对/绝对路径）       |
-| `--generate-certs` | —                       | 在指定目录生成客户端 TLS 证书，完成后退出 |
-| `--ip-allow`       | —                       | 将 IP 加入白名单（写入数据库），完成后退出 |
-| `--ip-block`       | —                       | 将 IP 加入黑名单（写入数据库），完成后退出 |
-| `-h`, `--help`     | —                       | 显示帮助信息                  |
-| `-v`, `--version`  | —                       | 显示版本号                   |
+| 参数                 | 默认值                     | 说明                                |
+|--------------------|-------------------------|-----------------------------------|
+| `--config`         | `nextunnel-server.toml` | 配置文件路径（支持相对/绝对路径）                 |
+| `--generate-certs` | —                       | 在指定目录生成客户端 TLS 证书，完成后退出           |
+| `--ip-allow`       | —                       | 将 IP 加入白名单（写入 `rules_ip` 表），完成后退出 |
+| `--ip-block`       | —                       | 将 IP 加入黑名单（写入 `rules_ip` 表），完成后退出 |
+| `-h`, `--help`     | —                       | 显示帮助信息                            |
+| `-v`, `--version`  | —                       | 显示版本号                             |
 
 ### 启动服务
 
@@ -127,5 +127,5 @@ db_path = "geoip/GeoLite2-City.mmdb"
 
 1. 在 [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) 注册并下载 `GeoLite2-City.mmdb`
 2. 将文件放到配置中 `[geoip].db_path` 指定路径
-3. 首次连接某 IP 时会查询 GeoIP 并将 `country` / `region` / `city` 写入 `ip_address` 表，后续直接读库
+3. 每次连接都会查询 GeoIP，并将 IP 与 `country` / `region` / `city` 写入 `logs_access` 表；IP 限制规则存储在 `rules_ip` 表
 4. 连接日志示例：`User connection arrived: proxy=web, ip=203.0.113.10, region=CN/广东/深圳`

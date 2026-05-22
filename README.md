@@ -39,8 +39,8 @@ When no task flags are provided, the program starts the server in the foreground
 |--------------------|-------------------------|--------------------------------------------------------------------|
 | `--config`         | `nextunnel-server.toml` | Path to the configuration file (relative or absolute)              |
 | `--generate-certs` | —                       | Generate client TLS certificates in the given directory, then exit |
-| `--ip-allow`       | —                       | Add an IP to the allow list (persisted in the database), then exit |
-| `--ip-block`       | —                       | Add an IP to the block list (persisted in the database), then exit |
+| `--ip-allow`       | —                       | Add an IP to the allow list (persisted in `rules_ip`), then exit   |
+| `--ip-block`       | —                       | Add an IP to the block list (persisted in `rules_ip`), then exit   |
 | `-h`, `--help`     | —                       | Show help                                                          |
 | `-v`, `--version`  | —                       | Show version                                                       |
 
@@ -129,6 +129,6 @@ db_path = "geoip/GeoLite2-City.mmdb"
 1. Register at [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and download
    `GeoLite2-City.mmdb`
 2. Place the file at the path configured in `[geoip].db_path`
-3. On first connection from an IP, GeoIP is queried and `country` / `region` / `city` are stored in `ip_address`; later
-   lookups use the database cache
+3. On each connection, GeoIP is queried and the IP with `country` / `region` / `city` is stored in `logs_access`; IP
+   restriction rules are stored in `rules_ip`
 4. Log example: `User connection arrived: proxy=web, ip=203.0.113.10, region=CN/Guangdong/Shenzhen`
