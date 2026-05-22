@@ -35,14 +35,24 @@ When no task flags are provided, the program starts the server in the foreground
 
 ### Flags
 
-| Flag               | Default                 | Description                                                        |
-|--------------------|-------------------------|--------------------------------------------------------------------|
-| `--config`         | `nextunnel-server.toml` | Path to the configuration file (relative or absolute)              |
-| `--generate-certs` | —                       | Generate client TLS certificates in the given directory, then exit |
-| `--ip-allow`       | —                       | Add an IP to the allow list (persisted in `rules_ip`), then exit   |
-| `--ip-block`       | —                       | Add an IP to the block list (persisted in `rules_ip`), then exit   |
-| `-h`, `--help`     | —                       | Show help                                                          |
-| `-v`, `--version`  | —                       | Show version                                                       |
+| Flag               | Default                 | Description                                             |
+|--------------------|-------------------------|---------------------------------------------------------|
+| `--config`         | `nextunnel-server.toml` | Path to the configuration file                          |
+| `--generate-certs` | —                       | Generate client TLS certificates in the given directory |
+| `--ip-allow`       | —                       | Add an IP to the allow list                             |
+| `--ip-block`       | —                       | Add an IP to the block list                             |
+| `--country-allow`  | —                       | Add a country to the allow list                         |
+| `--country-block`  | —                       | Add a country to the block list                         |
+| `--region-allow`   | —                       | Add a region/state to the allow list                    |
+| `--region-block`   | —                       | Add a region/state to the block list                    |
+| `--city-allow`     | —                       | Add a city to the allow list                            |
+| `--city-block`     | —                       | Add a city to the block list                            |
+| `--block-all`      | `false`                 | Block all connections                                   |
+| `--allow-all`      | `false`                 | Allow all connections                                   |
+| `--block-local`    | `false`                 | Block local network connections                         |
+| `--allow-local`    | `false`                 | Allow local network connections                         |
+| `-h`, `--help`     | —                       | Show help                                               |
+| `-v`, `--version`  | —                       | Show version                                            |
 
 ### Start the Server
 
@@ -72,20 +82,45 @@ nextunnel-server --generate-certs ./client-certs
 - Exits with an error if either file already exists in the target directory
 - Certificates are valid for 1 year
 
-### IP Allow / Block Lists
+### Access Control Rules
 
 ```bash
-# Allow an IP
+# Allow/Block an IP
 nextunnel-server --ip-allow 203.0.113.10
-
-# Block an IP
 nextunnel-server --ip-block 203.0.113.10
+
+# Allow/block a country
+nextunnel-server --country-allow China
+nextunnel-server --country-block China
+
+# Allow/block a region/state
+nextunnel-server --region-allow Guangdong
+nextunnel-server --region-block Guangdong
+
+# Allow/block a city
+nextunnel-server --city-allow Shenzhen
+nextunnel-server --city-block Shenzhen
+
+# Block/allow all connections
+nextunnel-server --block-all
+nextunnel-server --allow-all
+
+# Block/allow local network connections
+nextunnel-server --block-local
+nextunnel-server --allow-local
 ```
 
 - Supports IPv4 and IPv6; IP addresses are normalized automatically
+- **Category** has two values: `ALL` (all connections) and `LOCAL` (local network: private, loopback, link-local)
+- `Category=ALL` with `Status=0` and no other conditions blocks every connection
+- `Category=LOCAL` with `Status=0` and no other conditions blocks only local network connections
+- Geo rules must match GeoIP lookup results (use the same names shown in connection logs, e.g.
+  `China/Guangdong/Shenzhen`
+  maps to country=China, region=Guangdong, city=Shenzhen)
 - Requires a working database connection (PostgreSQL via `[database]`)
-- Updates the existing record if the IP is already present, otherwise creates a new one
+- Updates the existing rule if one with the same dimension already exists, otherwise creates a new one
 - Allow list maps to `status = 1`; block list maps to `status = 0`
+- Rule priority: 1) Allow beats Block at the same specificity; 2) IP > City > Region > Country > Category global rules
 
 ## Configuration
 

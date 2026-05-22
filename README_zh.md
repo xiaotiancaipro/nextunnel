@@ -35,14 +35,24 @@ nextunnel-server [flags]
 
 ### 参数一览
 
-| 参数                 | 默认值                     | 说明                                |
-|--------------------|-------------------------|-----------------------------------|
-| `--config`         | `nextunnel-server.toml` | 配置文件路径（支持相对/绝对路径）                 |
-| `--generate-certs` | —                       | 在指定目录生成客户端 TLS 证书，完成后退出           |
-| `--ip-allow`       | —                       | 将 IP 加入白名单（写入 `rules_ip` 表），完成后退出 |
-| `--ip-block`       | —                       | 将 IP 加入黑名单（写入 `rules_ip` 表），完成后退出 |
-| `-h`, `--help`     | —                       | 显示帮助信息                            |
-| `-v`, `--version`  | —                       | 显示版本号                             |
+| 参数                 | 默认值                     | 说明                |
+|--------------------|-------------------------|-------------------|
+| `--config`         | `nextunnel-server.toml` | 配置文件路径            |
+| `--generate-certs` | —                       | 在指定目录生成客户端 TLS 证书 |
+| `--ip-allow`       | —                       | 将 IP 加入白名单        |
+| `--ip-block`       | —                       | 将 IP 加入黑名单        |
+| `--country-allow`  | —                       | 将国家/地区加入白名单       |
+| `--country-block`  | —                       | 将国家/地区加入黑名单       |
+| `--region-allow`   | —                       | 将省/州加入白名单         |
+| `--region-block`   | —                       | 将省/州加入黑名单         |
+| `--city-allow`     | —                       | 将城市加入白名单          |
+| `--city-block`     | —                       | 将城市加入黑名单          |
+| `--block-all`      | `false`                 | 拒绝所有连接            |
+| `--allow-all`      | `false`                 | 允许所有连接            |
+| `--block-local`    | `false`                 | 拒绝局域网连接           |
+| `--allow-local`    | `false`                 | 允许局域网连接           |
+| `-h`, `--help`     | —                       | 显示帮助信息            |
+| `-v`, `--version`  | —                       | 显示版本号             |
 
 ### 启动服务
 
@@ -71,20 +81,44 @@ nextunnel-server --generate-certs ./client-certs
 - 目标目录中若已存在同名文件，命令会报错并退出
 - 证书有效期为 1 年
 
-### IP 白名单 / 黑名单
+### 访问控制规则
 
 ```bash
-# 允许某 IP 访问
+# 允许/禁止某 IP 访问
 nextunnel-server --ip-allow 203.0.113.10
-
-# 禁止某 IP 访问
 nextunnel-server --ip-block 203.0.113.10
+
+# 允许/禁止某个国家/地区
+nextunnel-server --country-allow China
+nextunnel-server --country-block China
+
+# 允许/禁止某个省/州
+nextunnel-server --region-allow 广东
+nextunnel-server --region-block California
+
+# 允许/禁止某个城市
+nextunnel-server --city-allow 深圳
+nextunnel-server --city-block 纽约
+
+# 拒绝/允许所有连接
+nextunnel-server --block-all
+nextunnel-server --allow-all
+
+# 拒绝/允许局域网连接
+nextunnel-server --block-local
+nextunnel-server --allow-local
 ```
 
 - 支持 IPv4 / IPv6，会自动规范化 IP 格式
+- **Category** 有两种值：`ALL`（所有连接）、`LOCAL`（局域网连接，含私有网段、回环地址、链路本地地址）
+- `Category=ALL` 且 `Status=0` 且无其他条件时，表示拒绝所有连接
+- `Category=LOCAL` 且 `Status=0` 且无其他条件时，表示仅拒绝局域网连接，公网连接不受影响
+- 地域规则需与 GeoIP 解析结果一致（名称需与连接日志中的 `region` 字段匹配，如 `China/Guangdong/Shenzhen` 对应
+  country=China、region=Guangdong、city=Shenzhen）
 - 需要数据库可用（通过 `[database]` 连接 PostgreSQL）
-- 若 IP 记录已存在则更新状态，否则新建记录
+- 若同维度规则已存在则更新状态，否则新建记录
 - 白名单对应 `status = 1`，黑名单对应 `status = 0`
+- 规则优先级：1) 同等精确度下 Allow > Block；2) IP > City > Region > Country > Category 全局规则
 
 ## 配置文件
 
