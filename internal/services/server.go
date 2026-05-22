@@ -233,9 +233,10 @@ func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
 
 	geo := s.GeoIP.Lookup(*ipP)
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
+	isLocal := utils.IsLocalIP(*ipP)
 
 	rulesSvc := &RulesIp{DB: s.DB}
-	allowed, err := rulesSvc.IsAllowed(*ipP, geo.Country, geo.Region, geo.City)
+	allowed, err := rulesSvc.IsAllowed(*ipP, geo.Country, geo.Region, geo.City, isLocal)
 	if err != nil {
 		return nil, region, err
 	}

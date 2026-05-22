@@ -2,43 +2,32 @@ package args
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 )
 
-type GeoRule struct {
+type CategoryRule struct {
 	FlagName string
 	Status   int16
-	Field    string
+	Category string
 }
 
-func (g *GeoRule) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func (c *CategoryRule) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 
-	if !cmd.Flags().Changed(g.FlagName) {
+	if !cmd.Flags().Changed(c.FlagName) {
 		return false, nil
 	}
 
-	raw, err := cmd.Flags().GetString(g.FlagName)
+	enabled, err := cmd.Flags().GetBool(c.FlagName)
 	if err != nil {
 		return false, err
 	}
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	if !enabled {
 		return false, nil
-	}
-
-	if g.Field == "ip" {
-		ip, err := utils.NormalizeIP(raw)
-		if err != nil {
-			return true, err
-		}
-		raw = *ip
 	}
 
 	logger, err := logger_.NewLogger(cfg.Logs)
@@ -52,22 +41,19 @@ func (g *GeoRule) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err e
 	}
 
 	service := services.RulesIp{DB: db}
-
-	target, err := service.NewRuleTarget(g.Field, raw)
+	target, err := service.NewCategoryRuleTarget(c.Category)
 	if err != nil {
 		return true, err
 	}
-
-	if err := service.UpsertRule(target, g.Status); err != nil {
+	if err := service.UpsertRule(target, c.Status); err != nil {
 		return true, err
 	}
 
 	action := "blocked"
-	if g.Status == 1 {
+	if c.Status == 1 {
 		action = "allowed"
 	}
-
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s %s %s\n", action, g.Field, raw)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s category %s\n", action, c.Category)
 	return true, nil
 
 }

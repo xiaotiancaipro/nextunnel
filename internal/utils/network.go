@@ -17,3 +17,15 @@ func NormalizeIP(raw string) (*string, error) {
 	}
 	return new(ip.String()), nil
 }
+
+func IsLocalIP(raw string) bool {
+	ipStr := strings.TrimSpace(raw)
+	if zoneIdx := strings.Index(ipStr, "%"); zoneIdx >= 0 {
+		ipStr = ipStr[:zoneIdx]
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
+}

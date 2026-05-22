@@ -14,10 +14,11 @@ type RulesIp struct {
 }
 
 type RuleTarget struct {
-	Ip      *string
-	Country *string
-	Region  *string
-	City    *string
+	Ip       *string
+	Country  *string
+	Region   *string
+	City     *string
+	Category *string
 }
 
 func (r *RulesIp) NewRuleTarget(field, value string) (RuleTarget, error) {
@@ -35,10 +36,24 @@ func (r *RulesIp) NewRuleTarget(field, value string) (RuleTarget, error) {
 		target.Region = &value
 	case "city":
 		target.City = &value
+	case "category":
+		category, err := r.normalizeCategory(value)
+		if err != nil {
+			return RuleTarget{}, err
+		}
+		target.Category = &category
 	default:
 		return RuleTarget{}, fmt.Errorf("unsupported rule field: %s", field)
 	}
 	return target, nil
+}
+
+func (r *RulesIp) NewCategoryRuleTarget(category string) (RuleTarget, error) {
+	category, err := r.normalizeCategory(category)
+	if err != nil {
+		return RuleTarget{}, err
+	}
+	return RuleTarget{Category: &category}, nil
 }
 
 func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
@@ -67,15 +82,22 @@ func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
 		} else {
 			q = q.Where("city IS NULL")
 		}
+		if target.Category != nil {
+			q = q.Where("category = ?", *target.Category)
+		} else {
+			q = q.Where("category IS NULL")
+		}
+
 		var record models.RulesIp
 		err := q.First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return tx.Model(&models.RulesIp{}).Create(map[string]any{
-				"Ip":      target.Ip,
-				"Country": target.Country,
-				"Region":  target.Region,
-				"City":    target.City,
-				"Status":  status,
+			return tx.Create(&models.RulesIp{
+				Ip:       target.Ip,
+				Country:  target.Country,
+				Region:   target.Region,
+				City:     target.City,
+				Category: target.Category,
+				Status:   status,
 			}).Error
 		}
 		if err != nil {
@@ -85,7 +107,7 @@ func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
 	})
 }
 
-func (r *RulesIp) IsAllowed(ip, country, region, city string) (bool, error) {
+func (r *RulesIp) IsAllowed(ip, country, region, city string, isLocal bool) (bool, error) {
 
 	var rules []models.RulesIp
 	if err := r.DB.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
@@ -96,7 +118,7 @@ func (r *RulesIp) IsAllowed(ip, country, region, city string) (bool, error) {
 	bestScore := -1
 	for i := range rules {
 		rule := &rules[i]
-		if !r.ruleMatches(*rule, ip, country, region, city) {
+		if !r.ruleMatches(*rule, ip, country, region, city, isLocal) {
 			continue
 		}
 		score := r.ruleSpecificity(*rule)
@@ -130,15 +152,22 @@ func (r *RulesIp) validateRuleTarget(target RuleTarget) error {
 	if target.City != nil {
 		set++
 	}
-	if set != 1 {
-		return fmt.Errorf("exactly one of ip, country, region, city must be set")
+	if target.Category != nil {
+		set++
+	}
+	if set == 0 {
+		return fmt.Errorf("at least one of ip, country, region, city, category must be set")
 	}
 	return nil
 }
 
-func (r *RulesIp) ruleMatches(rule models.RulesIp, ip, country, region, city string) bool {
-	if rule.Ip == nil && rule.Country == nil && rule.Region == nil && rule.City == nil {
+func (r *RulesIp) ruleMatches(rule models.RulesIp, ip, country, region, city string, isLocal bool) bool {
+	if !r.categoryMatches(rule.Category, isLocal) {
 		return false
+	}
+	hasGeo := rule.Ip != nil || rule.Country != nil || rule.Region != nil || rule.City != nil
+	if !hasGeo {
+		return rule.Category != nil
 	}
 	if rule.Ip != nil && strings.TrimSpace(*rule.Ip) != ip {
 		return false
@@ -155,6 +184,31 @@ func (r *RulesIp) ruleMatches(rule models.RulesIp, ip, country, region, city str
 	return true
 }
 
+func (r *RulesIp) categoryMatches(category *string, isLocal bool) bool {
+	if category == nil {
+		return true
+	}
+	switch strings.ToUpper(strings.TrimSpace(*category)) {
+	case models.RuleCategoryAll:
+		return true
+	case models.RuleCategoryLocal:
+		return isLocal
+	default:
+		return false
+	}
+}
+
+func (r *RulesIp) normalizeCategory(category string) (string, error) {
+	switch strings.ToUpper(strings.TrimSpace(category)) {
+	case models.RuleCategoryAll:
+		return models.RuleCategoryAll, nil
+	case models.RuleCategoryLocal:
+		return models.RuleCategoryLocal, nil
+	default:
+		return "", fmt.Errorf("category must be ALL or LOCAL")
+	}
+}
+
 func (r *RulesIp) ruleSpecificity(rule models.RulesIp) int {
 	score := 0
 	if rule.Ip != nil {
@@ -168,6 +222,14 @@ func (r *RulesIp) ruleSpecificity(rule models.RulesIp) int {
 	}
 	if rule.Country != nil {
 		score += 1
+	}
+	if rule.Ip == nil && rule.Country == nil && rule.Region == nil && rule.City == nil && rule.Category != nil {
+		switch strings.ToUpper(strings.TrimSpace(*rule.Category)) {
+		case models.RuleCategoryLocal:
+			score += 2
+		case models.RuleCategoryAll:
+			score += 1
+		}
 	}
 	return score
 }

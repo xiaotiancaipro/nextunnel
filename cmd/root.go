@@ -21,6 +21,13 @@ var geoRules = []args.GeoRule{
 	{FlagName: "city-block", Status: 0, Field: "city"},
 }
 
+var categoryRules = []args.CategoryRule{
+	{FlagName: "block-all", Status: 0, Category: "ALL"},
+	{FlagName: "allow-all", Status: 1, Category: "ALL"},
+	{FlagName: "block-local", Status: 0, Category: "LOCAL"},
+	{FlagName: "allow-local", Status: 1, Category: "LOCAL"},
+}
+
 type root struct{}
 
 func New(version string) *cobra.Command {
@@ -40,6 +47,10 @@ func New(version string) *cobra.Command {
 	c.Flags().String("region-block", "", "region block")
 	c.Flags().String("city-allow", "", "city allow")
 	c.Flags().String("city-block", "", "city block")
+	c.Flags().Bool("block-all", false, "block all connections")
+	c.Flags().Bool("allow-all", false, "allow all connections")
+	c.Flags().Bool("block-local", false, "block local network connections")
+	c.Flags().Bool("allow-local", false, "allow local network connections")
 	return c
 }
 
@@ -58,6 +69,17 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 
 	for i := range geoRules {
 		ran, err = geoRules[i].New(cmd, configs)
+		if err != nil {
+			cmd.PrintErr(err)
+			os.Exit(1)
+		}
+		if ran {
+			return
+		}
+	}
+
+	for i := range categoryRules {
+		ran, err = categoryRules[i].New(cmd, configs)
 		if err != nil {
 			cmd.PrintErr(err)
 			os.Exit(1)
