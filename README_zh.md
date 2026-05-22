@@ -35,14 +35,14 @@ nextunnel-server [flags]
 
 ### 参数一览
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--config` | `nextunnel-server.toml` | 配置文件路径（支持相对/绝对路径） |
-| `--generate-certs` | — | 在指定目录生成客户端 TLS 证书，完成后退出 |
-| `--ip-allow` | — | 将 IP 加入白名单（写入数据库），完成后退出 |
-| `--ip-block` | — | 将 IP 加入黑名单（写入数据库），完成后退出 |
-| `-h`, `--help` | — | 显示帮助信息 |
-| `-v`, `--version` | — | 显示版本号 |
+| 参数                 | 默认值                     | 说明                      |
+|--------------------|-------------------------|-------------------------|
+| `--config`         | `nextunnel-server.toml` | 配置文件路径（支持相对/绝对路径）       |
+| `--generate-certs` | —                       | 在指定目录生成客户端 TLS 证书，完成后退出 |
+| `--ip-allow`       | —                       | 将 IP 加入白名单（写入数据库），完成后退出 |
+| `--ip-block`       | —                       | 将 IP 加入黑名单（写入数据库），完成后退出 |
+| `-h`, `--help`     | —                       | 显示帮助信息                  |
+| `-v`, `--version`  | —                       | 显示版本号                   |
 
 ### 启动服务
 
@@ -108,13 +108,24 @@ port = 5432
 username = "postgres"
 password = "nextunnel"
 db = "nextunnel"
+
+[geoip]
+db_path = "geoip/GeoLite2-City.mmdb"
 ```
 
-| 配置段 | 字段 | 说明 |
-|--------|------|------|
-| `[server]` | `addr` | 监听地址 |
-| | `port` | 监听端口 |
-| `[logs]` | `file` | 日志文件路径 |
-| | `level` | 日志级别 |
-| `[tls]` | `dir` | TLS 证书目录（CA、服务端及客户端证书生成均依赖此目录） |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接信息 |
+| 配置段          | 字段                                               | 说明                                      |
+|--------------|--------------------------------------------------|-----------------------------------------|
+| `[server]`   | `addr`                                           | 监听地址                                    |
+|              | `port`                                           | 监听端口                                    |
+| `[logs]`     | `file`                                           | 日志文件路径                                  |
+|              | `level`                                          | 日志级别                                    |
+| `[tls]`      | `dir`                                            | TLS 证书目录（CA、服务端及客户端证书生成均依赖此目录）          |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接信息                         |
+| `[geoip]`    | `db_path`                                        | MaxMind GeoLite2-City 数据库路径；留空则跳过 GeoIP |
+
+### GeoIP 归属地
+
+1. 在 [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) 注册并下载 `GeoLite2-City.mmdb`
+2. 将文件放到配置中 `[geoip].db_path` 指定路径
+3. 首次连接某 IP 时会查询 GeoIP 并将 `country` / `region` / `city` 写入 `ip_address` 表，后续直接读库
+4. 连接日志示例：`User connection arrived: proxy=web, ip=203.0.113.10, region=CN/广东/深圳`

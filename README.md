@@ -109,6 +109,9 @@ port = 5432
 username = "postgres"
 password = "nextunnel"
 db = "nextunnel"
+
+[geoip]
+db_path = "geoip/GeoLite2-City.mmdb"
 ```
 
 | Section      | Field                                            | Description                                                                        |
@@ -119,3 +122,13 @@ db = "nextunnel"
 |              | `level`                                          | Log level                                                                          |
 | `[tls]`      | `dir`                                            | TLS certificate directory (used for CA, server, and client certificate generation) |
 | `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection settings                                                     |
+| `[geoip]`    | `db_path`                                        | Path to MaxMind GeoLite2-City database; leave empty to disable GeoIP               |
+
+### GeoIP region lookup
+
+1. Register at [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and download
+   `GeoLite2-City.mmdb`
+2. Place the file at the path configured in `[geoip].db_path`
+3. On first connection from an IP, GeoIP is queried and `country` / `region` / `city` are stored in `ip_address`; later
+   lookups use the database cache
+4. Log example: `User connection arrived: proxy=web, ip=203.0.113.10, region=CN/Guangdong/Shenzhen`
