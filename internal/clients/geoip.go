@@ -9,6 +9,26 @@ import (
 	"github.com/oschwald/geoip2-golang"
 )
 
+var geoIPLocales = []string{
+	"zh-CN",
+	"zh",
+	"en",
+	"ja",
+	"ko",
+	"de",
+	"fr",
+	"es",
+	"pt-BR",
+	"ru",
+	"it",
+	"nl",
+	"pl",
+	"tr",
+	"vi",
+	"th",
+	"id",
+}
+
 type GeoIP struct {
 	reader *geoip2.Reader
 }
@@ -56,11 +76,31 @@ func (g *GeoIP) Lookup(ipStr string) GeoIPResult {
 	var region string
 	if n := len(record.Subdivisions); n > 0 {
 		subdivision := record.Subdivisions[n-1]
-		region = subdivision.Names["en"]
+		region = g.localizedName(subdivision.Names, subdivision.IsoCode)
 	}
+	countryCode := strings.ToUpper(strings.TrimSpace(record.Country.IsoCode))
 	return GeoIPResult{
-		Country: strings.ToUpper(strings.TrimSpace(record.Country.IsoCode)),
+		Country: g.localizedName(record.Country.Names, countryCode),
 		Region:  region,
-		City:    record.City.Names["en"],
+		City:    g.localizedName(record.City.Names),
 	}
+}
+
+func (g *GeoIP) localizedName(names map[string]string, fallbacks ...string) string {
+	for _, locale := range geoIPLocales {
+		if name := strings.TrimSpace(names[locale]); name != "" {
+			return name
+		}
+	}
+	for _, name := range names {
+		if name = strings.TrimSpace(name); name != "" {
+			return name
+		}
+	}
+	for _, fallback := range fallbacks {
+		if name := strings.TrimSpace(fallback); name != "" {
+			return name
+		}
+	}
+	return ""
 }
