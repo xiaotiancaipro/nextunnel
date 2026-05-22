@@ -11,10 +11,10 @@ type LogsAccess struct {
 }
 
 func (l *LogsAccess) Record(ip, country, region, city string) error {
-	return l.DB.Create(&models.LogsAccess{
-		Ip:      ip,
-		Country: utils.NullIfEmpty(country),
-		Region:  utils.NullIfEmpty(region),
-		City:    utils.NullIfEmpty(city),
+	return l.DB.Model(&models.LogsAccess{}).Create(map[string]any{
+		"Ip":      ip,
+		"Country": utils.NullIfEmpty(country),
+		"Region":  utils.NullIfEmpty(region),
+		"City":    utils.NullIfEmpty(city),
 	}).Error
 }

@@ -13,14 +13,69 @@ type RulesIp struct {
 	DB *gorm.DB
 }
 
-func (r *RulesIp) UpsertIPRule(ip string, status int16) error {
+type RuleTarget struct {
+	Ip      *string
+	Country *string
+	Region  *string
+	City    *string
+}
+
+func (r *RulesIp) NewRuleTarget(field, value string) (RuleTarget, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return RuleTarget{}, fmt.Errorf("%s cannot be empty", field)
+	}
+	target := RuleTarget{}
+	switch field {
+	case "ip":
+		target.Ip = &value
+	case "country":
+		target.Country = &value
+	case "region":
+		target.Region = &value
+	case "city":
+		target.City = &value
+	default:
+		return RuleTarget{}, fmt.Errorf("unsupported rule field: %s", field)
+	}
+	return target, nil
+}
+
+func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
+	if err := r.validateRuleTarget(target); err != nil {
+		return err
+	}
 	return r.DB.Transaction(func(tx *gorm.DB) error {
+		q := tx.Where("is_delete = ?", false)
+		if target.Ip != nil {
+			q = q.Where("ip = ?", *target.Ip)
+		} else {
+			q = q.Where("ip IS NULL")
+		}
+		if target.Country != nil {
+			q = q.Where("country = ?", *target.Country)
+		} else {
+			q = q.Where("country IS NULL")
+		}
+		if target.Region != nil {
+			q = q.Where("region = ?", *target.Region)
+		} else {
+			q = q.Where("region IS NULL")
+		}
+		if target.City != nil {
+			q = q.Where("city = ?", *target.City)
+		} else {
+			q = q.Where("city IS NULL")
+		}
 		var record models.RulesIp
-		err := tx.Where("is_delete = ? AND ip = ?", false, ip).First(&record).Error
+		err := q.First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return tx.Model(&models.RulesIp{}).Create(map[string]any{
-				"Ip":     new(ip),
-				"Status": status,
+				"Ip":      target.Ip,
+				"Country": target.Country,
+				"Region":  target.Region,
+				"City":    target.City,
+				"Status":  status,
 			}).Error
 		}
 		if err != nil {
@@ -59,6 +114,26 @@ func (r *RulesIp) IsAllowed(ip, country, region, city string) (bool, error) {
 	}
 	return best.Status == 1, nil
 
+}
+
+func (r *RulesIp) validateRuleTarget(target RuleTarget) error {
+	set := 0
+	if target.Ip != nil {
+		set++
+	}
+	if target.Country != nil {
+		set++
+	}
+	if target.Region != nil {
+		set++
+	}
+	if target.City != nil {
+		set++
+	}
+	if set != 1 {
+		return fmt.Errorf("exactly one of ip, country, region, city must be set")
+	}
+	return nil
 }
 
 func (r *RulesIp) ruleMatches(rule models.RulesIp, ip, country, region, city string) bool {
