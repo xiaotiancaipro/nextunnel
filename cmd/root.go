@@ -19,8 +19,10 @@ func New(version string) *cobra.Command {
 		Args:    cobra.ExactArgs(0),
 		Run:     new(root).run,
 	}
-	c.Flags().StringP("config", "c", "nextunnel-server.toml", "configuration file Path")
-	c.Flags().StringP("generate-certs", "g", "", "output directory for client.crt and client.key (uses [tls] CA from config); ignored if flag not set or path is empty")
+	c.Flags().String("config", "nextunnel-server.toml", "configuration file Path")
+	c.Flags().String("generate-certs", "", "client certificate generation path")
+	c.Flags().String("ip-allow", "", "ip allow")
+	c.Flags().String("ip-block", "", "ip block")
 	return c
 }
 
@@ -29,6 +31,24 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 	configs := new(args.Config).New(cmd)
 
 	ran, err := new(args.GenerateCerts).New(cmd, configs)
+	if err != nil {
+		cmd.PrintErr(err)
+		os.Exit(1)
+	}
+	if ran {
+		return
+	}
+
+	ran, err = new(args.IpAllow).New(cmd, configs)
+	if err != nil {
+		cmd.PrintErr(err)
+		os.Exit(1)
+	}
+	if ran {
+		return
+	}
+
+	ran, err = new(args.IpBlock).New(cmd, configs)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)
