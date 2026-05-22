@@ -10,9 +10,9 @@ import (
 )
 
 var geoIPLocales = []string{
+	"en",
 	"zh-CN",
 	"zh",
-	"en",
 	"ja",
 	"ko",
 	"de",
