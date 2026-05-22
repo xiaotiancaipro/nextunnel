@@ -289,8 +289,12 @@ func (s *Server) resolveRegion(ip string) string {
 		return unknownIp
 	}
 
-	if record.Country != "" || record.Region != "" || record.City != "" {
-		return s.formatRegion(record.Country, record.Region, record.City)
+	if record.Country != nil || record.Region != nil || record.City != nil {
+		return s.formatRegion(
+			utils.DerefString(record.Country),
+			utils.DerefString(record.Region),
+			utils.DerefString(record.City),
+		)
 	}
 
 	geo := s.GeoIP.Lookup(ip)
@@ -298,9 +302,9 @@ func (s *Server) resolveRegion(ip string) string {
 		return unknownIp
 	}
 	_ = s.DB.Model(&record).Updates(map[string]any{
-		"country": geo.Country,
-		"region":  geo.Region,
-		"city":    geo.City,
+		"country": utils.NullIfEmpty(geo.Country),
+		"region":  utils.NullIfEmpty(geo.Region),
+		"city":    utils.NullIfEmpty(geo.City),
 	}).Error
 	return s.formatRegion(geo.Country, geo.Region, geo.City)
 

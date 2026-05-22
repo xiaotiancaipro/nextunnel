@@ -1,9 +1,17 @@
 package utils
 
-func SetupLookupMap(array []string) map[string]bool {
-	m := make(map[string]bool, len(array))
-	for _, v := range array {
-		m[v] = true
+import "strings"
+
+func DerefString(s *string) string {
+	if s == nil {
+		return ""
 	}
-	return m
+	return *s
+}
+
+func NullIfEmpty(s string) any {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.TrimSpace(s)
 }
