@@ -16,7 +16,6 @@ import (
 )
 
 type App struct {
-	configs       *configs.Configs
 	logger        *zap.Logger
 	geoIP         *clients.GeoIP
 	tlsService    *services.Tls
@@ -59,7 +58,6 @@ func NewApp(config *configs.Configs) (*App, error) {
 	}
 
 	app := App{
-		configs:       config,
 		logger:        logger,
 		tlsService:    &tlsService,
 		serverService: &serverService,

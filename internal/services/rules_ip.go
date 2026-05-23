@@ -36,12 +36,6 @@ func (r *RulesIp) NewRuleTarget(field, value string) (RuleTarget, error) {
 		target.Region = &value
 	case "city":
 		target.City = &value
-	case "category":
-		category, err := r.normalizeCategory(value)
-		if err != nil {
-			return RuleTarget{}, err
-		}
-		target.Category = &category
 	default:
 		return RuleTarget{}, fmt.Errorf("unsupported rule field: %s", field)
 	}
