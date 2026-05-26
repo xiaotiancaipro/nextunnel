@@ -6,15 +6,15 @@ import (
 	"github.com/google/uuid"
 )
 
-const RulesIpTable = "rules_ip"
+const AccessRuleTable = "access_rule"
 
 const (
-	RuleCategoryAll    = "ALL"
-	RuleCategoryLocal  = "LOCAL"
-	RuleCategoryRemote = "REMOTE"
+	AccessRuleCategoryAll    = "ALL"
+	AccessRuleCategoryLocal  = "LOCAL"
+	AccessRuleCategoryRemote = "REMOTE"
 )
 
-type RulesIp struct {
+type AccessRule struct {
 	Id        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	Ip        *string   `gorm:"type:string;default:null"`
 	Country   *string   `gorm:"type:varchar(256);default:null"`
@@ -27,6 +27,6 @@ type RulesIp struct {
 	UpdatedAt time.Time `gorm:"type:timestamptz;default:timezone('utc', now());not null"`
 }
 
-func (RulesIp) TableName() string {
-	return RulesIpTable
+func (AccessRule) TableName() string {
+	return AccessRuleTable
 }

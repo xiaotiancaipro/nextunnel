@@ -13,8 +13,8 @@ import (
 )
 
 var tables = map[string]any{
-	models.LogsAccessTable: models.LogsAccess{},
-	models.RulesIpTable:    models.RulesIp{},
+	models.AccessLogTable:  models.AccessLog{},
+	models.AccessRuleTable: models.AccessRule{},
 }
 
 type Database struct {

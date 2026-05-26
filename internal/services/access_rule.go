@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type RulesIp struct {
+type AccessRule struct {
 	DB *gorm.DB
 }
 
@@ -21,7 +21,7 @@ type RuleTarget struct {
 	Category *string
 }
 
-func (r *RulesIp) NewRuleTarget(field, value string) (RuleTarget, error) {
+func (r *AccessRule) NewRuleTarget(field, value string) (RuleTarget, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return RuleTarget{}, fmt.Errorf("%s cannot be empty", field)
@@ -42,7 +42,7 @@ func (r *RulesIp) NewRuleTarget(field, value string) (RuleTarget, error) {
 	return target, nil
 }
 
-func (r *RulesIp) NewCategoryRuleTarget(category string) (RuleTarget, error) {
+func (r *AccessRule) NewCategoryRuleTarget(category string) (RuleTarget, error) {
 	category, err := r.normalizeCategory(category)
 	if err != nil {
 		return RuleTarget{}, err
@@ -50,7 +50,7 @@ func (r *RulesIp) NewCategoryRuleTarget(category string) (RuleTarget, error) {
 	return RuleTarget{Category: &category}, nil
 }
 
-func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
+func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	if err := r.validateRuleTarget(target); err != nil {
 		return err
 	}
@@ -82,10 +82,10 @@ func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
 			q = q.Where("category IS NULL")
 		}
 
-		var record models.RulesIp
+		var record models.AccessRule
 		err := q.First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return tx.Create(&models.RulesIp{
+			return tx.Create(&models.AccessRule{
 				Ip:       target.Ip,
 				Country:  target.Country,
 				Region:   target.Region,
@@ -95,20 +95,20 @@ func (r *RulesIp) UpsertRule(target RuleTarget, status int16) error {
 			}).Error
 		}
 		if err != nil {
-			return fmt.Errorf("failed to query rules_ip: %w", err)
+			return fmt.Errorf("failed to query access_rules: %w", err)
 		}
 		return tx.Model(&record).Update("status", status).Error
 	})
 }
 
-func (r *RulesIp) IsAllowed(ip, country, region, city string, isLocal bool) (bool, error) {
+func (r *AccessRule) IsAllowed(ip, country, region, city string, isLocal bool) (bool, error) {
 
-	var rules []models.RulesIp
+	var rules []models.AccessRule
 	if err := r.DB.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
-		return false, fmt.Errorf("failed to query rules_ip: %w", err)
+		return false, fmt.Errorf("failed to query access_rules: %w", err)
 	}
 
-	var best *models.RulesIp
+	var best *models.AccessRule
 	for i := range rules {
 		rule := &rules[i]
 		if !r.ruleMatches(*rule, ip, country, region, city, isLocal) {
@@ -125,7 +125,7 @@ func (r *RulesIp) IsAllowed(ip, country, region, city string, isLocal bool) (boo
 
 }
 
-func (r *RulesIp) isHigherPriorityRule(candidate, current models.RulesIp) bool {
+func (r *AccessRule) isHigherPriorityRule(candidate, current models.AccessRule) bool {
 	candidateScore := r.ruleSpecificity(candidate)
 	currentScore := r.ruleSpecificity(current)
 	if candidateScore != currentScore {
@@ -138,7 +138,7 @@ func (r *RulesIp) isHigherPriorityRule(candidate, current models.RulesIp) bool {
 	return false
 }
 
-func (r *RulesIp) validateRuleTarget(target RuleTarget) error {
+func (r *AccessRule) validateRuleTarget(target RuleTarget) error {
 	set := 0
 	if target.Ip != nil {
 		set++
@@ -161,7 +161,7 @@ func (r *RulesIp) validateRuleTarget(target RuleTarget) error {
 	return nil
 }
 
-func (r *RulesIp) ruleMatches(rule models.RulesIp, ip, country, region, city string, isLocal bool) bool {
+func (r *AccessRule) ruleMatches(rule models.AccessRule, ip, country, region, city string, isLocal bool) bool {
 	if !r.categoryMatches(rule.Category, isLocal) {
 		return false
 	}
@@ -184,36 +184,36 @@ func (r *RulesIp) ruleMatches(rule models.RulesIp, ip, country, region, city str
 	return true
 }
 
-func (r *RulesIp) categoryMatches(category *string, isLocal bool) bool {
+func (r *AccessRule) categoryMatches(category *string, isLocal bool) bool {
 	if category == nil {
 		return true
 	}
 	switch strings.ToUpper(strings.TrimSpace(*category)) {
-	case models.RuleCategoryAll:
+	case models.AccessRuleCategoryAll:
 		return true
-	case models.RuleCategoryLocal:
+	case models.AccessRuleCategoryLocal:
 		return isLocal
-	case models.RuleCategoryRemote:
+	case models.AccessRuleCategoryRemote:
 		return !isLocal
 	default:
 		return false
 	}
 }
 
-func (r *RulesIp) normalizeCategory(category string) (string, error) {
+func (r *AccessRule) normalizeCategory(category string) (string, error) {
 	switch strings.ToUpper(strings.TrimSpace(category)) {
-	case models.RuleCategoryAll:
-		return models.RuleCategoryAll, nil
-	case models.RuleCategoryLocal:
-		return models.RuleCategoryLocal, nil
-	case models.RuleCategoryRemote:
-		return models.RuleCategoryRemote, nil
+	case models.AccessRuleCategoryAll:
+		return models.AccessRuleCategoryAll, nil
+	case models.AccessRuleCategoryLocal:
+		return models.AccessRuleCategoryLocal, nil
+	case models.AccessRuleCategoryRemote:
+		return models.AccessRuleCategoryRemote, nil
 	default:
 		return "", fmt.Errorf("category must be ALL, LOCAL or REMOTE")
 	}
 }
 
-func (r *RulesIp) ruleSpecificity(rule models.RulesIp) int {
+func (r *AccessRule) ruleSpecificity(rule models.AccessRule) int {
 	// Priority: IP > City > Region > Country > Category global rule
 	if rule.Ip != nil {
 		return 16
@@ -229,9 +229,9 @@ func (r *RulesIp) ruleSpecificity(rule models.RulesIp) int {
 	}
 	if rule.Category != nil {
 		switch strings.ToUpper(strings.TrimSpace(*rule.Category)) {
-		case models.RuleCategoryLocal, models.RuleCategoryRemote:
+		case models.AccessRuleCategoryLocal, models.AccessRuleCategoryRemote:
 			return 1
-		case models.RuleCategoryAll:
+		case models.AccessRuleCategoryAll:
 			return 0
 		}
 	}

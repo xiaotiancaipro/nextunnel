@@ -6,14 +6,14 @@ import (
 	"github.com/google/uuid"
 )
 
-const LogsAccessTable = "logs_access"
+const AccessLogTable = "access_log"
 
 const (
-	LogsAccessCategoryLocal  = "LOCAL"
-	LogsAccessCategoryRemote = "REMOTE"
+	AccessLogCategoryLocal  = "LOCAL"
+	AccessLogCategoryRemote = "REMOTE"
 )
 
-type LogsAccess struct {
+type AccessLog struct {
 	Id        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	Ip        string    `gorm:"type:string;not null"`
 	Category  *string   `gorm:"type:varchar(256);not null"` // LOCAL, REMOTE
@@ -25,6 +25,6 @@ type LogsAccess struct {
 	UpdatedAt time.Time `gorm:"type:timestamptz;default:timezone('utc', now());not null"`
 }
 
-func (LogsAccess) TableName() string {
-	return LogsAccessTable
+func (AccessLog) TableName() string {
+	return AccessLogTable
 }

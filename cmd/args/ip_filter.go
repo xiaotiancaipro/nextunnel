@@ -68,7 +68,7 @@ func (g *RuleGeoIP) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err
 		raw = *ip
 	}
 
-	service, err := newRulesIpService(cfg)
+	service, err := newAccessRuleService(cfg)
 	if err != nil {
 		return true, err
 	}
@@ -96,7 +96,7 @@ func (c *RuleGlobal) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, er
 		return false, nil
 	}
 
-	service, err := newRulesIpService(cfg)
+	service, err := newAccessRuleService(cfg)
 	if err != nil {
 		return true, err
 	}
@@ -110,7 +110,7 @@ func (c *RuleGlobal) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, er
 
 }
 
-func newRulesIpService(cfg *configs.Configs) (*services.RulesIp, error) {
+func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
 	logger, err := logger_.NewLogger(cfg.Logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
@@ -119,10 +119,10 @@ func newRulesIpService(cfg *configs.Configs) (*services.RulesIp, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
-	return &services.RulesIp{DB: db}, nil
+	return &services.AccessRule{DB: db}, nil
 }
 
-func upsertAndPrint(cmd *cobra.Command, service *services.RulesIp, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
+func upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
 	if err := service.UpsertRule(target, status); err != nil {
 		return true, err
 	}
