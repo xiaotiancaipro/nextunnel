@@ -39,8 +39,13 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
 	encoder := zapcore.NewConsoleEncoder(encoderConfig)
 
+	maxSize, err := config.MaxSizeBytes()
+	if err != nil {
+		return nil, fmt.Errorf("invalid logs.maxSize: %w", err)
+	}
+
 	dir, prefix, ext := parseLogFilePath(config.File)
-	dailyRotate := newDailyLogWriter(dir, prefix, ext, 100*1024*1024, 30, 7)
+	dailyRotate := newDailyLogWriter(dir, prefix, ext, maxSize, config.MaxBackups, config.MaxAge)
 
 	writeSyncer := zapcore.NewMultiWriteSyncer(
 		zapcore.AddSync(dailyRotate),

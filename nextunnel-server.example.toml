@@ -5,6 +5,9 @@ port = 25930
 [logs]
 file = "logs/nextunnel-server.log"
 level = "info"
+maxSize = "100MB"
+maxBackups = 30
+maxAge = 7
 
 [tls]
 dir = "certs"
