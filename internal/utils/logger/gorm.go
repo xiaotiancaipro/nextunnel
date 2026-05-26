@@ -2,10 +2,12 @@ package logger
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
@@ -69,6 +71,9 @@ func (f *GormLoggerFormatted) Trace(
 		zap.Duration("elapsed", elapsed),
 	}
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return
+		}
 		fields = append(fields, zap.Error(err))
 		f.logger.Error("query failed", fields...)
 		return
