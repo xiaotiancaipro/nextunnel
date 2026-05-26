@@ -8,9 +8,15 @@ import (
 
 const LogsAccessTable = "logs_access"
 
+const (
+	LogsAccessCategoryLocal  = "LOCAL"
+	LogsAccessCategoryRemote = "REMOTE"
+)
+
 type LogsAccess struct {
 	Id        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
-	Ip        string    `gorm:"type:string;not null;"`
+	Ip        string    `gorm:"type:string;not null"`
+	Category  *string   `gorm:"type:varchar(256);not null"` // LOCAL, REMOTE
 	Country   *string   `gorm:"type:varchar(256);default:null"`
 	Region    *string   `gorm:"type:varchar(256);default:null"`
 	City      *string   `gorm:"type:varchar(256);default:null"`
