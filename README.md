@@ -12,9 +12,26 @@
 
 </div>
 
+## Overview
+
+`nextunnel-server` is the server-side component of the nextunnel reverse-tunnel system. It:
+
+- Accepts mutual TLS (mTLS) connections from nextunnel clients
+- Applies proxy configurations submitted by clients
+- Enforces IP / geo-based access control rules stored in database
+- Records every inbound user connection in the database
+
+## Requirements
+
+- Go 1.26+ (for local builds)
+- PostgreSQL
+- MaxMind [GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) database (`GeoLite2-City.mmdb`)
+
 ## Quick Start
 
 ```bash
+# Download GeoLite2-City.mmdb and place it at geoip/GeoLite2-City.mmdb
+
 # Copy the example config
 cp nextunnel-server.example.toml nextunnel-server.toml
 
@@ -25,34 +42,70 @@ go build -o nextunnel-server .
 nextunnel-server
 ```
 
+Cross-platform release binaries can be built with:
+
+```bash
+./script/build.sh
+```
+
+## Docker
+
+The `docker/` directory provides Compose stacks for production and middleware-only deployments.
+
+```bash
+cd docker
+cp example.env .env
+# Edit .env if needed
+
+# Start PostgreSQL + nextunnel-server
+docker compose up -d
+
+# Or start PostgreSQL only
+docker compose -f docker-compose.middleware.yaml up -d
+```
+
+Default volume layout:
+
+| Host path                         | Container path                | Purpose          |
+|-----------------------------------|-------------------------------|------------------|
+| `docker/volumes/nextunnel/config` | `/usr/local/nextunnel/config` | Configuration    |
+| `docker/volumes/nextunnel/certs`  | `/usr/local/nextunnel/certs`  | TLS certificates |
+| `docker/volumes/nextunnel/geoip`  | `/usr/local/nextunnel/geoip`  | GeoIP database   |
+| `docker/volumes/nextunnel/logs`   | `/usr/local/nextunnel/logs`   | Log files        |
+
+The server container uses `network_mode: host` so client proxy ports bind directly on the host.
+
 ## CLI Usage
 
 ```bash
 nextunnel-server [flags]
 ```
 
-When no task flags are provided, the program starts the server in the foreground.
+When no task flags are provided, the program starts the server in the foreground. Press `Ctrl+C` or send `SIGTERM` for
+graceful shutdown.
 
 ### Flags
 
-| Flag               | Default                 | Description                                             |
-|--------------------|-------------------------|---------------------------------------------------------|
-| `--config`         | `nextunnel-server.toml` | Path to the configuration file                          |
-| `--generate-certs` | —                       | Generate client TLS certificates in the given directory |
-| `--ip-allow`       | —                       | Add an IP to the allow list                             |
-| `--ip-block`       | —                       | Add an IP to the block list                             |
-| `--country-allow`  | —                       | Add a country to the allow list                         |
-| `--country-block`  | —                       | Add a country to the block list                         |
-| `--region-allow`   | —                       | Add a region/state to the allow list                    |
-| `--region-block`   | —                       | Add a region/state to the block list                    |
-| `--city-allow`     | —                       | Add a city to the allow list                            |
-| `--city-block`     | —                       | Add a city to the block list                            |
-| `--block-all`      | `false`                 | Block all connections                                   |
-| `--allow-all`      | `false`                 | Allow all connections                                   |
-| `--block-local`    | `false`                 | Block local network connections                         |
-| `--allow-local`    | `false`                 | Allow local network connections                         |
-| `-h`, `--help`     | —                       | Show help                                               |
-| `-v`, `--version`  | —                       | Show version                                            |
+| Flag                        | Default                 | Description                                             |
+|-----------------------------|-------------------------|---------------------------------------------------------|
+| `--config`                  | `nextunnel-server.toml` | Path to the configuration file                          |
+| `--generate-certs`          | —                       | Generate client TLS certificates in the given directory |
+| `--ip-filter-allow-ip`      | —                       | Add an IP to the allow list                             |
+| `--ip-filter-block-ip`      | —                       | Add an IP to the block list                             |
+| `--ip-filter-allow-country` | —                       | Add a country to the allow list                         |
+| `--ip-filter-block-country` | —                       | Add a country to the block list                         |
+| `--ip-filter-allow-region`  | —                       | Add a region/state to the allow list                    |
+| `--ip-filter-block-region`  | —                       | Add a region/state to the block list                    |
+| `--ip-filter-allow-city`    | —                       | Add a city to the allow list                            |
+| `--ip-filter-block-city`    | —                       | Add a city to the block list                            |
+| `--ip-filter-block-all`     | `false`                 | Block all connections                                   |
+| `--ip-filter-allow-all`     | `false`                 | Allow all connections                                   |
+| `--ip-filter-block-local`   | `false`                 | Block local network connections                         |
+| `--ip-filter-allow-local`   | `false`                 | Allow local network connections                         |
+| `--ip-filter-block-remote`  | `false`                 | Block remote (non-local) network connections            |
+| `--ip-filter-allow-remote`  | `false`                 | Allow remote (non-local) network connections            |
+| `-h`, `--help`              | —                       | Show help                                               |
+| `-v`, `--version`           | —                       | Show version                                            |
 
 ### Start the Server
 
@@ -66,9 +119,12 @@ nextunnel-server --config /path/to/nextunnel-server.toml
 On startup, the server will:
 
 1. Load the TOML configuration file
-2. Initialize logging and the database connection
-3. Listen on the address and port configured under `[server]`
-4. Ensure CA and server TLS certificates exist in the configured certificate directory
+2. Initialize logging and the PostgreSQL connection (with auto-migration)
+3. Load the GeoIP database
+4. Listen on `0.0.0.0:<port>` (all interfaces)
+5. Ensure CA and server TLS certificates exist in the configured certificate directory
+
+> `[server].host` is used for TLS certificate SAN generation, not for the listen address.
 
 ### Generate Client Certificates
 
@@ -80,46 +136,47 @@ nextunnel-server --generate-certs ./client-certs
   generated automatically
 - Writes `client.crt` and `client.key` to the directory specified by `--generate-certs`
 - Exits with an error if either file already exists in the target directory
-- Certificates are valid for 1 year
+- Client certificates are valid for 1 year; CA certificates for 10 years
 
 ### Access Control Rules
 
 ```bash
-# Allow/Block an IP
-nextunnel-server --ip-allow 203.0.113.10
-nextunnel-server --ip-block 203.0.113.10
+# Allow/block an IP
+nextunnel-server --ip-filter-allow-ip 203.0.113.10
+nextunnel-server --ip-filter-block-ip 203.0.113.10
 
 # Allow/block a country
-nextunnel-server --country-allow China
-nextunnel-server --country-block China
+nextunnel-server --ip-filter-allow-country China
+nextunnel-server --ip-filter-block-country China
 
 # Allow/block a region/state
-nextunnel-server --region-allow Guangdong
-nextunnel-server --region-block Guangdong
+nextunnel-server --ip-filter-allow-region Guangdong
+nextunnel-server --ip-filter-block-region Guangdong
 
 # Allow/block a city
-nextunnel-server --city-allow Shenzhen
-nextunnel-server --city-block Shenzhen
+nextunnel-server --ip-filter-allow-city Shenzhen
+nextunnel-server --ip-filter-block-city Shenzhen
 
 # Block/allow all connections
-nextunnel-server --block-all
-nextunnel-server --allow-all
+nextunnel-server --ip-filter-block-all
+nextunnel-server --ip-filter-allow-all
 
 # Block/allow local network connections
-nextunnel-server --block-local
-nextunnel-server --allow-local
+nextunnel-server --ip-filter-block-local
+nextunnel-server --ip-filter-allow-local
+
+# Block/allow remote (non-local) network connections
+nextunnel-server --ip-filter-block-remote
+nextunnel-server --ip-filter-allow-remote
 ```
 
 - Supports IPv4 and IPv6; IP addresses are normalized automatically
-- **Category** has two values: `ALL` (all connections) and `LOCAL` (local network: private, loopback, link-local)
-- `Category=ALL` with `Status=0` and no other conditions blocks every connection
-- `Category=LOCAL` with `Status=0` and no other conditions blocks only local network connections
 - Geo rules must match GeoIP lookup results (use the same names shown in connection logs, e.g.
-  `China/Guangdong/Shenzhen`
-  maps to country=China, region=Guangdong, city=Shenzhen)
+  `China/Guangdong/Shenzhen` maps to country=China, region=Guangdong, city=Shenzhen)
 - Requires a working database connection (PostgreSQL via `[database]`)
 - Updates the existing rule if one with the same dimension already exists, otherwise creates a new one
 - Allow list maps to `status = 1`; block list maps to `status = 0`
+- When no rule matches, the connection is **allowed** by default
 - Rule priority: 1) Allow beats Block at the same specificity; 2) IP > City > Region > Country > Category global rules
 
 ## Configuration
@@ -128,12 +185,15 @@ See [`nextunnel-server.example.toml`](nextunnel-server.example.toml):
 
 ```toml
 [server]
-addr = "127.0.0.1"
+host = "127.0.0.1"
 port = 25930
 
 [logs]
 file = "logs/nextunnel-server.log"
 level = "info"
+maxSize = "100MB"
+maxBackups = 30
+maxAge = 7
 
 [tls]
 dir = "certs"
@@ -149,21 +209,15 @@ db = "nextunnel"
 db_path = "geoip/GeoLite2-City.mmdb"
 ```
 
-| Section      | Field                                            | Description                                                                        |
-|--------------|--------------------------------------------------|------------------------------------------------------------------------------------|
-| `[server]`   | `addr`                                           | Listen address                                                                     |
-|              | `port`                                           | Listen port                                                                        |
-| `[logs]`     | `file`                                           | Log file path                                                                      |
-|              | `level`                                          | Log level                                                                          |
-| `[tls]`      | `dir`                                            | TLS certificate directory (used for CA, server, and client certificate generation) |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection settings                                                     |
-| `[geoip]`    | `db_path`                                        | Path to MaxMind GeoLite2-City database; leave empty to disable GeoIP               |
-
-### GeoIP region lookup
-
-1. Register at [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and download
-   `GeoLite2-City.mmdb`
-2. Place the file at the path configured in `[geoip].db_path`
-3. On each connection, GeoIP is queried and the IP with `country` / `region` / `city` is stored in `logs_access`; IP
-   restriction rules are stored in `rules_ip`
-4. Log example: `User connection arrived: proxy=web, ip=203.0.113.10, region=CN/Guangdong/Shenzhen`
+| Section      | Field                                            | Description                                                        |
+|--------------|--------------------------------------------------|--------------------------------------------------------------------|
+| `[server]`   | `host`                                           | Hostname or IP for TLS certificate SAN (not the listen address)    |
+|              | `port`                                           | Listen port (binds to all interfaces)                              |
+| `[logs]`     | `file`                                           | Log file path (daily rotation with size-based segments)            |
+|              | `level`                                          | Log level (`debug`, `info`, `warn`, `error`)                       |
+|              | `maxSize`                                        | Max size per log segment (e.g. `100MB`, `1GB`; bare number = MB)   |
+|              | `maxBackups`                                     | Max number of daily log files to retain                            |
+|              | `maxAge`                                         | Max age of log files in days                                       |
+| `[tls]`      | `dir`                                            | TLS certificate directory (CA, server, and client cert generation) |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection settings                                     |
+| `[geoip]`    | `db_path`                                        | Path to MaxMind GeoLite2-City database (required)                  |
