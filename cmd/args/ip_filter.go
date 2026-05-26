@@ -13,20 +13,20 @@ import (
 )
 
 var IPFilterRules = []IpFilterRule{
-	&RuleGeoIP{FlagName: "ip-allow", Status: 1, Field: "ip"},
-	&RuleGeoIP{FlagName: "ip-block", Status: 0, Field: "ip"},
-	&RuleGeoIP{FlagName: "country-allow", Status: 1, Field: "country"},
-	&RuleGeoIP{FlagName: "country-block", Status: 0, Field: "country"},
-	&RuleGeoIP{FlagName: "region-allow", Status: 1, Field: "region"},
-	&RuleGeoIP{FlagName: "region-block", Status: 0, Field: "region"},
-	&RuleGeoIP{FlagName: "city-allow", Status: 1, Field: "city"},
-	&RuleGeoIP{FlagName: "city-block", Status: 0, Field: "city"},
-	&RuleGlobal{FlagName: "block-all", Status: 0, Category: "ALL"},
-	&RuleGlobal{FlagName: "allow-all", Status: 1, Category: "ALL"},
-	&RuleGlobal{FlagName: "block-local", Status: 0, Category: "LOCAL"},
-	&RuleGlobal{FlagName: "allow-local", Status: 1, Category: "LOCAL"},
-	&RuleGlobal{FlagName: "block-remote", Status: 0, Category: "REMOTE"},
-	&RuleGlobal{FlagName: "allow-remote", Status: 1, Category: "REMOTE"},
+	&RuleGeoIP{FlagName: "ip-filter-allow-ip", Status: 1, Field: "ip"},
+	&RuleGeoIP{FlagName: "ip-filter-block-ip", Status: 0, Field: "ip"},
+	&RuleGeoIP{FlagName: "ip-filter-allow-country", Status: 1, Field: "country"},
+	&RuleGeoIP{FlagName: "ip-filter-block-country", Status: 0, Field: "country"},
+	&RuleGeoIP{FlagName: "ip-filter-allow-region", Status: 1, Field: "region"},
+	&RuleGeoIP{FlagName: "ip-filter-block-region", Status: 0, Field: "region"},
+	&RuleGeoIP{FlagName: "ip-filter-allow-city", Status: 1, Field: "city"},
+	&RuleGeoIP{FlagName: "ip-filter-block-city", Status: 0, Field: "city"},
+	&RuleGlobal{FlagName: "ip-filter-block-all", Status: 0, Category: "ALL"},
+	&RuleGlobal{FlagName: "ip-filter-allow-all", Status: 1, Category: "ALL"},
+	&RuleGlobal{FlagName: "ip-filter-block-local", Status: 0, Category: "LOCAL"},
+	&RuleGlobal{FlagName: "ip-filter-allow-local", Status: 1, Category: "LOCAL"},
+	&RuleGlobal{FlagName: "ip-filter-block-remote", Status: 0, Category: "REMOTE"},
+	&RuleGlobal{FlagName: "ip-filter-allow-remote", Status: 1, Category: "REMOTE"},
 }
 
 type RuleGeoIP struct {
