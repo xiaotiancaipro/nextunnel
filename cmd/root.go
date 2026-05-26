@@ -10,26 +10,6 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal"
 )
 
-var geoRules = []args.GeoRule{
-	{FlagName: "ip-allow", Status: 1, Field: "ip"},
-	{FlagName: "ip-block", Status: 0, Field: "ip"},
-	{FlagName: "country-allow", Status: 1, Field: "country"},
-	{FlagName: "country-block", Status: 0, Field: "country"},
-	{FlagName: "region-allow", Status: 1, Field: "region"},
-	{FlagName: "region-block", Status: 0, Field: "region"},
-	{FlagName: "city-allow", Status: 1, Field: "city"},
-	{FlagName: "city-block", Status: 0, Field: "city"},
-}
-
-var categoryRules = []args.CategoryRule{
-	{FlagName: "block-all", Status: 0, Category: "ALL"},
-	{FlagName: "allow-all", Status: 1, Category: "ALL"},
-	{FlagName: "block-local", Status: 0, Category: "LOCAL"},
-	{FlagName: "allow-local", Status: 1, Category: "LOCAL"},
-	{FlagName: "block-remote", Status: 0, Category: "REMOTE"},
-	{FlagName: "allow-remote", Status: 1, Category: "REMOTE"},
-}
-
 type root struct{}
 
 func New(version string) *cobra.Command {
@@ -71,19 +51,8 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	for i := range geoRules {
-		ran, err = geoRules[i].New(cmd, configs)
-		if err != nil {
-			cmd.PrintErr(err)
-			os.Exit(1)
-		}
-		if ran {
-			return
-		}
-	}
-
-	for i := range categoryRules {
-		ran, err = categoryRules[i].New(cmd, configs)
+	for i := range args.IPFilterRules {
+		ran, err = args.IPFilterRules[i].New(cmd, configs)
 		if err != nil {
 			cmd.PrintErr(err)
 			os.Exit(1)
