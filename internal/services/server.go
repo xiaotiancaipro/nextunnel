@@ -241,8 +241,12 @@ func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
 		return nil, region, err
 	}
 
+	status := int16(0)
+	if allowed {
+		status = 1
+	}
 	logsAccess := &LogsAccess{DB: s.DB}
-	if err := logsAccess.Record(*ipP, geo.Country, geo.Region, geo.City); err != nil {
+	if err := logsAccess.Record(*ipP, geo.Country, geo.Region, geo.City, status); err != nil {
 		s.Logger.Warn(fmt.Sprintf("Failed to record access log: ip=%s, err=%v", *ipP, err))
 	}
 

@@ -14,6 +14,7 @@ type LogsAccess struct {
 	Country   *string   `gorm:"type:varchar(256);default:null"`
 	Region    *string   `gorm:"type:varchar(256);default:null"`
 	City      *string   `gorm:"type:varchar(256);default:null"`
+	Status    int16     `gorm:"type:smallint;not null"` // 0 is blocked, 1 is allowed
 	CreatedAt time.Time `gorm:"type:timestamptz;default:timezone('utc', now());not null"`
 	UpdatedAt time.Time `gorm:"type:timestamptz;default:timezone('utc', now());not null"`
 }
