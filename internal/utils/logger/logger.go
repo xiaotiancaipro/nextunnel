@@ -1,4 +1,4 @@
-package utils
+package logger
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natefinch/lumberjack"
 	"github.com/xiaotiancaipro/nextunnel-client/internal/configs"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -40,14 +39,13 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
 	encoder := zapcore.NewConsoleEncoder(encoderConfig)
 
-	dailyRotate := &lumberjack.Logger{
-		Filename:   config.File,
-		MaxSize:    100,
-		MaxBackups: 30,
-		MaxAge:     7,
-		Compress:   false,
-		LocalTime:  true,
+	maxSize, err := config.MaxSizeBytes()
+	if err != nil {
+		return nil, fmt.Errorf("invalid logs.maxSize: %w", err)
 	}
+
+	dir, prefix, ext := parseLogFilePath(config.File)
+	dailyRotate := newDailyLogWriter(dir, prefix, ext, maxSize, config.MaxBackups, config.MaxAge)
 
 	writeSyncer := zapcore.NewMultiWriteSyncer(
 		zapcore.AddSync(dailyRotate),
@@ -120,7 +118,7 @@ func pathRelativeToRepoRoot(file string) (string, bool) {
 	return "", false
 }
 
-func scheduleDailyLogRotation(logger *lumberjack.Logger) {
+func scheduleDailyLogRotation(logger *dailyLogWriter) {
 	loc := time.Local
 	for {
 		now := time.Now().In(loc)

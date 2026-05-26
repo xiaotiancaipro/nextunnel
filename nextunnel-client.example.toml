@@ -8,6 +8,9 @@ id = ""
 [logs]
 file = "logs/nextunnel-client.log"
 level = "info"
+maxSize = "100MB"
+maxBackups = 30
+maxAge = 7
 
 [tls]
 ca_file = "certs/ca.crt"

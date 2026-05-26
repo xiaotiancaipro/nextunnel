@@ -9,6 +9,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-client/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel-client/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-client/internal/utils"
+	logger_ "github.com/xiaotiancaipro/nextunnel-client/internal/utils/logger"
 	"go.uber.org/zap"
 )
 
@@ -31,7 +32,7 @@ type msgChan struct {
 
 func NewApp(config *configs.Configs) (*App, error) {
 
-	logger, err := utils.NewLogger(config.Logs)
+	logger, err := logger_.NewLogger(config.Logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %v", err)
 	}
