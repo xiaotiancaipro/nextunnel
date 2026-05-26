@@ -7,6 +7,7 @@ services:
     volumes:
       - ./volumes/nextunnel/config:/usr/local/nextunnel/config
       - ./volumes/nextunnel/certs:/usr/local/nextunnel/certs
+      - ./volumes/nextunnel/geoip:/usr/local/nextunnel/geoip
       - ./volumes/nextunnel/logs:/usr/local/nextunnel/logs
     depends_on:
       db:

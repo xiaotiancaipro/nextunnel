@@ -21,7 +21,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata \
-	&& mkdir -p /usr/local/nextunnel/bin /usr/local/nextunnel/config /usr/local/nextunnel/certs /usr/local/nextunnel/logs
+	&& mkdir -p /usr/local/nextunnel/bin \
+    && mkdir -p /usr/local/nextunnel/config \
+    && mkdir -p /usr/local/nextunnel/certs \
+    && mkdir -p /usr/local/nextunnel/geoip \
+    && mkdir -p /usr/local/nextunnel/logs
 
 WORKDIR /usr/local/nextunnel
 
