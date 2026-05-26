@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natefinch/lumberjack"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -40,14 +39,8 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 
 	encoder := zapcore.NewConsoleEncoder(encoderConfig)
 
-	dailyRotate := &lumberjack.Logger{
-		Filename:   config.File,
-		MaxSize:    100,
-		MaxBackups: 30,
-		MaxAge:     7,
-		Compress:   false,
-		LocalTime:  true,
-	}
+	dir, prefix, ext := parseLogFilePath(config.File)
+	dailyRotate := newDailyLogWriter(dir, prefix, ext, 100*1024*1024, 30, 7)
 
 	writeSyncer := zapcore.NewMultiWriteSyncer(
 		zapcore.AddSync(dailyRotate),
@@ -120,7 +113,7 @@ func pathRelativeToRepoRoot(file string) (string, bool) {
 	return "", false
 }
 
-func scheduleDailyLogRotation(logger *lumberjack.Logger) {
+func scheduleDailyLogRotation(logger *dailyLogWriter) {
 	loc := time.Local
 	for {
 		now := time.Now().In(loc)
