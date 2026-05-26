@@ -193,6 +193,8 @@ func (r *RulesIp) categoryMatches(category *string, isLocal bool) bool {
 		return true
 	case models.RuleCategoryLocal:
 		return isLocal
+	case models.RuleCategoryRemote:
+		return !isLocal
 	default:
 		return false
 	}
@@ -204,8 +206,10 @@ func (r *RulesIp) normalizeCategory(category string) (string, error) {
 		return models.RuleCategoryAll, nil
 	case models.RuleCategoryLocal:
 		return models.RuleCategoryLocal, nil
+	case models.RuleCategoryRemote:
+		return models.RuleCategoryRemote, nil
 	default:
-		return "", fmt.Errorf("category must be ALL or LOCAL")
+		return "", fmt.Errorf("category must be ALL, LOCAL or REMOTE")
 	}
 }
 
@@ -225,7 +229,7 @@ func (r *RulesIp) ruleSpecificity(rule models.RulesIp) int {
 	}
 	if rule.Category != nil {
 		switch strings.ToUpper(strings.TrimSpace(*rule.Category)) {
-		case models.RuleCategoryLocal:
+		case models.RuleCategoryLocal, models.RuleCategoryRemote:
 			return 1
 		case models.RuleCategoryAll:
 			return 0

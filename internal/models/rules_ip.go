@@ -9,8 +9,9 @@ import (
 const RulesIpTable = "rules_ip"
 
 const (
-	RuleCategoryAll   = "ALL"
-	RuleCategoryLocal = "LOCAL"
+	RuleCategoryAll    = "ALL"
+	RuleCategoryLocal  = "LOCAL"
+	RuleCategoryRemote = "REMOTE"
 )
 
 type RulesIp struct {
@@ -19,7 +20,7 @@ type RulesIp struct {
 	Country   *string   `gorm:"type:varchar(256);default:null"`
 	Region    *string   `gorm:"type:varchar(256);default:null"`
 	City      *string   `gorm:"type:varchar(256);default:null"`
-	Category  *string   `gorm:"type:varchar(256);default:null"` // ALL, LOCAL
+	Category  *string   `gorm:"type:varchar(256);default:null"` // ALL, LOCAL, REMOTE
 	Status    int16     `gorm:"type:smallint;not null"`         // 0 is blocked, 1 is allowed
 	IsDelete  bool      `gorm:"type:boolean;default:0;not null"`
 	CreatedAt time.Time `gorm:"type:timestamptz;default:timezone('utc', now());not null"`

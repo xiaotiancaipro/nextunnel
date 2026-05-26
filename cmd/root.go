@@ -26,6 +26,8 @@ var categoryRules = []args.CategoryRule{
 	{FlagName: "allow-all", Status: 1, Category: "ALL"},
 	{FlagName: "block-local", Status: 0, Category: "LOCAL"},
 	{FlagName: "allow-local", Status: 1, Category: "LOCAL"},
+	{FlagName: "block-remote", Status: 0, Category: "REMOTE"},
+	{FlagName: "allow-remote", Status: 1, Category: "REMOTE"},
 }
 
 type root struct{}
@@ -51,6 +53,8 @@ func New(version string) *cobra.Command {
 	c.Flags().Bool("allow-all", false, "allow all connections")
 	c.Flags().Bool("block-local", false, "block local network connections")
 	c.Flags().Bool("allow-local", false, "allow local network connections")
+	c.Flags().Bool("block-remote", false, "block remote (non-local) network connections")
+	c.Flags().Bool("allow-remote", false, "allow remote (non-local) network connections")
 	return c
 }
 
