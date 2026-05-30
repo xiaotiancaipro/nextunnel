@@ -39,7 +39,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 	}
 	logger.Info("initialize database successfully")
 
-	geoIP, err := clients.NewGeoIP(config.GeoIP.DbPath)
+	geoIP, err := clients.NewGeoIP(config.GeoIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize geoip: %v", err)
 	}
