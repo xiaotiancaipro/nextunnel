@@ -51,7 +51,7 @@ func GenerateClientToDir(tlsDir string, listenHost string, outDir string) error 
 	if err != nil {
 		return fmt.Errorf("tls: read CA cert: %w", err)
 	}
-	caKeyPEM, err := os.ReadFile(filepath.Join(tlsAbs, FileCAKey))
+	caKeyPEM, err := os.ReadFile(filepath.Join(tlsAbs, fileCAKey))
 	if err != nil {
 		return fmt.Errorf("tls: read CA key: %w", err)
 	}

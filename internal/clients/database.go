@@ -17,19 +17,19 @@ var tables = map[string]any{
 	models.AccessRuleTable: models.AccessRule{},
 }
 
-type Database struct {
-	Config        *configs.Database
-	Tables        map[string]any
-	Logger        *zap.Logger
-	SlowThreshold time.Duration
+type database struct {
+	config        *configs.Database
+	tables        map[string]any
+	logger        *zap.Logger
+	slowThreshold time.Duration
 }
 
 func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
 
-	d := &Database{
-		Config: config,
-		Tables: tables,
-		Logger: logger,
+	d := &database{
+		config: config,
+		tables: tables,
+		logger: logger,
 	}
 
 	db, err := d.connect()
@@ -37,7 +37,7 @@ func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("database connection failed: %v", err)
 	}
 
-	if err := d.Migrate(); err != nil {
+	if err := d.migrate(); err != nil {
 		return nil, fmt.Errorf("database migration failed, %v", err)
 	}
 
@@ -53,7 +53,7 @@ func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
 
 }
 
-func (d *Database) Migrate() error {
+func (d *database) migrate() error {
 	db, err := d.connect()
 	if err != nil {
 		return fmt.Errorf("database connection failed: %v", err)
@@ -61,7 +61,7 @@ func (d *Database) Migrate() error {
 	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
 		return fmt.Errorf("failed to enable uuid-ossp extension: %v", err)
 	}
-	for name, table := range d.Tables {
+	for name, table := range d.tables {
 		if err_ := db.AutoMigrate(&table); err_ != nil {
 			return fmt.Errorf("table migration failed, TableName=%s: %v", name, err_)
 		}
@@ -69,20 +69,20 @@ func (d *Database) Migrate() error {
 	return nil
 }
 
-func (d *Database) connect() (*gorm.DB, error) {
-	if d.Logger == nil {
+func (d *database) connect() (*gorm.DB, error) {
+	if d.logger == nil {
 		return nil, fmt.Errorf("database logger is required")
 	}
 	dsn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		d.Config.Host,
-		d.Config.Port,
-		d.Config.Username,
-		d.Config.Password,
-		d.Config.Database,
+		d.config.Host,
+		d.config.Port,
+		d.config.Username,
+		d.config.Password,
+		d.config.Database,
 	)
 	conf := gorm.Config{
-		Logger: logger.NewGormLoggerFormatted(d.Logger, d.SlowThreshold),
+		Logger: logger.NewGormLogger(d.logger, d.slowThreshold),
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)
 }

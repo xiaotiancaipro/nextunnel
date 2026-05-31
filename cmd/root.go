@@ -40,9 +40,9 @@ func New(version string) *cobra.Command {
 
 func (c *root) run(cmd *cobra.Command, _ []string) {
 
-	configs := new(args.Config).New(cmd)
+	cfg := args.LoadConfig(cmd)
 
-	ran, err := new(args.GenerateCerts).New(cmd, configs)
+	ran, err := args.RunGenerateCerts(cmd, cfg)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)
@@ -51,18 +51,16 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	for i := range args.IPFilterRules {
-		ran, err = args.IPFilterRules[i].New(cmd, configs)
-		if err != nil {
-			cmd.PrintErr(err)
-			os.Exit(1)
-		}
-		if ran {
-			return
-		}
+	ran, err = args.RunIPFilters(cmd, cfg)
+	if err != nil {
+		cmd.PrintErr(err)
+		os.Exit(1)
+	}
+	if ran {
+		return
 	}
 
-	app, err := internal.NewApp(configs)
+	app, err := internal.NewApp(cfg)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)

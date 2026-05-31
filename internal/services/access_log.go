@@ -6,12 +6,16 @@ import (
 	"gorm.io/gorm"
 )
 
-type AccessLog struct {
-	DB *gorm.DB
+type accessLog struct {
+	db *gorm.DB
 }
 
-func (l *AccessLog) Record(ip, country, region, city string, isLocal bool, status int16) error {
-	return l.DB.Model(&models.AccessLog{}).Create(map[string]any{
+func newAccessLog(db *gorm.DB) *accessLog {
+	return &accessLog{db: db}
+}
+
+func (l *accessLog) record(ip, country, region, city string, isLocal bool, status int16) error {
+	return l.db.Model(&models.AccessLog{}).Create(map[string]any{
 		"Ip":       ip,
 		"Category": l.categoryFromIP(isLocal),
 		"Country":  utils.NullIfEmpty(country),
@@ -21,7 +25,7 @@ func (l *AccessLog) Record(ip, country, region, city string, isLocal bool, statu
 	}).Error
 }
 
-func (l *AccessLog) categoryFromIP(isLocal bool) string {
+func (l *accessLog) categoryFromIP(isLocal bool) string {
 	if isLocal {
 		return models.AccessLogCategoryLocal
 	}

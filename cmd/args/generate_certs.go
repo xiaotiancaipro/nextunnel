@@ -10,9 +10,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
 )
 
-type GenerateCerts struct{}
-
-func (*GenerateCerts) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func RunGenerateCerts(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 
 	if !cmd.Flags().Changed("generate-certs") {
 		return false, nil

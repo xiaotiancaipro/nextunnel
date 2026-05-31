@@ -17,7 +17,7 @@ import (
 
 const (
 	FileCACert  = "ca.crt"
-	FileCAKey   = "ca.key"
+	fileCAKey   = "ca.key"
 	FileSrvCert = "server.crt"
 	FileSrvKey  = "server.key"
 )
@@ -29,7 +29,7 @@ func Ensure(dir string, listenHost string) error {
 		return fmt.Errorf("tls: certificate dir: %w", err)
 	}
 	caCrt := filepath.Join(abs, FileCACert)
-	caKey := filepath.Join(abs, FileCAKey)
+	caKey := filepath.Join(abs, fileCAKey)
 	srvCrt := filepath.Join(abs, FileSrvCert)
 	srvKey := filepath.Join(abs, FileSrvKey)
 
@@ -81,7 +81,7 @@ func Ensure(dir string, listenHost string) error {
 	if n != 0 {
 		return fmt.Errorf(
 			"tls: incomplete certificate material in %q (need all of %s, %s, %s, %s or none)",
-			abs, FileCACert, FileCAKey, FileSrvCert, FileSrvKey,
+			abs, FileCACert, fileCAKey, FileSrvCert, FileSrvKey,
 		)
 	}
 
@@ -191,7 +191,7 @@ func generateAll(dir string, listenHost string) error {
 	}
 
 	caCrt := filepath.Join(dir, FileCACert)
-	caKey := filepath.Join(dir, FileCAKey)
+	caKey := filepath.Join(dir, fileCAKey)
 	srvCrt := filepath.Join(dir, FileSrvCert)
 	srvKey := filepath.Join(dir, FileSrvKey)
 
@@ -200,7 +200,7 @@ func generateAll(dir string, listenHost string) error {
 	}
 	caPrivDER := x509.MarshalPKCS1PrivateKey(caPriv)
 	if err := writePEM(caKey, "RSA PRIVATE KEY", caPrivDER, 0o600); err != nil {
-		return fmt.Errorf("tls: write %s: %w", FileCAKey, err)
+		return fmt.Errorf("tls: write %s: %w", fileCAKey, err)
 	}
 	if err := writePEM(srvCrt, "CERTIFICATE", srvDER, 0o644); err != nil {
 		return fmt.Errorf("tls: write %s: %w", FileSrvCert, err)

@@ -8,9 +8,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 )
 
-type Config struct{}
-
-func (*Config) New(cmd *cobra.Command) *configs.Configs {
+func LoadConfig(cmd *cobra.Command) *configs.Configs {
 
 	flag, err := cmd.Flags().GetString("config")
 	if err != nil {

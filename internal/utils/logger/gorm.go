@@ -21,35 +21,35 @@ var sqlWhitespaceReplacer = strings.NewReplacer(
 	"    ", " ",
 )
 
-type GormLoggerFormatted struct {
+type gormLogger struct {
 	logger        *zap.Logger
 	slowThreshold time.Duration
 }
 
-func NewGormLoggerFormatted(logger *zap.Logger, slowThreshold time.Duration) *GormLoggerFormatted {
+func NewGormLogger(logger *zap.Logger, slowThreshold time.Duration) logger.Interface {
 	if slowThreshold <= 0 {
 		slowThreshold = defaultSlowThreshold
 	}
-	return &GormLoggerFormatted{
+	return &gormLogger{
 		logger:        logger.Named("gorm"),
 		slowThreshold: slowThreshold,
 	}
 }
 
-func (f *GormLoggerFormatted) LogMode(level logger.LogLevel) logger.Interface {
+func (f *gormLogger) LogMode(level logger.LogLevel) logger.Interface {
 	if level <= logger.Silent {
-		return &GormLoggerFormatted{logger: zap.NewNop(), slowThreshold: f.slowThreshold}
+		return &gormLogger{logger: zap.NewNop(), slowThreshold: f.slowThreshold}
 	}
 	return f
 }
 
-func (f *GormLoggerFormatted) Info(context.Context, string, ...any) {}
+func (f *gormLogger) Info(context.Context, string, ...any) {}
 
-func (f *GormLoggerFormatted) Warn(context.Context, string, ...any) {}
+func (f *gormLogger) Warn(context.Context, string, ...any) {}
 
-func (f *GormLoggerFormatted) Error(context.Context, string, ...any) {}
+func (f *gormLogger) Error(context.Context, string, ...any) {}
 
-func (f *GormLoggerFormatted) Trace(
+func (f *gormLogger) Trace(
 	_ context.Context,
 	begin time.Time,
 	fc func() (sql string, rowsAffected int64),

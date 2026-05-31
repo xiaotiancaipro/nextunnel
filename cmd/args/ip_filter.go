@@ -12,46 +12,56 @@ import (
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 )
 
-var IPFilterRules = []IpFilterRule{
-	&RuleGeoIP{FlagName: "ip-filter-allow-ip", Status: 1, Field: "ip"},
-	&RuleGeoIP{FlagName: "ip-filter-block-ip", Status: 0, Field: "ip"},
-	&RuleGeoIP{FlagName: "ip-filter-allow-country", Status: 1, Field: "country"},
-	&RuleGeoIP{FlagName: "ip-filter-block-country", Status: 0, Field: "country"},
-	&RuleGeoIP{FlagName: "ip-filter-allow-region", Status: 1, Field: "region"},
-	&RuleGeoIP{FlagName: "ip-filter-block-region", Status: 0, Field: "region"},
-	&RuleGeoIP{FlagName: "ip-filter-allow-city", Status: 1, Field: "city"},
-	&RuleGeoIP{FlagName: "ip-filter-block-city", Status: 0, Field: "city"},
-	&RuleGlobal{FlagName: "ip-filter-block-all", Status: 0, Category: "ALL"},
-	&RuleGlobal{FlagName: "ip-filter-allow-all", Status: 1, Category: "ALL"},
-	&RuleGlobal{FlagName: "ip-filter-block-local", Status: 0, Category: "LOCAL"},
-	&RuleGlobal{FlagName: "ip-filter-allow-local", Status: 1, Category: "LOCAL"},
-	&RuleGlobal{FlagName: "ip-filter-block-remote", Status: 0, Category: "REMOTE"},
-	&RuleGlobal{FlagName: "ip-filter-allow-remote", Status: 1, Category: "REMOTE"},
+var ipFilterRules = []ipFilterRule{
+	&ruleGeoIP{flagName: "ip-filter-allow-ip", status: 1, field: "ip"},
+	&ruleGeoIP{flagName: "ip-filter-block-ip", status: 0, field: "ip"},
+	&ruleGeoIP{flagName: "ip-filter-allow-country", status: 1, field: "country"},
+	&ruleGeoIP{flagName: "ip-filter-block-country", status: 0, field: "country"},
+	&ruleGeoIP{flagName: "ip-filter-allow-region", status: 1, field: "region"},
+	&ruleGeoIP{flagName: "ip-filter-block-region", status: 0, field: "region"},
+	&ruleGeoIP{flagName: "ip-filter-allow-city", status: 1, field: "city"},
+	&ruleGeoIP{flagName: "ip-filter-block-city", status: 0, field: "city"},
+	&ruleGlobal{flagName: "ip-filter-block-all", status: 0, category: "ALL"},
+	&ruleGlobal{flagName: "ip-filter-allow-all", status: 1, category: "ALL"},
+	&ruleGlobal{flagName: "ip-filter-block-local", status: 0, category: "LOCAL"},
+	&ruleGlobal{flagName: "ip-filter-allow-local", status: 1, category: "LOCAL"},
+	&ruleGlobal{flagName: "ip-filter-block-remote", status: 0, category: "REMOTE"},
+	&ruleGlobal{flagName: "ip-filter-allow-remote", status: 1, category: "REMOTE"},
 }
 
-type RuleGeoIP struct {
-	FlagName string
-	Status   int16
-	Field    string
+type ruleGeoIP struct {
+	flagName string
+	status   int16
+	field    string
 }
 
-type RuleGlobal struct {
-	FlagName string
-	Status   int16
-	Category string
+type ruleGlobal struct {
+	flagName string
+	status   int16
+	category string
 }
 
-type IpFilterRule interface {
-	New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error)
+type ipFilterRule interface {
+	run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error)
 }
 
-func (g *RuleGeoIP) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func RunIPFilters(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+	for i := range ipFilterRules {
+		ran, err = ipFilterRules[i].run(cmd, cfg)
+		if err != nil || ran {
+			return ran, err
+		}
+	}
+	return false, nil
+}
 
-	if !cmd.Flags().Changed(g.FlagName) {
+func (g *ruleGeoIP) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+
+	if !cmd.Flags().Changed(g.flagName) {
 		return false, nil
 	}
 
-	raw, err := cmd.Flags().GetString(g.FlagName)
+	raw, err := cmd.Flags().GetString(g.flagName)
 	if err != nil {
 		return false, err
 	}
@@ -60,7 +70,7 @@ func (g *RuleGeoIP) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err
 		return false, nil
 	}
 
-	if g.Field == "ip" {
+	if g.field == "ip" {
 		ip, err := utils.NormalizeIP(raw)
 		if err != nil {
 			return true, err
@@ -73,22 +83,22 @@ func (g *RuleGeoIP) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err
 		return true, err
 	}
 
-	target, err := service.NewRuleTarget(g.Field, raw)
+	target, err := service.NewRuleTarget(g.field, raw)
 	if err != nil {
 		return true, err
 	}
 
-	return upsertAndPrint(cmd, service, target, g.Status, "%s %s %s", ruleAction(g.Status), g.Field, raw)
+	return upsertAndPrint(cmd, service, target, g.status, "%s %s %s", ruleAction(g.status), g.field, raw)
 
 }
 
-func (c *RuleGlobal) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func (c *ruleGlobal) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 
-	if !cmd.Flags().Changed(c.FlagName) {
+	if !cmd.Flags().Changed(c.flagName) {
 		return false, nil
 	}
 
-	enabled, err := cmd.Flags().GetBool(c.FlagName)
+	enabled, err := cmd.Flags().GetBool(c.flagName)
 	if err != nil {
 		return false, err
 	}
@@ -101,12 +111,12 @@ func (c *RuleGlobal) New(cmd *cobra.Command, cfg *configs.Configs) (ran bool, er
 		return true, err
 	}
 
-	target, err := service.NewCategoryRuleTarget(c.Category)
+	target, err := service.NewCategoryRuleTarget(c.category)
 	if err != nil {
 		return true, err
 	}
 
-	return upsertAndPrint(cmd, service, target, c.Status, "%s category %s", ruleAction(c.Status), c.Category)
+	return upsertAndPrint(cmd, service, target, c.status, "%s category %s", ruleAction(c.status), c.category)
 
 }
 
@@ -119,7 +129,7 @@ func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
-	return &services.AccessRule{DB: db}, nil
+	return services.NewAccessRule(db), nil
 }
 
 func upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {

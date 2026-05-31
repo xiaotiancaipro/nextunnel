@@ -9,7 +9,7 @@ import (
 	"net"
 )
 
-const MsgMaxSize = 1 << 20
+const msgMaxSize = 1 << 20
 
 const (
 	MsgLogin         byte = 0x01
@@ -88,7 +88,7 @@ func ReadMsg(conn net.Conn) (byte, []byte, error) {
 	msgType := header[0]
 	length := binary.BigEndian.Uint32(header[1:5])
 
-	if length > MsgMaxSize {
+	if length > msgMaxSize {
 		return 0, nil, fmt.Errorf("message too large: %d bytes", length)
 	}
 

@@ -45,22 +45,10 @@ func NewApp(config *configs.Configs) (*App, error) {
 	}
 	logger.Info("GeoIP database loaded: " + config.GeoIP.DbPath)
 
-	tlsService := services.Tls{
-		Config:     config.Tls,
-		ServerAddr: config.Server.Host,
-		Logger:     logger,
-	}
-	serverService := services.Server{
-		Config: config.Server,
-		Logger: logger,
-		DB:     db,
-		GeoIP:  geoIP,
-	}
-
 	app := App{
 		logger:        logger,
-		tlsService:    &tlsService,
-		serverService: &serverService,
+		tlsService:    services.NewTls(config.Tls, config.Server.Host, logger),
+		serverService: services.NewServer(config.Server, logger, db, geoIP),
 		geoIP:         geoIP,
 		stopCh:        make(chan struct{}),
 	}

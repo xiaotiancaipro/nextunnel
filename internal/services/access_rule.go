@@ -10,15 +10,19 @@ import (
 )
 
 type AccessRule struct {
-	DB *gorm.DB
+	db *gorm.DB
 }
 
 type RuleTarget struct {
-	Ip       *string
-	Country  *string
-	Region   *string
-	City     *string
-	Category *string
+	ip       *string
+	country  *string
+	region   *string
+	city     *string
+	category *string
+}
+
+func NewAccessRule(db *gorm.DB) *AccessRule {
+	return &AccessRule{db: db}
 }
 
 func (r *AccessRule) NewRuleTarget(field, value string) (RuleTarget, error) {
@@ -29,13 +33,13 @@ func (r *AccessRule) NewRuleTarget(field, value string) (RuleTarget, error) {
 	target := RuleTarget{}
 	switch field {
 	case "ip":
-		target.Ip = &value
+		target.ip = &value
 	case "country":
-		target.Country = &value
+		target.country = &value
 	case "region":
-		target.Region = &value
+		target.region = &value
 	case "city":
-		target.City = &value
+		target.city = &value
 	default:
 		return RuleTarget{}, fmt.Errorf("unsupported rule field: %s", field)
 	}
@@ -47,37 +51,37 @@ func (r *AccessRule) NewCategoryRuleTarget(category string) (RuleTarget, error) 
 	if err != nil {
 		return RuleTarget{}, err
 	}
-	return RuleTarget{Category: &category}, nil
+	return RuleTarget{category: &category}, nil
 }
 
 func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	if err := r.validateRuleTarget(target); err != nil {
 		return err
 	}
-	return r.DB.Transaction(func(tx *gorm.DB) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
 		q := tx.Where("is_delete = ?", false)
-		if target.Ip != nil {
-			q = q.Where("ip = ?", *target.Ip)
+		if target.ip != nil {
+			q = q.Where("ip = ?", *target.ip)
 		} else {
 			q = q.Where("ip IS NULL")
 		}
-		if target.Country != nil {
-			q = q.Where("country = ?", *target.Country)
+		if target.country != nil {
+			q = q.Where("country = ?", *target.country)
 		} else {
 			q = q.Where("country IS NULL")
 		}
-		if target.Region != nil {
-			q = q.Where("region = ?", *target.Region)
+		if target.region != nil {
+			q = q.Where("region = ?", *target.region)
 		} else {
 			q = q.Where("region IS NULL")
 		}
-		if target.City != nil {
-			q = q.Where("city = ?", *target.City)
+		if target.city != nil {
+			q = q.Where("city = ?", *target.city)
 		} else {
 			q = q.Where("city IS NULL")
 		}
-		if target.Category != nil {
-			q = q.Where("category = ?", *target.Category)
+		if target.category != nil {
+			q = q.Where("category = ?", *target.category)
 		} else {
 			q = q.Where("category IS NULL")
 		}
@@ -86,11 +90,11 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 		err := q.First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return tx.Create(&models.AccessRule{
-				Ip:       target.Ip,
-				Country:  target.Country,
-				Region:   target.Region,
-				City:     target.City,
-				Category: target.Category,
+				Ip:       target.ip,
+				Country:  target.country,
+				Region:   target.region,
+				City:     target.city,
+				Category: target.category,
 				Status:   status,
 			}).Error
 		}
@@ -101,10 +105,10 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	})
 }
 
-func (r *AccessRule) IsAllowed(ip, country, region, city string, isLocal bool) (bool, error) {
+func (r *AccessRule) isAllowed(ip, country, region, city string, isLocal bool) (bool, error) {
 
 	var rules []models.AccessRule
-	if err := r.DB.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
+	if err := r.db.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
 		return false, fmt.Errorf("failed to query access_rules: %w", err)
 	}
 
@@ -140,19 +144,19 @@ func (r *AccessRule) isHigherPriorityRule(candidate, current models.AccessRule) 
 
 func (r *AccessRule) validateRuleTarget(target RuleTarget) error {
 	set := 0
-	if target.Ip != nil {
+	if target.ip != nil {
 		set++
 	}
-	if target.Country != nil {
+	if target.country != nil {
 		set++
 	}
-	if target.Region != nil {
+	if target.region != nil {
 		set++
 	}
-	if target.City != nil {
+	if target.city != nil {
 		set++
 	}
-	if target.Category != nil {
+	if target.category != nil {
 		set++
 	}
 	if set == 0 {
