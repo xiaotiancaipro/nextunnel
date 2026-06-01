@@ -14,12 +14,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 const unknownIp = "UNKNOWN_IP"
+
+const ruleCacheTTL = 10 * time.Second
 
 type Server struct {
 	config      *configs.Server
@@ -28,6 +31,9 @@ type Server struct {
 	geoIP       *clients.GeoIP
 	pendingMu   sync.Mutex
 	pendingWork map[string]*pendingWorkItem
+	ruleCacheMu sync.RWMutex
+	ruleCache   []models.AccessRule
+	ruleCacheAt time.Time
 }
 
 type pendingWorkItem struct {
@@ -42,6 +48,12 @@ func NewServer(config *configs.Server, logger *zap.Logger, db *gorm.DB, geoIP *c
 		db:     db,
 		geoIP:  geoIP,
 	}
+}
+
+func WriteCtrlMsg(mu *sync.Mutex, conn net.Conn, msgType byte, payload interface{}) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return utils.WriteMsg(conn, msgType, payload)
 }
 
 func (s *Server) Listen() (net.Listener, error) {
@@ -89,43 +101,40 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 
 }
 
-func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, serverStopCh, clientStopCh chan struct{}) error {
+func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientIdP *string, serverStopCh, clientStopCh chan struct{}) error {
+
+	replyErr := func(e string) {
+		_ = WriteCtrlMsg(ctrlWriteMu, conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
+		s.logger.Error(e)
+	}
 
 	var msg utils.ProxiesApplyMsg
 	if err := utils.Decode(payload, &msg); err != nil {
-		e := fmt.Sprintf("failed to parse ApplyConfigMsg: %v", err)
-		_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
-		s.logger.Error(e)
+		replyErr(fmt.Sprintf("failed to parse ApplyConfigMsg: %v", err))
 		return fmt.Errorf("failed to parse ApplyConfigMsg")
 	}
 
 	desired := make(map[string]utils.ProxiesApplyMsgItem, len(msg.Proxies))
+	usedPorts := make(map[int]string, len(msg.Proxies))
 	for _, proxy := range msg.Proxies {
 		if proxy.Name == "" {
-			e := fmt.Sprintf("[%s]Proxy name is empty", proxy.Name)
-			_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
-			s.logger.Error(e)
+			replyErr("Proxy name is empty")
 			return fmt.Errorf("proxy name is empty")
 		}
 		if proxy.Type != "tcp" {
-			e := fmt.Sprintf("[%s]Proxy type is invalid", proxy.Name)
-			_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
-			s.logger.Error(e)
+			replyErr(fmt.Sprintf("[%s]Proxy type is invalid", proxy.Name))
 			return fmt.Errorf("proxy type is invalid")
 		}
-		if proxy.RemotePort <= 0 || proxy.RemotePort > 65535 {
-			e := fmt.Sprintf("[%s]Proxy remote port is invalid", proxy.Name)
-			_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
-			s.logger.Error(e)
-			return fmt.Errorf("proxy remote port is invalid")
-		}
 		if _, exists := desired[proxy.Name]; exists {
-			e := fmt.Sprintf("[%s]Proxy name is duplicated", proxy.Name)
-			_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
-			s.logger.Error(e)
+			replyErr(fmt.Sprintf("[%s]Proxy name is duplicated", proxy.Name))
 			return fmt.Errorf("proxy name is duplicated")
 		}
+		if other, exists := usedPorts[proxy.RemotePort]; exists {
+			replyErr(fmt.Sprintf("[%s]Proxy remote port %d is already requested by [%s]", proxy.Name, proxy.RemotePort, other))
+			return fmt.Errorf("proxy remote port is duplicated")
+		}
 		desired[proxy.Name] = proxy
+		usedPorts[proxy.RemotePort] = proxy.Name
 	}
 
 	opened := make(map[string]net.Listener)
@@ -134,16 +143,14 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, 
 			_ = ln.Close()
 		}
 	}
-	for _, proxy := range msg.Proxies {
+	for name, proxy := range desired {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", proxy.RemotePort))
 		if err != nil {
 			openedClose()
-			e := fmt.Sprintf("Failed to listen on port %d: %v", proxy.RemotePort, err)
-			_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: e})
-			s.logger.Error(e)
+			replyErr(fmt.Sprintf("Failed to listen on port %d: %v", proxy.RemotePort, err))
 			return fmt.Errorf("failed to listen on port %d", proxy.RemotePort)
 		}
-		opened[proxy.Name] = ln
+		opened[name] = ln
 	}
 
 	for name, listener := range opened {
@@ -155,11 +162,11 @@ func (s *Server) ProxiesApply(conn net.Conn, payload []byte, clientIdP *string, 
 			}
 			_ = ln.Close()
 		}()
-		go s.proxyAcceptLoop(conn, name, ln, serverStopCh, clientStopCh)
+		go s.proxyAcceptLoop(conn, ctrlWriteMu, name, ln, serverStopCh, clientStopCh)
 	}
 
-	_ = utils.WriteMsg(conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: ""})
-	s.logger.Info(fmt.Sprintf("Client config applied: clientID=%s", *clientIdP))
+	_ = WriteCtrlMsg(ctrlWriteMu, conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: ""})
+	s.logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", *clientIdP, len(opened)))
 	return nil
 
 }
@@ -184,7 +191,7 @@ func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
 	return nil
 }
 
-func (s *Server) proxyAcceptLoop(controlConn net.Conn, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
+func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
 
 	defer func() {
 		_ = listener.Close()
@@ -219,7 +226,7 @@ func (s *Server) proxyAcceptLoop(controlConn net.Conn, proxyName string, listene
 
 		s.logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
 
-		go s.bridgeClientConn(controlConn, conn, proxyName, serverStopCh, clientStopCh)
+		go s.bridgeClientConn(controlConn, ctrlWriteMu, conn, proxyName, serverStopCh, clientStopCh)
 
 	}
 
@@ -241,11 +248,11 @@ func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
 	isLocal := utils.IsLocalIP(*ipP)
 
-	rulesSvc := NewAccessRule(s.db)
-	allowed, err := rulesSvc.isAllowed(*ipP, geo.Country, geo.Region, geo.City, isLocal)
+	rules, err := s.cachedRules()
 	if err != nil {
 		return nil, region, err
 	}
+	allowed := NewAccessRule(s.db).evaluate(rules, *ipP, geo.Country, geo.Region, geo.City, isLocal)
 
 	status := int16(0)
 	if allowed {
@@ -281,7 +288,7 @@ func (s *Server) formatRegion(country, region, city string) string {
 	return strings.Join(parts, "/")
 }
 
-func (s *Server) bridgeClientConn(controlConn, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
+func (s *Server) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
 
 	certFP, err := s.clientLeafCertSHA256(controlConn)
 	if err != nil {
@@ -311,13 +318,37 @@ func (s *Server) bridgeClientConn(controlConn, conn net.Conn, proxyName string, 
 		WorkID:    workID,
 		ProxyName: proxyName,
 	}
-	if err := utils.WriteMsg(controlConn, utils.MsgNewWorkConn, msg); err != nil {
+	if err := WriteCtrlMsg(ctrlWriteMu, controlConn, utils.MsgNewWorkConn, msg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
 		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()
 		}
 		return
 	}
+
+}
+
+func (s *Server) cachedRules() ([]models.AccessRule, error) {
+
+	s.ruleCacheMu.RLock()
+	if s.ruleCache != nil && time.Since(s.ruleCacheAt) < ruleCacheTTL {
+		rules := s.ruleCache
+		s.ruleCacheMu.RUnlock()
+		return rules, nil
+	}
+	s.ruleCacheMu.RUnlock()
+
+	var rules []models.AccessRule
+	if err := s.db.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
+		return nil, fmt.Errorf("failed to query access_rules: %w", err)
+	}
+
+	s.ruleCacheMu.Lock()
+	s.ruleCache = rules
+	s.ruleCacheAt = time.Now()
+	s.ruleCacheMu.Unlock()
+
+	return rules, nil
 
 }
 

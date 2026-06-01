@@ -74,12 +74,13 @@ func (d *database) connect() (*gorm.DB, error) {
 		return nil, fmt.Errorf("database logger is required")
 	}
 	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		d.config.Host,
 		d.config.Port,
 		d.config.Username,
 		d.config.Password,
 		d.config.Database,
+		d.config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
 		Logger: logger.NewGormLogger(d.logger, d.slowThreshold),

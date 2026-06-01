@@ -192,5 +192,6 @@ See [`nextunnel-server.example.toml`](nextunnel-server.example.toml):
 |              | `maxAge`                                         | Max age of log files in days                                                                                                      |
 | `[tls]`      | `dir`                                            | TLS certificate directory (CA, server, and client cert generation)                                                                |
 | `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection settings                                                                                                    |
+|              | `sslmode`                                        | libpq SSL mode (`disable`, `require`, `verify-ca`, `verify-full`); defaults to `disable`                                          |
 | `[geoip]`    | `db_path`                                        | Path to MaxMind GeoLite2-City database (required)                                                                                 |
 |              | `locales`                                        | Ordered locale codes for GeoIP name lookup (e.g. `["zh-CN", "en"]`); geo access rules must use names resolved under these locales |

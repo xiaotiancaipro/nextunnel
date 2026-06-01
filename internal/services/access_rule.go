@@ -105,13 +105,7 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	})
 }
 
-func (r *AccessRule) isAllowed(ip, country, region, city string, isLocal bool) (bool, error) {
-
-	var rules []models.AccessRule
-	if err := r.db.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
-		return false, fmt.Errorf("failed to query access_rules: %w", err)
-	}
-
+func (r *AccessRule) evaluate(rules []models.AccessRule, ip, country, region, city string, isLocal bool) bool {
 	var best *models.AccessRule
 	for i := range rules {
 		rule := &rules[i]
@@ -123,10 +117,9 @@ func (r *AccessRule) isAllowed(ip, country, region, city string, isLocal bool) (
 		}
 	}
 	if best == nil {
-		return true, nil
+		return true
 	}
-	return best.Status == 1, nil
-
+	return best.Status == 1
 }
 
 func (r *AccessRule) isHigherPriorityRule(candidate, current models.AccessRule) bool {
@@ -218,23 +211,22 @@ func (r *AccessRule) normalizeCategory(category string) (string, error) {
 }
 
 func (r *AccessRule) ruleSpecificity(rule models.AccessRule) int {
-	// Priority: IP > City > Region > Country > Category global rule
 	if rule.Ip != nil {
-		return 16
+		return 1 << 4
 	}
 	if rule.City != nil {
-		return 8
+		return 1 << 3
 	}
 	if rule.Region != nil {
-		return 4
+		return 1 << 2
 	}
 	if rule.Country != nil {
-		return 2
+		return 1 << 1
 	}
 	if rule.Category != nil {
 		switch strings.ToUpper(strings.TrimSpace(*rule.Category)) {
 		case models.AccessRuleCategoryLocal, models.AccessRuleCategoryRemote:
-			return 1
+			return 1 << 0
 		case models.AccessRuleCategoryAll:
 			return 0
 		}

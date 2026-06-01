@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -90,13 +91,7 @@ func (a *App) Start() error {
 			a.logger.Error(fmt.Sprintf("Failed to accept connection: %v", err))
 			return err
 		}
-		conn, err := a.serverService.EstablishConn(connRaw, tlsConfig)
-		if err != nil {
-			a.logger.Error(fmt.Sprintf("Failed to incoming TLS connection: %v", err))
-			_ = connRaw.Close()
-			continue
-		}
-		go a.acceptedConn(conn)
+		go a.handleConn(connRaw, tlsConfig)
 	}
 
 }
@@ -118,6 +113,16 @@ func (a *App) Stop() {
 	})
 }
 
+func (a *App) handleConn(connRaw net.Conn, tlsConfig *tls.Config) {
+	conn, err := a.serverService.EstablishConn(connRaw, tlsConfig)
+	if err != nil {
+		a.logger.Error(fmt.Sprintf("Failed to incoming TLS connection: %v", err))
+		_ = connRaw.Close()
+		return
+	}
+	a.acceptedConn(conn)
+}
+
 func (a *App) acceptedConn(conn net.Conn) {
 
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
@@ -137,6 +142,7 @@ func (a *App) acceptedConn(conn net.Conn) {
 			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
 			return
 		}
+		var ctrlWriteMu sync.Mutex
 		clientStopCh := make(chan struct{})
 		defer close(clientStopCh)
 		for {
@@ -147,12 +153,12 @@ func (a *App) acceptedConn(conn net.Conn) {
 			}
 			switch msgType_ {
 			case utils.MsgProxiesApply:
-				if err := a.serverService.ProxiesApply(conn, payload_, clientIdP, a.stopCh, clientStopCh); err != nil {
+				if err := a.serverService.ProxiesApply(conn, &ctrlWriteMu, payload_, clientIdP, a.stopCh, clientStopCh); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
 					return
 				}
 			case utils.MsgHeartbeat:
-				if err := utils.WriteMsg(conn, utils.MsgHeartbeatResp, utils.HeartbeatRespMsg{}); err != nil {
+				if err := services.WriteCtrlMsg(&ctrlWriteMu, conn, utils.MsgHeartbeatResp, utils.HeartbeatRespMsg{}); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
 					return
 				}

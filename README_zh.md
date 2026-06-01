@@ -179,16 +179,17 @@ nextunnel-server --ip-filter-allow-remote
 
 参考 [`nextunnel-server.example.toml`](nextunnel-server.example.toml)：
 
-| 配置段          | 字段                                               | 说明                                                   |
-|--------------|--------------------------------------------------|------------------------------------------------------|
-| `[server]`   | `host`                                           | TLS 证书 SAN 用的主机名或 IP（非监听地址）                          |
-|              | `port`                                           | 监听端口（绑定所有网卡）                                         |
-| `[logs]`     | `file`                                           | 日志文件路径（按天轮转，超出大小自动分段）                                |
-|              | `level`                                          | 日志级别（`debug`、`info`、`warn`、`error`）                  |
-|              | `maxSize`                                        | 单个日志分段最大大小（如 `100MB`、`1GB`；纯数字默认为 MB）                |
-|              | `maxBackups`                                     | 保留的按天日志文件数量上限                                        |
-|              | `maxAge`                                         | 日志文件最大保留天数                                           |
-| `[tls]`      | `dir`                                            | TLS 证书目录（CA、服务端及客户端证书生成均依赖此目录）                       |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接信息                                      |
-| `[geoip]`    | `db_path`                                        | MaxMind GeoLite2-City 数据库路径                          |
-|              | `locales`                                        | GeoIP 地名解析的语言优先级（如 `["zh-CN", "en"]`）；地域访问规则须与解析结果一致 |
+| 配置段          | 字段                                               | 说明                                                                       |
+|--------------|--------------------------------------------------|--------------------------------------------------------------------------|
+| `[server]`   | `host`                                           | TLS 证书 SAN 用的主机名或 IP（非监听地址）                                              |
+|              | `port`                                           | 监听端口（绑定所有网卡）                                                             |
+| `[logs]`     | `file`                                           | 日志文件路径（按天轮转，超出大小自动分段）                                                    |
+|              | `level`                                          | 日志级别（`debug`、`info`、`warn`、`error`）                                      |
+|              | `maxSize`                                        | 单个日志分段最大大小（如 `100MB`、`1GB`；纯数字默认为 MB）                                    |
+|              | `maxBackups`                                     | 保留的按天日志文件数量上限                                                            |
+|              | `maxAge`                                         | 日志文件最大保留天数                                                               |
+| `[tls]`      | `dir`                                            | TLS 证书目录（CA、服务端及客户端证书生成均依赖此目录）                                           |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接信息                                                          |
+|              | `sslmode`                                        | libpq SSL 模式（`disable`、`require`、`verify-ca`、`verify-full`），默认 `disable` |
+| `[geoip]`    | `db_path`                                        | MaxMind GeoLite2-City 数据库路径                                              |
+|              | `locales`                                        | GeoIP 地名解析的语言优先级（如 `["zh-CN", "en"]`）；地域访问规则须与解析结果一致                     |
