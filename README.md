@@ -2,8 +2,6 @@
 
 <h1 style="border-bottom: none"><b>nextunnel-server</b></h1>
 
-**Accepts client connections, manages proxies, and controls IP access**
-
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-Apache%20License%20Version%202.0-blue)](./LICENSE)
 
@@ -18,8 +16,8 @@
 
 - Accepts mutual TLS (mTLS) connections from nextunnel clients
 - Applies proxy configurations submitted by clients
-- Enforces IP / geo-based access control rules stored in database
-- Records every inbound user connection in the database
+- Enforces IP / geo / network-category access control rules stored in PostgreSQL
+- Records every inbound user connection (IP, geo, category, allow/deny decision) in PostgreSQL
 
 ## Requirements
 
@@ -171,8 +169,8 @@ nextunnel-server --ip-filter-allow-remote
 ```
 
 - Supports IPv4 and IPv6; IP addresses are normalized automatically
-- Geo rules must match GeoIP lookup results (use the same names shown in connection logs, e.g.
-  `China/Guangdong/Shenzhen` maps to country=China, region=Guangdong, city=Shenzhen)
+- Geo rules must match GeoIP lookup results under the configured `[geoip].locales` (use the same names shown in
+  connection logs, e.g. `China/Guangdong/Shenzhen` maps to country=China, region=Guangdong, city=Shenzhen)
 - Requires a working database connection (PostgreSQL via `[database]`)
 - Updates the existing rule if one with the same dimension already exists, otherwise creates a new one
 - Allow list maps to `status = 1`; block list maps to `status = 0`
@@ -183,41 +181,16 @@ nextunnel-server --ip-filter-allow-remote
 
 See [`nextunnel-server.example.toml`](nextunnel-server.example.toml):
 
-```toml
-[server]
-host = "127.0.0.1"
-port = 25930
-
-[logs]
-file = "logs/nextunnel-server.log"
-level = "info"
-maxSize = "100MB"
-maxBackups = 30
-maxAge = 7
-
-[tls]
-dir = "certs"
-
-[database]
-host = "127.0.0.1"
-port = 5432
-username = "postgres"
-password = "nextunnel"
-db = "nextunnel"
-
-[geoip]
-db_path = "geoip/GeoLite2-City.mmdb"
-```
-
-| Section      | Field                                            | Description                                                        |
-|--------------|--------------------------------------------------|--------------------------------------------------------------------|
-| `[server]`   | `host`                                           | Hostname or IP for TLS certificate SAN (not the listen address)    |
-|              | `port`                                           | Listen port (binds to all interfaces)                              |
-| `[logs]`     | `file`                                           | Log file path (daily rotation with size-based segments)            |
-|              | `level`                                          | Log level (`debug`, `info`, `warn`, `error`)                       |
-|              | `maxSize`                                        | Max size per log segment (e.g. `100MB`, `1GB`; bare number = MB)   |
-|              | `maxBackups`                                     | Max number of daily log files to retain                            |
-|              | `maxAge`                                         | Max age of log files in days                                       |
-| `[tls]`      | `dir`                                            | TLS certificate directory (CA, server, and client cert generation) |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection settings                                     |
-| `[geoip]`    | `db_path`                                        | Path to MaxMind GeoLite2-City database (required)                  |
+| Section      | Field                                            | Description                                                                                                                       |
+|--------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `[server]`   | `host`                                           | Hostname or IP for TLS certificate SAN (not the listen address)                                                                   |
+|              | `port`                                           | Listen port (binds to all interfaces)                                                                                             |
+| `[logs]`     | `file`                                           | Log file path (daily rotation with size-based segments)                                                                           |
+|              | `level`                                          | Log level (`debug`, `info`, `warn`, `error`)                                                                                      |
+|              | `maxSize`                                        | Max size per log segment (e.g. `100MB`, `1GB`; bare number = MB)                                                                  |
+|              | `maxBackups`                                     | Max number of daily log files to retain                                                                                           |
+|              | `maxAge`                                         | Max age of log files in days                                                                                                      |
+| `[tls]`      | `dir`                                            | TLS certificate directory (CA, server, and client cert generation)                                                                |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection settings                                                                                                    |
+| `[geoip]`    | `db_path`                                        | Path to MaxMind GeoLite2-City database (required)                                                                                 |
+|              | `locales`                                        | Ordered locale codes for GeoIP name lookup (e.g. `["zh-CN", "en"]`); geo access rules must use names resolved under these locales |

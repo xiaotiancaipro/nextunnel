@@ -2,8 +2,6 @@
 
 <h1 style="border-bottom: none"><b>nextunnel-server</b></h1>
 
-**接受客户端连接，管理代理与 IP 访问控制**
-
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-Apache%20License%20Version%202.0-blue)](./LICENSE)
 
@@ -18,8 +16,8 @@
 
 - 接受 nextunnel 客户端的双向 TLS（mTLS）连接
 - 根据客户端提交的代理配置监听远程端口
-- 基于规则执行 IP / 地域访问控制
-- 将每次入站用户连接记录到数据表
+- 基于 PostgreSQL 中的规则执行 IP / 地域 / 网络类别访问控制
+- 将每次入站用户连接（IP、地域、网络类别、放行/拒绝结果）写入 PostgreSQL
 
 ## 环境要求
 
@@ -169,8 +167,8 @@ nextunnel-server --ip-filter-allow-remote
 ```
 
 - 支持 IPv4 / IPv6，会自动规范化 IP 格式
-- 地域规则需与 GeoIP 解析结果一致（名称需与连接日志中的 `region` 字段匹配，如 `China/Guangdong/Shenzhen` 对应
-  country=China、region=Guangdong、city=Shenzhen）
+- 地域规则需与 `[geoip].locales` 解析出的 GeoIP 结果一致（名称需与连接日志中的 `region` 字段匹配，如
+  `China/Guangdong/Shenzhen` 对应 country=China、region=Guangdong、city=Shenzhen）
 - 需要数据库可用（通过 `[database]` 连接 PostgreSQL）
 - 若同维度规则已存在则更新状态，否则新建记录
 - 白名单对应 `status = 1`，黑名单对应 `status = 0`
@@ -181,41 +179,16 @@ nextunnel-server --ip-filter-allow-remote
 
 参考 [`nextunnel-server.example.toml`](nextunnel-server.example.toml)：
 
-```toml
-[server]
-host = "127.0.0.1"
-port = 25930
-
-[logs]
-file = "logs/nextunnel-server.log"
-level = "info"
-maxSize = "100MB"
-maxBackups = 30
-maxAge = 7
-
-[tls]
-dir = "certs"
-
-[database]
-host = "127.0.0.1"
-port = 5432
-username = "postgres"
-password = "nextunnel"
-db = "nextunnel"
-
-[geoip]
-db_path = "geoip/GeoLite2-City.mmdb"
-```
-
-| 配置段          | 字段                                               | 说明                                    |
-|--------------|--------------------------------------------------|---------------------------------------|
-| `[server]`   | `host`                                           | TLS 证书 SAN 用的主机名或 IP（非监听地址）           |
-|              | `port`                                           | 监听端口（绑定所有网卡）                          |
-| `[logs]`     | `file`                                           | 日志文件路径（按天轮转，超出大小自动分段）                 |
-|              | `level`                                          | 日志级别（`debug`、`info`、`warn`、`error`）   |
-|              | `maxSize`                                        | 单个日志分段最大大小（如 `100MB`、`1GB`；纯数字默认为 MB） |
-|              | `maxBackups`                                     | 保留的日志文件天数上限                           |
-|              | `maxAge`                                         | 日志文件最大保留天数                            |
-| `[tls]`      | `dir`                                            | TLS 证书目录（CA、服务端及客户端证书生成均依赖此目录）        |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接信息                       |
-| `[geoip]`    | `db_path`                                        | MaxMind GeoLite2-City 数据库路径           |
+| 配置段          | 字段                                               | 说明                                                   |
+|--------------|--------------------------------------------------|------------------------------------------------------|
+| `[server]`   | `host`                                           | TLS 证书 SAN 用的主机名或 IP（非监听地址）                          |
+|              | `port`                                           | 监听端口（绑定所有网卡）                                         |
+| `[logs]`     | `file`                                           | 日志文件路径（按天轮转，超出大小自动分段）                                |
+|              | `level`                                          | 日志级别（`debug`、`info`、`warn`、`error`）                  |
+|              | `maxSize`                                        | 单个日志分段最大大小（如 `100MB`、`1GB`；纯数字默认为 MB）                |
+|              | `maxBackups`                                     | 保留的按天日志文件数量上限                                        |
+|              | `maxAge`                                         | 日志文件最大保留天数                                           |
+| `[tls]`      | `dir`                                            | TLS 证书目录（CA、服务端及客户端证书生成均依赖此目录）                       |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接信息                                      |
+| `[geoip]`    | `db_path`                                        | MaxMind GeoLite2-City 数据库路径                          |
+|              | `locales`                                        | GeoIP 地名解析的语言优先级（如 `["zh-CN", "en"]`）；地域访问规则须与解析结果一致 |
