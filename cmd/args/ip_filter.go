@@ -13,36 +13,31 @@ import (
 )
 
 var ipFilterRules = []ipFilterRule{
-	&ruleGeoIP{flagName: "ip-filter-allow-ip", status: 1, field: "ip"},
-	&ruleGeoIP{flagName: "ip-filter-block-ip", status: 0, field: "ip"},
-	&ruleGeoIP{flagName: "ip-filter-allow-country", status: 1, field: "country"},
-	&ruleGeoIP{flagName: "ip-filter-block-country", status: 0, field: "country"},
-	&ruleGeoIP{flagName: "ip-filter-allow-region", status: 1, field: "region"},
-	&ruleGeoIP{flagName: "ip-filter-block-region", status: 0, field: "region"},
-	&ruleGeoIP{flagName: "ip-filter-allow-city", status: 1, field: "city"},
-	&ruleGeoIP{flagName: "ip-filter-block-city", status: 0, field: "city"},
-	&ruleGlobal{flagName: "ip-filter-block-all", status: 0, category: "ALL"},
-	&ruleGlobal{flagName: "ip-filter-allow-all", status: 1, category: "ALL"},
-	&ruleGlobal{flagName: "ip-filter-block-local", status: 0, category: "LOCAL"},
-	&ruleGlobal{flagName: "ip-filter-allow-local", status: 1, category: "LOCAL"},
-	&ruleGlobal{flagName: "ip-filter-block-remote", status: 0, category: "REMOTE"},
-	&ruleGlobal{flagName: "ip-filter-allow-remote", status: 1, category: "REMOTE"},
-}
-
-type ruleGeoIP struct {
-	flagName string
-	status   int16
-	field    string
-}
-
-type ruleGlobal struct {
-	flagName string
-	status   int16
-	category string
+	&ipFilter{flag: "ip-filter-allow-ip", flagDel: "ip-filter-allow-ip-delete", status: 1, field: "ip"},
+	&ipFilter{flag: "ip-filter-block-ip", flagDel: "ip-filter-block-ip-delete", status: 0, field: "ip"},
+	&ipFilter{flag: "ip-filter-allow-country", flagDel: "ip-filter-allow-country-delete", status: 1, field: "country"},
+	&ipFilter{flag: "ip-filter-block-country", flagDel: "ip-filter-block-country-delete", status: 0, field: "country"},
+	&ipFilter{flag: "ip-filter-allow-region", flagDel: "ip-filter-allow-region-delete", status: 1, field: "region"},
+	&ipFilter{flag: "ip-filter-block-region", flagDel: "ip-filter-block-region-delete", status: 0, field: "region"},
+	&ipFilter{flag: "ip-filter-allow-city", flagDel: "ip-filter-allow-city-delete", status: 1, field: "city"},
+	&ipFilter{flag: "ip-filter-block-city", flagDel: "ip-filter-block-city-delete", status: 0, field: "city"},
+	&ipFilter{flag: "ip-filter-allow-all", flagDel: "ip-filter-allow-all-delete", status: 1, field: "ALL"},
+	&ipFilter{flag: "ip-filter-block-all", flagDel: "ip-filter-block-all-delete", status: 0, field: "ALL"},
+	&ipFilter{flag: "ip-filter-allow-local", flagDel: "ip-filter-allow-local-delete", status: 1, field: "LOCAL"},
+	&ipFilter{flag: "ip-filter-block-local", flagDel: "ip-filter-block-local-delete", status: 0, field: "LOCAL"},
+	&ipFilter{flag: "ip-filter-allow-remote", flagDel: "ip-filter-allow-remote-delete", status: 1, field: "REMOTE"},
+	&ipFilter{flag: "ip-filter-block-remote", flagDel: "ip-filter-block-remote-delete", status: 0, field: "REMOTE"},
 }
 
 type ipFilterRule interface {
 	run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error)
+}
+
+type ipFilter struct {
+	flag    string
+	flagDel string
+	status  int16
+	field   string
 }
 
 func RunIPFilters(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
@@ -55,13 +50,37 @@ func RunIPFilters(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error
 	return false, nil
 }
 
-func (g *ruleGeoIP) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func (f *ipFilter) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 
-	if !cmd.Flags().Changed(g.flagName) {
+	if cmd.Flags().Changed(f.flagDel) {
+		return f.runDelete(cmd, cfg)
+	}
+
+	if !cmd.Flags().Changed(f.flag) {
 		return false, nil
 	}
 
-	raw, err := cmd.Flags().GetString(g.flagName)
+	service, err := f.newAccessRuleService(cfg)
+	if err != nil {
+		return true, err
+	}
+
+	if f.isCategory() {
+		enabled, err := cmd.Flags().GetBool(f.flag)
+		if err != nil {
+			return false, err
+		}
+		if !enabled {
+			return false, nil
+		}
+		target, err := service.NewCategoryRuleTarget(f.field)
+		if err != nil {
+			return true, err
+		}
+		return f.upsertAndPrint(cmd, service, target, f.status, "%s category %s", f.ruleAction(f.status), f.field)
+	}
+
+	raw, err := cmd.Flags().GetString(f.flag)
 	if err != nil {
 		return false, err
 	}
@@ -70,7 +89,7 @@ func (g *ruleGeoIP) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err
 		return false, nil
 	}
 
-	if g.field == "ip" {
+	if f.field == "ip" {
 		ip, err := utils.NormalizeIP(raw)
 		if err != nil {
 			return true, err
@@ -78,49 +97,73 @@ func (g *ruleGeoIP) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err
 		raw = *ip
 	}
 
-	service, err := newAccessRuleService(cfg)
+	target, err := service.NewRuleTarget(f.field, raw)
 	if err != nil {
 		return true, err
 	}
 
-	target, err := service.NewRuleTarget(g.field, raw)
-	if err != nil {
-		return true, err
-	}
-
-	return upsertAndPrint(cmd, service, target, g.status, "%s %s %s", ruleAction(g.status), g.field, raw)
+	return f.upsertAndPrint(cmd, service, target, f.status, "%s %s %s", f.ruleAction(f.status), f.field, raw)
 
 }
 
-func (c *ruleGlobal) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func (f *ipFilter) runDelete(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 
-	if !cmd.Flags().Changed(c.flagName) {
-		return false, nil
+	service, err := f.newAccessRuleService(cfg)
+	if err != nil {
+		return true, err
 	}
 
-	enabled, err := cmd.Flags().GetBool(c.flagName)
+	if f.isCategory() {
+		enabled, err := cmd.Flags().GetBool(f.flagDel)
+		if err != nil {
+			return false, err
+		}
+		if !enabled {
+			return false, nil
+		}
+		target, err := service.NewCategoryRuleTarget(f.field)
+		if err != nil {
+			return true, err
+		}
+		return f.deleteAndPrint(cmd, service, target, f.status, "deleted %s category %s", f.ruleAction(f.status), f.field)
+	}
+
+	raw, err := cmd.Flags().GetString(f.flagDel)
 	if err != nil {
 		return false, err
 	}
-	if !enabled {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
 		return false, nil
 	}
 
-	service, err := newAccessRuleService(cfg)
+	if f.field == "ip" {
+		ip, err := utils.NormalizeIP(raw)
+		if err != nil {
+			return true, err
+		}
+		raw = *ip
+	}
+
+	target, err := service.NewRuleTarget(f.field, raw)
 	if err != nil {
 		return true, err
 	}
 
-	target, err := service.NewCategoryRuleTarget(c.category)
-	if err != nil {
-		return true, err
-	}
-
-	return upsertAndPrint(cmd, service, target, c.status, "%s category %s", ruleAction(c.status), c.category)
+	return f.deleteAndPrint(cmd, service, target, f.status, "deleted %s %s %s", f.ruleAction(f.status), f.field, raw)
 
 }
 
-func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
+func (f *ipFilter) isCategory() bool {
+	switch f.field {
+	case "ALL", "LOCAL", "REMOTE":
+		return true
+	default:
+		return false
+	}
+}
+
+func (f *ipFilter) newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
 	logger, err := logger_.NewLogger(cfg.Logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
@@ -132,7 +175,7 @@ func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
 	return services.NewAccessRule(db), nil
 }
 
-func upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
+func (f *ipFilter) upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
 	if err := service.UpsertRule(target, status); err != nil {
 		return true, err
 	}
@@ -140,9 +183,17 @@ func upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target ser
 	return true, nil
 }
 
-func ruleAction(status int16) string {
-	if status == 1 {
-		return "allowed"
+func (f *ipFilter) deleteAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
+	if err := service.DeleteRule(target, status); err != nil {
+		return true, err
 	}
-	return "blocked"
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", args...)
+	return true, nil
+}
+
+func (f *ipFilter) ruleAction(status int16) string {
+	if status == 1 {
+		return "Allowed"
+	}
+	return "Blocked"
 }

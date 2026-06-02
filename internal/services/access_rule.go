@@ -59,35 +59,8 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 		return err
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		q := tx.Where("is_delete = ?", false)
-		if target.ip != nil {
-			q = q.Where("ip = ?", *target.ip)
-		} else {
-			q = q.Where("ip IS NULL")
-		}
-		if target.country != nil {
-			q = q.Where("country = ?", *target.country)
-		} else {
-			q = q.Where("country IS NULL")
-		}
-		if target.region != nil {
-			q = q.Where("region = ?", *target.region)
-		} else {
-			q = q.Where("region IS NULL")
-		}
-		if target.city != nil {
-			q = q.Where("city = ?", *target.city)
-		} else {
-			q = q.Where("city IS NULL")
-		}
-		if target.category != nil {
-			q = q.Where("category = ?", *target.category)
-		} else {
-			q = q.Where("category IS NULL")
-		}
-
 		var record models.AccessRule
-		err := q.First(&record).Error
+		err := r.targetQuery(tx, target).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return tx.Create(&models.AccessRule{
 				Ip:       target.ip,
@@ -103,6 +76,53 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 		}
 		return tx.Model(&record).Update("status", status).Error
 	})
+}
+
+func (r *AccessRule) DeleteRule(target RuleTarget, status int16) error {
+	if err := r.validateRuleTarget(target); err != nil {
+		return err
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var record models.AccessRule
+		err := r.targetQuery(tx, target).Where("status = ?", status).First(&record).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("rule not found")
+		}
+		if err != nil {
+			return fmt.Errorf("failed to query access_rules: %w", err)
+		}
+		return tx.Model(&record).Update("is_delete", true).Error
+	})
+}
+
+func (r *AccessRule) targetQuery(tx *gorm.DB, target RuleTarget) *gorm.DB {
+	q := tx.Where("is_delete = ?", false)
+	if target.ip != nil {
+		q = q.Where("ip = ?", *target.ip)
+	} else {
+		q = q.Where("ip IS NULL")
+	}
+	if target.country != nil {
+		q = q.Where("country = ?", *target.country)
+	} else {
+		q = q.Where("country IS NULL")
+	}
+	if target.region != nil {
+		q = q.Where("region = ?", *target.region)
+	} else {
+		q = q.Where("region IS NULL")
+	}
+	if target.city != nil {
+		q = q.Where("city = ?", *target.city)
+	} else {
+		q = q.Where("city IS NULL")
+	}
+	if target.category != nil {
+		q = q.Where("category = ?", *target.category)
+	} else {
+		q = q.Where("category IS NULL")
+	}
+	return q
 }
 
 func (r *AccessRule) evaluate(rules []models.AccessRule, ip, country, region, city string, isLocal bool) bool {
