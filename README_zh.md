@@ -87,6 +87,7 @@ nextunnel-server [flags]
 |-----------------------------|-------------------------|-------------------|
 | `--config`                  | `nextunnel-server.toml` | 配置文件路径            |
 | `--generate-certs`          | —                       | 在指定目录生成客户端 TLS 证书 |
+| `--ip-filter-list`          | `false`                 | 列出当前所有 IP 过滤规则    |
 | `--ip-filter-allow-ip`      | —                       | 将 IP 加入白名单        |
 | `--ip-filter-block-ip`      | —                       | 将 IP 加入黑名单        |
 | `--ip-filter-allow-country` | —                       | 将国家/地区加入白名单       |

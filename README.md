@@ -88,6 +88,7 @@ graceful shutdown.
 |-----------------------------|-------------------------|---------------------------------------------------------|
 | `--config`                  | `nextunnel-server.toml` | Path to the configuration file                          |
 | `--generate-certs`          | —                       | Generate client TLS certificates in the given directory |
+| `--ip-filter-list`          | `false`                 | List all current IP filtering rules                     |
 | `--ip-filter-allow-ip`      | —                       | Add an IP to the allow list                             |
 | `--ip-filter-block-ip`      | —                       | Add an IP to the block list                             |
 | `--ip-filter-allow-country` | —                       | Add a country to the allow list                         |
