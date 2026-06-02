@@ -13,186 +13,105 @@ import (
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 )
 
-var ipFilterRules = []ipFilterRule{
-	&ipFilter{flag: "ip-filter-allow-ip", flagDel: "ip-filter-allow-ip-delete", status: 1, field: "ip"},
-	&ipFilter{flag: "ip-filter-block-ip", flagDel: "ip-filter-block-ip-delete", status: 0, field: "ip"},
-	&ipFilter{flag: "ip-filter-allow-country", flagDel: "ip-filter-allow-country-delete", status: 1, field: "country"},
-	&ipFilter{flag: "ip-filter-block-country", flagDel: "ip-filter-block-country-delete", status: 0, field: "country"},
-	&ipFilter{flag: "ip-filter-allow-region", flagDel: "ip-filter-allow-region-delete", status: 1, field: "region"},
-	&ipFilter{flag: "ip-filter-block-region", flagDel: "ip-filter-block-region-delete", status: 0, field: "region"},
-	&ipFilter{flag: "ip-filter-allow-city", flagDel: "ip-filter-allow-city-delete", status: 1, field: "city"},
-	&ipFilter{flag: "ip-filter-block-city", flagDel: "ip-filter-block-city-delete", status: 0, field: "city"},
-	&ipFilter{flag: "ip-filter-allow-all", flagDel: "ip-filter-allow-all-delete", status: 1, field: "ALL"},
-	&ipFilter{flag: "ip-filter-block-all", flagDel: "ip-filter-block-all-delete", status: 0, field: "ALL"},
-	&ipFilter{flag: "ip-filter-allow-local", flagDel: "ip-filter-allow-local-delete", status: 1, field: "LOCAL"},
-	&ipFilter{flag: "ip-filter-block-local", flagDel: "ip-filter-block-local-delete", status: 0, field: "LOCAL"},
-	&ipFilter{flag: "ip-filter-allow-remote", flagDel: "ip-filter-allow-remote-delete", status: 1, field: "REMOTE"},
-	&ipFilter{flag: "ip-filter-block-remote", flagDel: "ip-filter-block-remote-delete", status: 0, field: "REMOTE"},
-}
-
-type ipFilterRule interface {
-	run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error)
-}
-
-type ipFilter struct {
-	flag    string
-	flagDel string
-	status  int16
-	field   string
-}
-
-func RunIPFilterList(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
-
-	if !cmd.Flags().Changed("ip-filter-list") {
-		return false, nil
-	}
-
-	enabled, err := cmd.Flags().GetBool("ip-filter-list")
-	if err != nil {
-		return false, err
-	}
-	if !enabled {
-		return false, nil
-	}
+func ListIPFilters(cmd *cobra.Command, cfg *configs.Configs) error {
 
 	service, err := newAccessRuleService(cfg)
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	rules, err := service.ListRules()
 	if err != nil {
-		return true, err
+		return err
 	}
 	if len(rules) == 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no ip filter rules")
-		return true, nil
+		return nil
 	}
 
 	for i := range rules {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), formatAccessRule(rules[i]))
 	}
 
-	return true, nil
+	return nil
 
 }
 
-func RunIPFilters(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
-	for i := range ipFilterRules {
-		ran, err = ipFilterRules[i].run(cmd, cfg)
-		if err != nil || ran {
-			return ran, err
-		}
-	}
-	return false, nil
-}
-
-func (f *ipFilter) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
-
-	if cmd.Flags().Changed(f.flagDel) {
-		return f.runDelete(cmd, cfg)
-	}
-
-	if !cmd.Flags().Changed(f.flag) {
-		return false, nil
-	}
+func UpsertIPFilter(cmd *cobra.Command, cfg *configs.Configs, status int16, field, value string) error {
 
 	service, err := newAccessRuleService(cfg)
 	if err != nil {
-		return true, err
+		return err
 	}
 
-	if f.isCategory() {
-		enabled, err := cmd.Flags().GetBool(f.flag)
-		if err != nil {
-			return false, err
-		}
-		if !enabled {
-			return false, nil
-		}
-		target, err := service.NewCategoryRuleTarget(f.field)
-		if err != nil {
-			return true, err
-		}
-		return f.upsertAndPrint(cmd, service, target, f.status, "%s category %s", f.ruleAction(f.status), f.field)
-	}
-
-	raw, err := cmd.Flags().GetString(f.flag)
+	target, format, msgArgs, err := buildRuleTarget(service, field, value)
 	if err != nil {
-		return false, err
-	}
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return false, nil
+		return err
 	}
 
-	if f.field == "ip" {
-		ip, err := utils.NormalizeIP(raw)
-		if err != nil {
-			return true, err
-		}
-		raw = *ip
+	if err := service.UpsertRule(target, status); err != nil {
+		return err
 	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", append([]any{ruleAction(status)}, msgArgs...)...)
 
-	target, err := service.NewRuleTarget(f.field, raw)
-	if err != nil {
-		return true, err
-	}
-
-	return f.upsertAndPrint(cmd, service, target, f.status, "%s %s %s", f.ruleAction(f.status), f.field, raw)
+	return nil
 
 }
 
-func (f *ipFilter) runDelete(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+func DeleteIPFilter(cmd *cobra.Command, cfg *configs.Configs, status int16, field, value string) error {
 
 	service, err := newAccessRuleService(cfg)
 	if err != nil {
-		return true, err
+		return err
 	}
 
-	if f.isCategory() {
-		enabled, err := cmd.Flags().GetBool(f.flagDel)
-		if err != nil {
-			return false, err
-		}
-		if !enabled {
-			return false, nil
-		}
-		target, err := service.NewCategoryRuleTarget(f.field)
-		if err != nil {
-			return true, err
-		}
-		return f.deleteAndPrint(cmd, service, target, f.status, "deleted %s category %s", f.ruleAction(f.status), f.field)
-	}
-
-	raw, err := cmd.Flags().GetString(f.flagDel)
+	target, format, msgArgs, err := buildRuleTarget(service, field, value)
 	if err != nil {
-		return false, err
-	}
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return false, nil
+		return err
 	}
 
-	if f.field == "ip" {
-		ip, err := utils.NormalizeIP(raw)
-		if err != nil {
-			return true, err
-		}
-		raw = *ip
+	if err := service.DeleteRule(target, status); err != nil {
+		return err
 	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "deleted "+format+"\n", append([]any{ruleAction(status)}, msgArgs...)...)
 
-	target, err := service.NewRuleTarget(f.field, raw)
-	if err != nil {
-		return true, err
-	}
-
-	return f.deleteAndPrint(cmd, service, target, f.status, "deleted %s %s %s", f.ruleAction(f.status), f.field, raw)
+	return nil
 
 }
 
-func (f *ipFilter) isCategory() bool {
-	switch f.field {
+func buildRuleTarget(service *services.AccessRule, field, value string) (services.RuleTarget, string, []any, error) {
+
+	if isCategoryField(field) {
+		target, err := service.NewCategoryRuleTarget(field)
+		if err != nil {
+			return services.RuleTarget{}, "", nil, err
+		}
+		return target, "%s category %s", []any{field}, nil
+	}
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return services.RuleTarget{}, "", nil, fmt.Errorf("value is required for field %q", field)
+	}
+
+	if field == "ip" {
+		ip, err := utils.NormalizeIP(value)
+		if err != nil {
+			return services.RuleTarget{}, "", nil, err
+		}
+		value = *ip
+	}
+
+	target, err := service.NewRuleTarget(field, value)
+	if err != nil {
+		return services.RuleTarget{}, "", nil, err
+	}
+	return target, "%s %s %s", []any{field, value}, nil
+
+}
+
+func isCategoryField(field string) bool {
+	switch field {
 	case "ALL", "LOCAL", "REMOTE":
 		return true
 	default:
@@ -200,23 +119,7 @@ func (f *ipFilter) isCategory() bool {
 	}
 }
 
-func (f *ipFilter) upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
-	if err := service.UpsertRule(target, status); err != nil {
-		return true, err
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", args...)
-	return true, nil
-}
-
-func (f *ipFilter) deleteAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
-	if err := service.DeleteRule(target, status); err != nil {
-		return true, err
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", args...)
-	return true, nil
-}
-
-func (f *ipFilter) ruleAction(status int16) string {
+func ruleAction(status int16) string {
 	if status == 1 {
 		return "Allowed"
 	}

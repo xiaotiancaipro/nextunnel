@@ -6,83 +6,29 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel-server/cmd/args"
+	"github.com/xiaotiancaipro/nextunnel-server/cmd/utils"
 	"github.com/xiaotiancaipro/nextunnel-server/internal"
 )
 
-type root struct{}
+type Root struct{}
 
-func New(version string) *cobra.Command {
+func (r *Root) New(version string) *cobra.Command {
 	c := &cobra.Command{
+		Use:     "nextunnel-server",
 		Short:   "nextunnel-server",
 		Version: version,
 		Args:    cobra.ExactArgs(0),
-		Run:     new(root).run,
+		Run:     r.run,
 	}
-	c.Flags().String("config", "nextunnel-server.toml", "configuration file Path")
-	c.Flags().String("generate-certs", "", "client certificate generation path")
-	c.Flags().Bool("ip-filter-list", false, "list current ip filter rules")
-	c.Flags().String("ip-filter-allow-ip", "", "ip allow")
-	c.Flags().String("ip-filter-block-ip", "", "ip block")
-	c.Flags().String("ip-filter-allow-country", "", "country allow")
-	c.Flags().String("ip-filter-block-country", "", "country block")
-	c.Flags().String("ip-filter-allow-region", "", "region allow")
-	c.Flags().String("ip-filter-block-region", "", "region block")
-	c.Flags().String("ip-filter-allow-city", "", "city allow")
-	c.Flags().String("ip-filter-block-city", "", "city block")
-	c.Flags().Bool("ip-filter-allow-all", false, "allow all connections")
-	c.Flags().Bool("ip-filter-block-all", false, "block all connections")
-	c.Flags().Bool("ip-filter-allow-local", false, "allow local network connections")
-	c.Flags().Bool("ip-filter-block-local", false, "block local network connections")
-	c.Flags().Bool("ip-filter-allow-remote", false, "allow remote (non-local) network connections")
-	c.Flags().Bool("ip-filter-block-remote", false, "block remote (non-local) network connections")
-	c.Flags().String("ip-filter-allow-ip-delete", "", "delete ip allow rule")
-	c.Flags().String("ip-filter-block-ip-delete", "", "delete ip block rule")
-	c.Flags().String("ip-filter-allow-country-delete", "", "delete country allow rule")
-	c.Flags().String("ip-filter-block-country-delete", "", "delete country block rule")
-	c.Flags().String("ip-filter-allow-region-delete", "", "delete region allow rule")
-	c.Flags().String("ip-filter-block-region-delete", "", "delete region block rule")
-	c.Flags().String("ip-filter-allow-city-delete", "", "delete city allow rule")
-	c.Flags().String("ip-filter-block-city-delete", "", "delete city block rule")
-	c.Flags().Bool("ip-filter-allow-all-delete", false, "delete allow all rule")
-	c.Flags().Bool("ip-filter-block-all-delete", false, "delete block all rule")
-	c.Flags().Bool("ip-filter-allow-local-delete", false, "delete allow local rule")
-	c.Flags().Bool("ip-filter-block-local-delete", false, "delete block local rule")
-	c.Flags().Bool("ip-filter-allow-remote-delete", false, "delete allow remote rule")
-	c.Flags().Bool("ip-filter-block-remote-delete", false, "delete block remote rule")
+	c.PersistentFlags().String("config", "nextunnel-server.toml", "configuration file path")
+	c.AddCommand(new(client).new())
+	c.AddCommand(new(ipFilter).new())
 	return c
 }
 
-func (c *root) run(cmd *cobra.Command, _ []string) {
+func (r *Root) run(cmd *cobra.Command, _ []string) {
 
-	cfg := args.LoadConfig(cmd)
-
-	ran, err := args.RunGenerateCerts(cmd, cfg)
-	if err != nil {
-		cmd.PrintErr(err)
-		os.Exit(1)
-	}
-	if ran {
-		return
-	}
-
-	ran, err = args.RunIPFilterList(cmd, cfg)
-	if err != nil {
-		cmd.PrintErr(err)
-		os.Exit(1)
-	}
-	if ran {
-		return
-	}
-
-	ran, err = args.RunIPFilters(cmd, cfg)
-	if err != nil {
-		cmd.PrintErr(err)
-		os.Exit(1)
-	}
-	if ran {
-		return
-	}
+	cfg := utils.LoadConfig(cmd)
 
 	app, err := internal.NewApp(cfg)
 	if err != nil {
