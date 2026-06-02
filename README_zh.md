@@ -122,20 +122,19 @@ nextunnel-server ip-filter <command>        # 访问控制规则管理
 nextunnel-server ip-filter list
 
 # 添加白名单 / 黑名单
-nextunnel-server ip-filter allow ip 203.0.113.10
-nextunnel-server ip-filter block ip 203.0.113.10
-nextunnel-server ip-filter allow country China
-nextunnel-server ip-filter block region Guangdong
-nextunnel-server ip-filter allow city Shenzhen
+nextunnel-server ip-filter add --allow --ip 203.0.113.10
+nextunnel-server ip-filter add --block --city Shenzhen
+nextunnel-server ip-filter add --allow --region Guangdong
+nextunnel-server ip-filter add --block --country China
 
 # 网络类别：all / local / remote
-nextunnel-server ip-filter block all
-nextunnel-server ip-filter allow local
-nextunnel-server ip-filter block remote
+nextunnel-server ip-filter add --block --all
+nextunnel-server ip-filter add --allow --local
+nextunnel-server ip-filter add --block --remote
 
 # 删除规则（需与添加时的 allow/block 维度一致）
-nextunnel-server ip-filter delete block ip 203.0.113.10
-nextunnel-server ip-filter delete allow country China
+nextunnel-server ip-filter delete --allow --ip 203.0.113.10
+nextunnel-server ip-filter delete --block --country China
 ```
 
 **规则说明：**

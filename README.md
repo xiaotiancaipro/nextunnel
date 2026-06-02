@@ -126,20 +126,19 @@ restarting the server.
 nextunnel-server ip-filter list
 
 # Add allow / block rules
-nextunnel-server ip-filter allow ip 203.0.113.10
-nextunnel-server ip-filter block ip 203.0.113.10
-nextunnel-server ip-filter allow country China
-nextunnel-server ip-filter block region Guangdong
-nextunnel-server ip-filter allow city Shenzhen
+nextunnel-server ip-filter add --allow --ip 203.0.113.10
+nextunnel-server ip-filter add --block --city Shenzhen
+nextunnel-server ip-filter add --allow --region Guangdong
+nextunnel-server ip-filter add --block --country China
 
 # Network categories: all / local / remote
-nextunnel-server ip-filter block all
-nextunnel-server ip-filter allow local
-nextunnel-server ip-filter block remote
+nextunnel-server ip-filter add --block --all
+nextunnel-server ip-filter add --allow --local
+nextunnel-server ip-filter add --block --remote
 
 # Delete rules (match the allow/block dimension used when adding)
-nextunnel-server ip-filter delete block ip 203.0.113.10
-nextunnel-server ip-filter delete allow country China
+nextunnel-server ip-filter delete --allow --ip 203.0.113.10
+nextunnel-server ip-filter delete --block --country China
 ```
 
 **Rule semantics:**
