@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
@@ -40,6 +41,42 @@ type ipFilter struct {
 	field   string
 }
 
+func RunIPFilterList(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
+
+	if !cmd.Flags().Changed("ip-filter-list") {
+		return false, nil
+	}
+
+	enabled, err := cmd.Flags().GetBool("ip-filter-list")
+	if err != nil {
+		return false, err
+	}
+	if !enabled {
+		return false, nil
+	}
+
+	service, err := newAccessRuleService(cfg)
+	if err != nil {
+		return true, err
+	}
+
+	rules, err := service.ListRules()
+	if err != nil {
+		return true, err
+	}
+	if len(rules) == 0 {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no ip filter rules")
+		return true, nil
+	}
+
+	for i := range rules {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), formatAccessRule(rules[i]))
+	}
+
+	return true, nil
+
+}
+
 func RunIPFilters(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 	for i := range ipFilterRules {
 		ran, err = ipFilterRules[i].run(cmd, cfg)
@@ -60,7 +97,7 @@ func (f *ipFilter) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err 
 		return false, nil
 	}
 
-	service, err := f.newAccessRuleService(cfg)
+	service, err := newAccessRuleService(cfg)
 	if err != nil {
 		return true, err
 	}
@@ -108,7 +145,7 @@ func (f *ipFilter) run(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err 
 
 func (f *ipFilter) runDelete(cmd *cobra.Command, cfg *configs.Configs) (ran bool, err error) {
 
-	service, err := f.newAccessRuleService(cfg)
+	service, err := newAccessRuleService(cfg)
 	if err != nil {
 		return true, err
 	}
@@ -163,18 +200,6 @@ func (f *ipFilter) isCategory() bool {
 	}
 }
 
-func (f *ipFilter) newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
-	logger, err := logger_.NewLogger(cfg.Logs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logging: %w", err)
-	}
-	db, err := clients.NewDB(cfg.Database, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
-	}
-	return services.NewAccessRule(db), nil
-}
-
 func (f *ipFilter) upsertAndPrint(cmd *cobra.Command, service *services.AccessRule, target services.RuleTarget, status int16, format string, args ...any) (bool, error) {
 	if err := service.UpsertRule(target, status); err != nil {
 		return true, err
@@ -196,4 +221,37 @@ func (f *ipFilter) ruleAction(status int16) string {
 		return "Allowed"
 	}
 	return "Blocked"
+}
+
+func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
+	logger, err := logger_.NewLogger(cfg.Logs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logging: %w", err)
+	}
+	db, err := clients.NewDB(cfg.Database, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
+	}
+	return services.NewAccessRule(db), nil
+}
+
+func formatAccessRule(rule models.AccessRule) string {
+	action := "Blocked"
+	if rule.Status == 1 {
+		action = "Allowed"
+	}
+	switch {
+	case rule.Category != nil:
+		return fmt.Sprintf("%s category %s", action, *rule.Category)
+	case rule.Ip != nil:
+		return fmt.Sprintf("%s ip %s", action, *rule.Ip)
+	case rule.Country != nil:
+		return fmt.Sprintf("%s country %s", action, *rule.Country)
+	case rule.Region != nil:
+		return fmt.Sprintf("%s region %s", action, *rule.Region)
+	case rule.City != nil:
+		return fmt.Sprintf("%s city %s", action, *rule.City)
+	default:
+		return action
+	}
 }

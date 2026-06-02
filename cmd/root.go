@@ -21,6 +21,7 @@ func New(version string) *cobra.Command {
 	}
 	c.Flags().String("config", "nextunnel-server.toml", "configuration file Path")
 	c.Flags().String("generate-certs", "", "client certificate generation path")
+	c.Flags().Bool("ip-filter-list", false, "list current ip filter rules")
 	c.Flags().String("ip-filter-allow-ip", "", "ip allow")
 	c.Flags().String("ip-filter-block-ip", "", "ip block")
 	c.Flags().String("ip-filter-allow-country", "", "country allow")
@@ -57,6 +58,15 @@ func (c *root) run(cmd *cobra.Command, _ []string) {
 	cfg := args.LoadConfig(cmd)
 
 	ran, err := args.RunGenerateCerts(cmd, cfg)
+	if err != nil {
+		cmd.PrintErr(err)
+		os.Exit(1)
+	}
+	if ran {
+		return
+	}
+
+	ran, err = args.RunIPFilterList(cmd, cfg)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)

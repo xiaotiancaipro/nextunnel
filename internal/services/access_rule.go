@@ -78,6 +78,14 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	})
 }
 
+func (r *AccessRule) ListRules() ([]models.AccessRule, error) {
+	var rules []models.AccessRule
+	if err := r.db.Where("is_delete = ?", false).Order("status DESC, created_at ASC").Find(&rules).Error; err != nil {
+		return nil, fmt.Errorf("failed to query access_rules: %w", err)
+	}
+	return rules, nil
+}
+
 func (r *AccessRule) DeleteRule(target RuleTarget, status int16) error {
 	if err := r.validateRuleTarget(target); err != nil {
 		return err
