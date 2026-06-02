@@ -12,6 +12,7 @@ var ipFilterFields = []ipFilterField{
 	{flag: "ip", field: "ip", needsValue: true},
 	{flag: "country", field: "country", needsValue: true},
 	{flag: "region", field: "region", needsValue: true},
+	{flag: "city", field: "city", needsValue: true},
 	{flag: "all", field: "ALL", needsValue: false},
 	{flag: "local", field: "LOCAL", needsValue: false},
 	{flag: "remote", field: "REMOTE", needsValue: false},
@@ -58,7 +59,7 @@ func (f *ipFilter) newIPFilterDelete() *cobra.Command {
 
 func (f *ipFilter) newIPFilterMutate(use, short string, delete bool) *cobra.Command {
 	c := &cobra.Command{
-		Use:   use + " [--allow | --block] [--ip | --country | --region | --all | --local | --remote] [value]",
+		Use:   use + " [--allow | --block] [--ip | --country | --region | --city | --all | --local | --remote] [value]",
 		Short: short,
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, posArgs []string) {
@@ -101,13 +102,13 @@ func (f *ipFilter) parseIPFilterFlags(cmd *cobra.Command, posArgs []string) (sta
 			continue
 		}
 		if selected != nil {
-			return 0, "", "", fmt.Errorf("specify exactly one of --ip, --country, --region, --all, --local, --remote")
+			return 0, "", "", fmt.Errorf("specify exactly one of --ip, --country, --region, --city, --all, --local, --remote")
 		}
 		spec := ipFilterFields[i]
 		selected = &spec
 	}
 	if selected == nil {
-		return 0, "", "", fmt.Errorf("specify one of --ip, --country, --region, --all, --local, --remote")
+		return 0, "", "", fmt.Errorf("specify one of --ip, --country, --region, --city, --all, --local, --remote")
 	}
 
 	field = selected.field
@@ -130,6 +131,7 @@ func (f *ipFilter) bindIPFilterFlags(c *cobra.Command) {
 	c.Flags().Bool("ip", false, "match by IP address (requires value)")
 	c.Flags().Bool("country", false, "match by country (requires value)")
 	c.Flags().Bool("region", false, "match by region (requires value)")
+	c.Flags().Bool("city", false, "match by city (requires value)")
 	c.Flags().Bool("all", false, "match all traffic")
 	c.Flags().Bool("local", false, "match local network traffic")
 	c.Flags().Bool("remote", false, "match remote network traffic")

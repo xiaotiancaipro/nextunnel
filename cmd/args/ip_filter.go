@@ -13,6 +13,11 @@ import (
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 )
 
+const (
+	actionAllow = "allowed"
+	actionBlock = "blocked"
+)
+
 func ListIPFilters(cmd *cobra.Command, cfg *configs.Configs) error {
 
 	service, err := newAccessRuleService(cfg)
@@ -121,9 +126,9 @@ func isCategoryField(field string) bool {
 
 func ruleAction(status int16) string {
 	if status == 1 {
-		return "Allowed"
+		return actionAllow
 	}
-	return "Blocked"
+	return actionBlock
 }
 
 func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
@@ -139,9 +144,9 @@ func newAccessRuleService(cfg *configs.Configs) (*services.AccessRule, error) {
 }
 
 func formatAccessRule(rule models.AccessRule) string {
-	action := "Blocked"
+	action := actionBlock
 	if rule.Status == 1 {
-		action = "Allowed"
+		action = actionAllow
 	}
 	switch {
 	case rule.Category != nil:
