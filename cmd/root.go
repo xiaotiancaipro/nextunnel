@@ -20,7 +20,7 @@ func (r *Root) New(version string) *cobra.Command {
 		Args:    cobra.ExactArgs(0),
 		Run:     r.run,
 	}
-	c.PersistentFlags().String("config", "nextunnel-server.toml", "configuration file path")
+	c.PersistentFlags().String("config", utils.DefaultConfigPath, "configuration file path (overrides $"+utils.EnvConfigPath+")")
 	c.AddCommand(new(client).new())
 	c.AddCommand(new(ipFilter).new())
 	return c
