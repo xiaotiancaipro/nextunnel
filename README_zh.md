@@ -17,9 +17,9 @@ mTLS 连入服务端，由服务端在公网侧监听代理端口并转发流量
 
 主要能力：
 
-- 接受 nextunnel 客户端的**双向 TLS（mTLS）**连接
+- 接受 nextunnel 客户端的 mTLS 连接
 - 根据客户端提交的代理配置在宿主机上监听远程端口
-- 基于 PostgreSQL 中的规则执行 **IP / 地域 / 网络类别**访问控制
+- 基于 PostgreSQL 中的规则执行 IP / 地域 / 网络类别访问控制
 - 将每次入站用户连接（IP、地域、网络类别、放行/拒绝结果）写入 PostgreSQL
 
 ```mermaid
@@ -46,10 +46,10 @@ flowchart LR
 # 1. 准备 GeoIP 数据库
 # 将 GeoLite2-City.mmdb 放到 geoip/GeoLite2-City.mmdb
 
-# 2. 复制并编辑配置
+# 2. 复制并编辑配置（数据库、GeoIP 路径、时区等）
 cp nextunnel-server.example.toml nextunnel-server.toml
 
-# 3. 编译并启动（默认读取 nextunnel-server.toml）
+# 3. 编译并启动（默认读取 nextunnel-server.toml，或通过 $NEXTUNNEL_SERVER_CONFIG 指定）
 go build -o nextunnel-server .
 ./nextunnel-server
 ```
@@ -87,6 +87,8 @@ go build -o nextunnel-server .
 cd docker
 cp example.env .env
 # 按需修改 .env（数据库账号、端口等）
+# 编辑 volumes/nextunnel/config/nextunnel-server.toml（时区、GeoIP、日志等）
+# 将 GeoLite2-City.mmdb 放到 volumes/nextunnel/geoip/
 
 # 启动 PostgreSQL + nextunnel-server
 docker compose up -d
@@ -94,6 +96,17 @@ docker compose up -d
 # 或仅启动 PostgreSQL（自行在宿主机运行 nextunnel-server）
 docker compose -f docker-compose.middleware.yaml up -d
 ```
+
+容器内挂载路径：
+
+| 宿主机路径                       | 容器路径                           |
+|-----------------------------|--------------------------------|
+| `volumes/nextunnel/config/` | `/usr/local/nextunnel/config/` |
+| `volumes/nextunnel/certs/`  | `/usr/local/nextunnel/certs/`  |
+| `volumes/nextunnel/geoip/`  | `/usr/local/nextunnel/geoip/`  |
+| `volumes/nextunnel/logs/`   | `/usr/local/nextunnel/logs/`   |
+
+默认启动命令：`nextunnel-server --config config/nextunnel-server.toml`。
 
 ## CLI 参考
 
@@ -105,11 +118,11 @@ nextunnel-server ip-filter <command>        # 访问控制规则管理
 
 全局标志：
 
-| 标志                | 默认值                     | 说明     |
-|-------------------|-------------------------|--------|
-| `--config`        | `nextunnel-server.toml` | 配置文件路径 |
-| `-h`, `--help`    | —                       | 显示帮助   |
-| `-v`, `--version` | —                       | 显示版本   |
+| 标志                | 默认值                     | 说明                                            |
+|-------------------|-------------------------|-----------------------------------------------|
+| `--config`        | `nextunnel-server.toml` | 配置文件路径；未指定时回退到环境变量 `$NEXTUNNEL_SERVER_CONFIG` |
+| `-h`, `--help`    | —                       | 显示帮助                                          |
+| `-v`, `--version` | —                       | 显示版本                                          |
 
 未指定子命令时以前台方式运行服务端；按 `Ctrl+C` 或发送 `SIGTERM` 可优雅退出。
 
@@ -163,6 +176,7 @@ nextunnel-server ip-filter delete --block --country China
 | `[tls]`      | `dir`                                            | 证书目录（CA、服务端及客户端证书生成）                       |
 | `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接                              |
 |              | `sslmode`                                        | libpq SSL 模式，默认 `disable`                  |
+| `[timezone]` | `location`                                       | 日志展示与按天轮转的 IANA 时区，默认 `Asia/Shanghai`      |
 | `[geoip]`    | `db_path`                                        | GeoLite2-City 数据库路径（必填）                    |
 |              | `locales`                                        | 地名解析语言优先级，如 `["zh-CN", "en"]`；地域规则须与解析结果一致 |
 

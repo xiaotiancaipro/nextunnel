@@ -18,9 +18,9 @@ targets reachable from the client.
 
 Capabilities:
 
-- Accept **mutual TLS (mTLS)** connections from nextunnel clients
+- Accept mutual TLS (mTLS) connections from nextunnel clients
 - Listen on remote proxy ports based on client-submitted proxy configuration
-- Enforce **IP / geo / network-category** access control rules stored in PostgreSQL
+- Enforce IP / geo / network-category access control rules stored in PostgreSQL
 - Record every inbound user connection (IP, geo, category, allow/deny decision) in PostgreSQL
 
 ```mermaid
@@ -47,10 +47,10 @@ flowchart LR
 # 1. Prepare the GeoIP database
 # Place GeoLite2-City.mmdb at geoip/GeoLite2-City.mmdb
 
-# 2. Copy and edit configuration
+# 2. Copy and edit configuration (database, GeoIP path, timezone, etc.)
 cp nextunnel-server.example.toml nextunnel-server.toml
 
-# 3. Build and run (reads nextunnel-server.toml by default)
+# 3. Build and run (reads nextunnel-server.toml by default, or $NEXTUNNEL_SERVER_CONFIG)
 go build -o nextunnel-server .
 ./nextunnel-server
 ```
@@ -89,7 +89,9 @@ PostgreSQL alone).
 ```bash
 cd docker
 cp example.env .env
-# Edit .env as needed (database credentials, ports, etc.)
+# Edit .env (database credentials, ports, etc.)
+# Edit volumes/nextunnel/config/nextunnel-server.toml (timezone, GeoIP, logs, etc.)
+# Place GeoLite2-City.mmdb under volumes/nextunnel/geoip/
 
 # Start PostgreSQL + nextunnel-server
 docker compose up -d
@@ -97,6 +99,17 @@ docker compose up -d
 # Or PostgreSQL only (run nextunnel-server on the host yourself)
 docker compose -f docker-compose.middleware.yaml up -d
 ```
+
+Mounted paths inside the container:
+
+| Host path                   | Container path                 |
+|-----------------------------|--------------------------------|
+| `volumes/nextunnel/config/` | `/usr/local/nextunnel/config/` |
+| `volumes/nextunnel/certs/`  | `/usr/local/nextunnel/certs/`  |
+| `volumes/nextunnel/geoip/`  | `/usr/local/nextunnel/geoip/`  |
+| `volumes/nextunnel/logs/`   | `/usr/local/nextunnel/logs/`   |
+
+Default command: `nextunnel-server --config config/nextunnel-server.toml`.
 
 ## CLI Reference
 
@@ -108,11 +121,11 @@ nextunnel-server ip-filter <command>        # Access control rule management
 
 Global flags:
 
-| Flag              | Default                 | Description             |
-|-------------------|-------------------------|-------------------------|
-| `--config`        | `nextunnel-server.toml` | Configuration file path |
-| `-h`, `--help`    | —                       | Show help               |
-| `-v`, `--version` | —                       | Show version            |
+| Flag              | Default                 | Description                                                                   |
+|-------------------|-------------------------|-------------------------------------------------------------------------------|
+| `--config`        | `nextunnel-server.toml` | Configuration file path; when unset, falls back to `$NEXTUNNEL_SERVER_CONFIG` |
+| `-h`, `--help`    | —                       | Show help                                                                     |
+| `-v`, `--version` | —                       | Show version                                                                  |
 
 With no subcommand, the server runs in the foreground. Press `Ctrl+C` or send `SIGTERM` for graceful shutdown.
 
@@ -167,6 +180,7 @@ See [`nextunnel-server.example.toml`](nextunnel-server.example.toml) for a full 
 | `[tls]`      | `dir`                                            | Certificate directory (CA, server, and client cert generation)                                  |
 | `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection                                                                           |
 |              | `sslmode`                                        | libpq SSL mode; defaults to `disable`                                                           |
+| `[timezone]` | `location`                                       | IANA timezone for log display and daily log rotation; defaults to `Asia/Shanghai`               |
 | `[geoip]`    | `db_path`                                        | Path to GeoLite2-City database (required)                                                       |
 |              | `locales`                                        | Ordered locale codes for GeoIP names, e.g. `["zh-CN", "en"]`; geo rules must use resolved names |
 
