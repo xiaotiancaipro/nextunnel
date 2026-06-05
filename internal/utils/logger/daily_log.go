@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/xiaotiancaipro/nextunnel-client/internal/utils/timezone"
 )
 
 const (
@@ -97,7 +99,7 @@ func (d *dailyLogWriter) pathForSegment(date string, segment int) string {
 }
 
 func (d *dailyLogWriter) today() string {
-	return time.Now().Format(dailyLogDateFormat)
+	return timezone.Today()
 }
 
 func (d *dailyLogWriter) Write(p []byte) (int, error) {
@@ -282,7 +284,7 @@ func (d *dailyLogWriter) cleanupLocked() {
 	}
 
 	if d.maxAge > 0 {
-		cutoff := time.Now().AddDate(0, 0, -d.maxAge).Format(dailyLogDateFormat)
+		cutoff := timezone.DaysAgo(d.maxAge)
 		for date, paths := range byDate {
 			if date < cutoff {
 				for _, path := range paths {

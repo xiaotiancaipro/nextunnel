@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-client/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel-client/internal/utils/timezone"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -29,7 +30,7 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 		LineEnding:       zapcore.DefaultLineEnding,
 		ConsoleSeparator: " - ",
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-			enc.AppendString(t.Format("2006-01-02 15:04:05"))
+			enc.AppendString(timezone.Format(t))
 		},
 		EncodeLevel:    zapcore.CapitalLevelEncoder,
 		EncodeCaller:   repoRelativeCallerEncoder,
@@ -119,7 +120,7 @@ func pathRelativeToRepoRoot(file string) (string, bool) {
 }
 
 func scheduleDailyLogRotation(logger *dailyLogWriter) {
-	loc := time.Local
+	loc := timezone.Location()
 	for {
 		now := time.Now().In(loc)
 		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)

@@ -1,17 +1,20 @@
 package configs
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/BurntSushi/toml"
+	"github.com/xiaotiancaipro/nextunnel-client/internal/utils/timezone"
 )
 
 type Configs struct {
-	Server  *Server `toml:"server"`
-	Client  *Client `toml:"client"`
-	Logs    *Logs   `toml:"logs"`
-	Tls     *Tls    `toml:"tls"`
-	Proxies []Proxy `toml:"proxies"`
+	Server   *Server   `toml:"server"`
+	Client   *Client   `toml:"client"`
+	Logs     *Logs     `toml:"logs"`
+	Tls      *Tls      `toml:"tls"`
+	Timezone *Timezone `toml:"timezone"`
+	Proxies  []Proxy   `toml:"proxies"`
 }
 
 func NewConfigs(file string) (*Configs, error) {
@@ -21,6 +24,9 @@ func NewConfigs(file string) (*Configs, error) {
 	var configs Configs
 	if _, err := toml.DecodeFile(file, &configs); err != nil {
 		return nil, err
+	}
+	if err := timezone.Init(configs.Timezone.NameOrDefault()); err != nil {
+		return nil, fmt.Errorf("invalid timezone config: %w", err)
 	}
 	return &configs, nil
 }
