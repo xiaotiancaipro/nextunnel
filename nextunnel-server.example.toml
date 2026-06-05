@@ -20,6 +20,9 @@ password = "nextunnel"
 db = "nextunnel"
 sslmode = "disable"
 
+[timezone]
+location = "Asia/Shanghai"
+
 [geoip]
 db_path = "geoip/GeoLite2-City.mmdb"
 locales = ["en"]

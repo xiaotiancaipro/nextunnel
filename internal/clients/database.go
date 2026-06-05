@@ -7,6 +7,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -74,7 +75,7 @@ func (d *database) connect() (*gorm.DB, error) {
 		return nil, fmt.Errorf("database logger is required")
 	}
 	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=UTC",
 		d.config.Host,
 		d.config.Port,
 		d.config.Username,
@@ -83,7 +84,8 @@ func (d *database) connect() (*gorm.DB, error) {
 		d.config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
-		Logger: logger.NewGormLogger(d.logger, d.slowThreshold),
+		Logger:  logger.NewGormLogger(d.logger, d.slowThreshold),
+		NowFunc: func() time.Time { return timezone.NowUTC() },
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)
 }
