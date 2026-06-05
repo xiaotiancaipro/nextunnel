@@ -77,7 +77,7 @@ go build -o nextunnel-server .
 ./script/build.sh
 ```
 
-产物输出至 `dist/`，命名格式为 `nextunnel-server-<version>-<os>-<arch>[.exe]`。
+二进制文件输出至 `dist/`，命名格式为 `nextunnel-server-<version>-<os>-<arch>[.exe]`。
 
 ## Docker 部署
 
