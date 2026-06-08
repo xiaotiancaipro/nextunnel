@@ -76,7 +76,15 @@ func (f *ipFilter) newIPFilterMutate(use, short string, delete bool) *cobra.Comm
 			utils.ExitOnErr(cmd, args.UpsertIPFilter(cmd, cfg, status, field, value))
 		},
 	}
-	f.bindIPFilterFlags(c)
+	c.Flags().Bool("allow", false, "allow matching traffic")
+	c.Flags().Bool("block", false, "block matching traffic")
+	c.Flags().Bool("ip", false, "match by IP address (requires value)")
+	c.Flags().Bool("country", false, "match by country (requires value)")
+	c.Flags().Bool("region", false, "match by region (requires value)")
+	c.Flags().Bool("city", false, "match by city (requires value)")
+	c.Flags().Bool("all", false, "match all traffic")
+	c.Flags().Bool("local", false, "match local network traffic")
+	c.Flags().Bool("remote", false, "match remote network traffic")
 	return c
 }
 
@@ -123,16 +131,4 @@ func (f *ipFilter) parseIPFilterFlags(cmd *cobra.Command, posArgs []string) (sta
 
 	return status, field, value, nil
 
-}
-
-func (f *ipFilter) bindIPFilterFlags(c *cobra.Command) {
-	c.Flags().Bool("allow", false, "allow matching traffic")
-	c.Flags().Bool("block", false, "block matching traffic")
-	c.Flags().Bool("ip", false, "match by IP address (requires value)")
-	c.Flags().Bool("country", false, "match by country (requires value)")
-	c.Flags().Bool("region", false, "match by region (requires value)")
-	c.Flags().Bool("city", false, "match by city (requires value)")
-	c.Flags().Bool("all", false, "match all traffic")
-	c.Flags().Bool("local", false, "match local network traffic")
-	c.Flags().Bool("remote", false, "match remote network traffic")
 }
