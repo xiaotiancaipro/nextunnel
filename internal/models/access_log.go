@@ -16,6 +16,8 @@ const (
 // AccessLog records each access attempt and its geo/decision metadata
 type AccessLog struct {
 	Id        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey;"`          // Primary key UUID
+	ClientId  uuid.UUID `gorm:"type:uuid;not null"`                                        // Owning tunnel client UUID
+	ProxyId   uuid.UUID `gorm:"type:uuid;not null"`                                        // Associated proxy rule UUID
 	Ip        string    `gorm:"type:varchar(128);not null;"`                               // Client IP address
 	Category  *string   `gorm:"type:varchar(128);not null;"`                               // Access source category: LOCAL or REMOTE
 	Country   *string   `gorm:"type:varchar(256);default:null;"`                           // GeoIP country name
