@@ -19,10 +19,9 @@ var tables = map[string]any{
 }
 
 type database struct {
-	config        *configs.Database
-	tables        map[string]any
-	logger        *zap.Logger
-	slowThreshold time.Duration
+	config *configs.Database
+	tables map[string]any
+	logger *zap.Logger
 }
 
 func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
@@ -84,7 +83,7 @@ func (d *database) connect() (*gorm.DB, error) {
 		d.config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
-		Logger:  logger.NewGormLogger(d.logger, d.slowThreshold),
+		Logger:  logger.NewGormLogger(d.logger, 0),
 		NowFunc: func() time.Time { return timezone.NowUTC() },
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)
