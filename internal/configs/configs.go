@@ -10,10 +10,10 @@ import (
 
 type Configs struct {
 	Server   *Server   `toml:"server"`
-	Logs     *Logs     `toml:"logs"`
-	Tls      *Tls      `toml:"tls"`
+	Cert     *Cert     `toml:"cert"`
 	Database *Database `toml:"database"`
 	GeoIP    *GeoIP    `toml:"geoip"`
+	Logs     *Logs     `toml:"logs"`
 	Timezone *Timezone `toml:"timezone"`
 }
 

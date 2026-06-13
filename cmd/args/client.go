@@ -17,7 +17,7 @@ func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out string) error {
 		return fmt.Errorf("output directory is required")
 	}
 
-	if err := certs.GenerateClientToDir(cfg.Tls.Dir, cfg.Server.Host, out); err != nil {
+	if err := certs.GenerateClientToDir(cfg.Cert.Dir, cfg.Cert.Host, out); err != nil {
 		return err
 	}
 

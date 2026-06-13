@@ -48,7 +48,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 
 	app := App{
 		logger:        logger,
-		tlsService:    services.NewTls(config.Tls, config.Server.Host, logger),
+		tlsService:    services.NewTls(config.Cert, logger),
 		serverService: services.NewServer(config.Server, logger, db, geoIP),
 		geoIP:         geoIP,
 		stopCh:        make(chan struct{}),

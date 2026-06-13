@@ -56,9 +56,7 @@ go build -o nextunnel-server .
 ```
 
 On startup the server: loads config → connects to PostgreSQL (auto-migration) → loads GeoIP → listens on
-`0.0.0.0:<port>` → ensures CA and server TLS certificates exist under `[tls].dir`.
-
-> `[server].host` is used for TLS certificate SAN generation only, **not** as the listen address.
+`0.0.0.0:<port>` → ensures CA and server TLS certificates exist under `[cert].dir`.
 
 ### Generate Client Certificates
 
@@ -66,7 +64,7 @@ On startup the server: loads config → connects to PostgreSQL (auto-migration) 
 ./nextunnel-server client generate-certs ./client-certs
 ```
 
-- Reads the CA from `[tls].dir` (`ca.crt` / `ca.key`); missing CA or server certs are generated automatically
+- Reads the CA from `[cert].dir` (`ca.crt` / `ca.key`); missing CA or server certs are generated automatically
 - Writes `client.crt` and `client.key` to the output directory; exits with an error if either file already exists
 - Client certificates are valid for 1 year; CA certificates for 10 years
 
@@ -170,19 +168,19 @@ See [`nextunnel-server.example.toml`](nextunnel-server.example.toml) for a full 
 
 | Section      | Field                                            | Description                                                                                     |
 |--------------|--------------------------------------------------|-------------------------------------------------------------------------------------------------|
-| `[server]`   | `host`                                           | Hostname or IP for TLS certificate SAN (not the listen address)                                 |
-|              | `port`                                           | Listen port (binds to all interfaces, `0.0.0.0`)                                                |
+| `[server]`   | `port`                                           | Listen port (binds to all interfaces, `0.0.0.0`)                                                |
+| `[cert]`     | `host`                                           | Hostname or IP for auto-generated certificate SAN (not the listen address)                      |
+|              | `dir`                                            | Certificate directory (CA, server, and client cert generation)                                  |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection                                                                           |
+|              | `sslmode`                                        | libpq SSL mode; defaults to `disable`                                                           |
+| `[geoip]`    | `db_path`                                        | Path to GeoLite2-City database (required)                                                       |
+|              | `locales`                                        | Ordered locale codes for GeoIP names, e.g. `["zh-CN", "en"]`; geo rules must use resolved names |
 | `[logs]`     | `file`                                           | Log path (daily rotation with size-based segments)                                              |
 |              | `level`                                          | `debug`, `info`, `warn`, or `error`                                                             |
 |              | `maxSize`                                        | Max segment size, e.g. `100MB`, `1GB`; bare number = MB                                         |
 |              | `maxBackups`                                     | Max number of daily log files to retain                                                         |
 |              | `maxAge`                                         | Max log retention in days                                                                       |
-| `[tls]`      | `dir`                                            | Certificate directory (CA, server, and client cert generation)                                  |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection                                                                           |
-|              | `sslmode`                                        | libpq SSL mode; defaults to `disable`                                                           |
 | `[timezone]` | `location`                                       | IANA timezone for log display and daily log rotation; defaults to `Asia/Shanghai`               |
-| `[geoip]`    | `db_path`                                        | Path to GeoLite2-City database (required)                                                       |
-|              | `locales`                                        | Ordered locale codes for GeoIP names, e.g. `["zh-CN", "en"]`; geo rules must use resolved names |
 
 ## License
 

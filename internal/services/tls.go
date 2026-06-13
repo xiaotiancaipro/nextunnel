@@ -13,22 +13,20 @@ import (
 )
 
 type Tls struct {
-	config     *configs.Tls
-	serverAddr string
-	logger     *zap.Logger
+	config *configs.Cert
+	logger *zap.Logger
 }
 
-func NewTls(config *configs.Tls, serverAddr string, logger *zap.Logger) *Tls {
+func NewTls(config *configs.Cert, logger *zap.Logger) *Tls {
 	return &Tls{
-		config:     config,
-		serverAddr: serverAddr,
-		logger:     logger,
+		config: config,
+		logger: logger,
 	}
 }
 
 func (t *Tls) Init() (*tls.Config, error) {
 
-	if err := certs.Ensure(t.config.Dir, t.serverAddr); err != nil {
+	if err := certs.Ensure(t.config.Dir, t.config.Host); err != nil {
 		return nil, err
 	}
 

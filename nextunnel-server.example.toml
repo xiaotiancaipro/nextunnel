@@ -1,15 +1,8 @@
 [server]
-host = "127.0.0.1"
 port = 25930
 
-[logs]
-file = "logs/nextunnel-server.log"
-level = "info"
-maxSize = "100MB"
-maxBackups = 30
-maxAge = 7
-
-[tls]
+[cert]
+host = "127.0.0.1"
 dir = "certs"
 
 [database]
@@ -20,9 +13,16 @@ password = "nextunnel"
 db = "nextunnel"
 sslmode = "disable"
 
-[timezone]
-location = "Asia/Shanghai"
-
 [geoip]
 db_path = "geoip/GeoLite2-City.mmdb"
 locales = ["en"]
+
+[logs]
+file = "logs/nextunnel-server.log"
+level = "info"
+maxSize = "100MB"
+maxBackups = 30
+maxAge = 7
+
+[timezone]
+location = "Asia/Shanghai"

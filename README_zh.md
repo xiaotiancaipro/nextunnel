@@ -54,10 +54,8 @@ go build -o nextunnel-server .
 ./nextunnel-server
 ```
 
-启动后程序会：加载配置 → 连接 PostgreSQL（自动建表）→ 加载 GeoIP → 在 `0.0.0.0:<port>` 监听 → 在 `[tls].dir` 下自动确保 CA
+启动后程序会：加载配置 → 连接 PostgreSQL（自动建表）→ 加载 GeoIP → 在 `0.0.0.0:<port>` 监听 → 在 `[cert].dir` 下自动确保 CA
 与服务端证书存在。
-
-> `[server].host` 仅用于 TLS 证书 SAN 生成，**不是**实际监听地址。
 
 ### 生成客户端证书
 
@@ -65,7 +63,7 @@ go build -o nextunnel-server .
 ./nextunnel-server client generate-certs ./client-certs
 ```
 
-- 从配置中 `[tls].dir` 读取 CA（`ca.crt` / `ca.key`）；若 CA 或服务端证书不存在会自动生成
+- 从配置中 `[cert].dir` 读取 CA（`ca.crt` / `ca.key`）；若 CA 或服务端证书不存在会自动生成
 - 在指定目录输出 `client.crt` 与 `client.key`；目标目录中若已存在同名文件则报错退出
 - 客户端证书有效期 1 年，CA 证书有效期 10 年
 
@@ -166,19 +164,19 @@ nextunnel-server ip-filter delete --block --country China
 
 | 配置段          | 字段                                               | 说明                                         |
 |--------------|--------------------------------------------------|--------------------------------------------|
-| `[server]`   | `host`                                           | TLS 证书 SAN 用的主机名或 IP（非监听地址）                |
-|              | `port`                                           | 监听端口（绑定所有网卡 `0.0.0.0`）                     |
+| `[server]`   | `port`                                           | 监听端口（绑定所有网卡 `0.0.0.0`）                     |
+| `[cert]`     | `host`                                           | 自动生成证书时的 SAN 主机名或 IP（非监听地址）                |
+|              | `dir`                                            | 证书目录（CA、服务端及客户端证书生成）                       |
+| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接                              |
+|              | `sslmode`                                        | libpq SSL 模式，默认 `disable`                  |
+| `[geoip]`    | `db_path`                                        | GeoLite2-City 数据库路径（必填）                    |
+|              | `locales`                                        | 地名解析语言优先级，如 `["zh-CN", "en"]`；地域规则须与解析结果一致 |
 | `[logs]`     | `file`                                           | 日志路径（按天轮转，超出大小自动分段）                        |
 |              | `level`                                          | `debug` / `info` / `warn` / `error`        |
 |              | `maxSize`                                        | 单段最大大小，如 `100MB`、`1GB`；纯数字默认为 MB           |
 |              | `maxBackups`                                     | 保留的按天日志文件数量上限                              |
 |              | `maxAge`                                         | 日志最大保留天数                                   |
-| `[tls]`      | `dir`                                            | 证书目录（CA、服务端及客户端证书生成）                       |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL 连接                              |
-|              | `sslmode`                                        | libpq SSL 模式，默认 `disable`                  |
 | `[timezone]` | `location`                                       | 日志展示与按天轮转的 IANA 时区，默认 `Asia/Shanghai`      |
-| `[geoip]`    | `db_path`                                        | GeoLite2-City 数据库路径（必填）                    |
-|              | `locales`                                        | 地名解析语言优先级，如 `["zh-CN", "en"]`；地域规则须与解析结果一致 |
 
 ## 许可证
 
