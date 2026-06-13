@@ -116,12 +116,12 @@ See [`nextunnel-client.example.toml`](nextunnel-client.example.toml) for a full 
 |---------------|--------------------------------------|-----------------------------------------------------------------------------------|
 | `[server]`    | `addr` / `port`                      | nextunnel-server control endpoint                                                 |
 | `[client]`    | `id`                                 | Client identifier (required; must be unique per connected client)                 |
+| `[cert]`      | `ca_file` / `cert_file` / `key_file` | CA and client certificate paths for mTLS                                          |
 | `[logs]`      | `file`                               | Log path (daily rotation with size-based segments)                                |
 |               | `level`                              | `debug`, `info`, `warn`, or `error`                                               |
 |               | `maxSize`                            | Max segment size, e.g. `100MB`, `1GB`; bare number = MB                           |
 |               | `maxBackups`                         | Max number of daily log files to retain                                           |
 |               | `maxAge`                             | Max log retention in days                                                         |
-| `[tls]`       | `ca_file` / `cert_file` / `key_file` | CA and client certificate paths for mTLS                                          |
 | `[timezone]`  | `location`                           | IANA timezone for log display and daily log rotation; defaults to `Asia/Shanghai` |
 | `[[proxies]]` | `name`                               | Proxy name (referenced by the server when opening work connections)               |
 |               | `type`                               | Proxy type; currently `tcp`                                                       |

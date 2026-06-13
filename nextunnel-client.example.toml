@@ -1,9 +1,14 @@
 [server]
-addr = "127.0.0.1"
+host = "127.0.0.1"
 port = 25930
 
 [client]
 id = ""
+
+[cert]
+ca_file = "certs/ca.crt"
+cert_file = "certs/client.crt"
+key_file = "certs/client.key"
 
 [logs]
 file = "logs/nextunnel-client.log"
@@ -11,11 +16,6 @@ level = "info"
 maxSize = "100MB"
 maxBackups = 30
 maxAge = 7
-
-[tls]
-ca_file = "certs/ca.crt"
-cert_file = "certs/client.crt"
-key_file = "certs/client.key"
 
 [timezone]
 location = "Asia/Shanghai"

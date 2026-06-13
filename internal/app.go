@@ -38,7 +38,7 @@ func NewApp(config *configs.Configs) (*App, error) {
 	}
 
 	tls := services.Tls{
-		Config: config.Tls,
+		Config: config.Cert,
 		Logger: logger,
 	}
 	server := services.Server{

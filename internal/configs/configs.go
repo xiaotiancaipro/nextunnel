@@ -11,8 +11,8 @@ import (
 type Configs struct {
 	Server   *Server   `toml:"server"`
 	Client   *Client   `toml:"client"`
+	Cert     *Cert     `toml:"cert"`
 	Logs     *Logs     `toml:"logs"`
-	Tls      *Tls      `toml:"tls"`
 	Timezone *Timezone `toml:"timezone"`
 	Proxies  []Proxy   `toml:"proxies"`
 }

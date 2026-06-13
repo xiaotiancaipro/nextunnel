@@ -113,12 +113,12 @@ nextunnel-client [--config <path>]    # 启动客户端（前台）
 |---------------|--------------------------------------|---------------------------------------|
 | `[server]`    | `addr` / `port`                      | nextunnel-server 控制通道地址               |
 | `[client]`    | `id`                                 | 客户端标识（必填；同一时刻每个连接应唯一）                 |
+| `[cert]`      | `ca_file` / `cert_file` / `key_file` | mTLS 所需的 CA 与客户端证书路径                  |
 | `[logs]`      | `file`                               | 日志路径（按天轮转，超出大小自动分段）                   |
 |               | `level`                              | `debug` / `info` / `warn` / `error`   |
 |               | `maxSize`                            | 单段最大大小，如 `100MB`、`1GB`；纯数字默认为 MB      |
 |               | `maxBackups`                         | 保留的按天日志文件数量上限                         |
 |               | `maxAge`                             | 日志最大保留天数                              |
-| `[tls]`       | `ca_file` / `cert_file` / `key_file` | mTLS 所需的 CA 与客户端证书路径                  |
 | `[timezone]`  | `location`                           | 日志展示与按天轮转的 IANA 时区，默认 `Asia/Shanghai` |
 | `[[proxies]]` | `name`                               | 代理名称（服务端建立工作连接时引用）                    |
 |               | `type`                               | 代理类型；当前支持 `tcp`                       |

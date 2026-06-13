@@ -11,7 +11,7 @@ import (
 )
 
 type Tls struct {
-	Config *configs.Tls
+	Config *configs.Cert
 	Logger *zap.Logger
 }
 

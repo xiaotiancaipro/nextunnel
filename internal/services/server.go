@@ -22,5 +22,5 @@ func (s *Server) DialServer(c *tls.Config) (net.Conn, error) {
 }
 
 func (s *Server) AddrStr() string {
-	return net.JoinHostPort(s.Config.Addr, strconv.Itoa(s.Config.Port))
+	return net.JoinHostPort(s.Config.Host, strconv.Itoa(s.Config.Port))
 }
