@@ -18,7 +18,7 @@ import (
 
 type App struct {
 	logger        *zap.Logger
-	geoIP         *clients.GeoIP
+	ipLocator     clients.IPLocator
 	tlsService    *services.Tls
 	serverService *services.Server
 	stopCh        chan struct{}
@@ -40,17 +40,22 @@ func NewApp(config *configs.Configs) (*App, error) {
 	}
 	logger.Info("initialize database successfully")
 
-	geoIP, err := clients.NewGeoIP(config.GeoIP)
+	ipLocator, err := clients.NewIPLocator(config.IPLocation, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize geoip: %v", err)
+		return nil, fmt.Errorf("failed to initialize ip location: %v", err)
 	}
-	logger.Info("GeoIP database loaded: " + config.GeoIP.DbPath)
+	switch config.IPLocation.Type {
+	case "api":
+		logger.Info("IP location provider: api")
+	default:
+		logger.Info("IP location provider: geoip, database=" + config.IPLocation.GeoIPDbPath)
+	}
 
 	app := App{
 		logger:        logger,
 		tlsService:    services.NewTls(config.Cert, logger),
-		serverService: services.NewServer(config.Server, logger, db, geoIP),
-		geoIP:         geoIP,
+		serverService: services.NewServer(config.Server, logger, db, ipLocator),
+		ipLocator:     ipLocator,
 		stopCh:        make(chan struct{}),
 	}
 
@@ -106,8 +111,8 @@ func (a *App) Stop() {
 		if ln != nil {
 			_ = ln.Close()
 		}
-		if a.geoIP != nil {
-			_ = a.geoIP.Close()
+		if a.ipLocator != nil {
+			_ = a.ipLocator.Close()
 		}
 		a.logger.Info("Shutting down gracefully")
 	})

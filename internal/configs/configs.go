@@ -9,12 +9,12 @@ import (
 )
 
 type Configs struct {
-	Server   *Server   `toml:"server"`
-	Cert     *Cert     `toml:"cert"`
-	Database *Database `toml:"database"`
-	GeoIP    *GeoIP    `toml:"geoip"`
-	Logs     *Logs     `toml:"logs"`
-	Timezone *Timezone `toml:"timezone"`
+	Server     *Server     `toml:"server"`
+	Cert       *Cert       `toml:"cert"`
+	Database   *Database   `toml:"database"`
+	IPLocation *IPLocation `toml:"ip_location"`
+	Logs       *Logs       `toml:"logs"`
+	Timezone   *Timezone   `toml:"timezone"`
 }
 
 func NewConfigs(file string) (*Configs, error) {

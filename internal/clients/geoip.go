@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/oschwald/geoip2-golang"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 )
 
@@ -16,16 +15,10 @@ type GeoIP struct {
 	locales []string
 }
 
-type GeoIPResult struct {
-	Country string
-	Region  string
-	City    string
-}
-
-func NewGeoIP(config *configs.GeoIP) (*GeoIP, error) {
-	dbPath := strings.TrimSpace(config.DbPath)
+func NewGeoIP(dbPath string, locales []string) (*GeoIP, error) {
+	dbPath = strings.TrimSpace(dbPath)
 	if dbPath == "" {
-		return nil, fmt.Errorf("dbPath is empty")
+		return nil, fmt.Errorf("geoip_db_path is empty")
 	}
 	if _, err := os.Stat(dbPath); err != nil {
 		return nil, fmt.Errorf("geoip database not found: %s", dbPath)
@@ -34,7 +27,7 @@ func NewGeoIP(config *configs.GeoIP) (*GeoIP, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open geoip database: %w", err)
 	}
-	return &GeoIP{reader: reader, locales: utils.Normalize(config.Locales)}, nil
+	return &GeoIP{reader: reader, locales: utils.Normalize(locales)}, nil
 }
 
 func (g *GeoIP) Close() error {
@@ -44,21 +37,21 @@ func (g *GeoIP) Close() error {
 	return g.reader.Close()
 }
 
-func (g *GeoIP) Lookup(ipStr string) GeoIPResult {
+func (g *GeoIP) Lookup(ipStr string) IPLocationResult {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
-		return GeoIPResult{}
+		return IPLocationResult{}
 	}
 	record, err := g.reader.City(ip)
 	if err != nil {
-		return GeoIPResult{}
+		return IPLocationResult{}
 	}
 	var region string
 	if n := len(record.Subdivisions); n > 0 {
 		subdivision := record.Subdivisions[n-1]
 		region = utils.PickName(subdivision.Names, g.locales)
 	}
-	return GeoIPResult{
+	return IPLocationResult{
 		Country: utils.PickName(record.Country.Names, g.locales),
 		Region:  region,
 		City:    utils.PickName(record.City.Names, g.locales),
