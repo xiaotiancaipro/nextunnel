@@ -68,7 +68,7 @@ On startup the client: loads config → initializes mTLS → dials the server �
 ./script/build.sh
 ```
 
-Binaries are written to `dist/` as `nextunnel-client-<version>-<os>-<arch>[.exe]`.
+Binaries are written to `bin/` as `nextunnel-client-<version>-<os>-<arch>[.exe]`.
 
 ## Docker
 

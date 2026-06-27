@@ -8,7 +8,7 @@ cd "${ROOT_DIR}"
 
 APP_NAME="nextunnel-client"
 MAIN_GO="${ROOT_DIR}/main.go"
-OUT_DIR="${ROOT_DIR}/dist"
+OUT_DIR="${ROOT_DIR}/bin"
 
 VERSION="$(
   sed -n -E 's/^[[:space:]]*var[[:space:]]+version[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "${MAIN_GO}" | head -n1

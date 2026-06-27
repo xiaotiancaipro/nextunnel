@@ -5,7 +5,6 @@ bin/
 config/
 build/
 test/
-dist/
 logs/
 data/
 docker/
