@@ -124,7 +124,7 @@ When the client connects, the server syncs `[[proxies]]` into the PostgreSQL `pr
 ./script/build.sh
 ```
 
-Binaries are written to `dist/` as `nextunnel-server-<version>-<os>-<arch>[.exe]`.
+Binaries are written to `bin/` as `nextunnel-server-<version>-<os>-<arch>[.exe]`.
 
 ## Docker
 

@@ -121,7 +121,7 @@ remote_port = 5000
 ./script/build.sh
 ```
 
-二进制文件输出至 `dist/`，命名格式为 `nextunnel-server-<version>-<os>-<arch>[.exe]`。
+二进制文件输出至 `bin/`，命名格式为 `nextunnel-server-<version>-<os>-<arch>[.exe]`。
 
 ## Docker 部署
 
