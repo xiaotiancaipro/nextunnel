@@ -19,7 +19,8 @@ targets reachable from the client.
 Capabilities:
 
 - Accept mutual TLS (mTLS) connections from nextunnel clients
-- Listen on remote proxy ports based on client-submitted proxy configuration
+- Register clients and allocate remote port ranges via CLI
+- Listen on remote proxy ports based on client-submitted proxy configuration and sync them to PostgreSQL
 - Enforce IP / geo / network-category access control rules stored in PostgreSQL
 - Record every inbound user connection (IP, geo, category, allow/deny decision) in PostgreSQL
 
@@ -30,24 +31,28 @@ flowchart LR
     Server <-->|mTLS| Client[nextunnel-client]
     Client --> Target[Private target]
     Server --> PG[(PostgreSQL)]
-    Server --> Geo[GeoLite2-City]
+    Server --> IPLoc[IP location]
+    IPLoc --> Geo[GeoLite2-City]
+    IPLoc --> API[Xiaotiancai API]
 ```
 
 ## Requirements
 
-| Dependency    | Notes                                                                                                                         |
-|---------------|-------------------------------------------------------------------------------------------------------------------------------|
-| Go 1.26+      | Required for local builds only                                                                                                |
-| PostgreSQL    | Stores access rules and connection logs                                                                                       |
-| GeoLite2-City | Download from [MaxMind](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and place at `geoip/GeoLite2-City.mmdb` |
+| Dependency           | Notes                                                                                                                                                  |
+|----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Go 1.26+             | Required for local builds only                                                                                                                         |
+| PostgreSQL           | Stores clients, proxies, access rules, and connection logs                                                                                             |
+| IP location (one of) | **GeoIP mode**: download [MaxMind GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and place at `geoip/GeoLite2-City.mmdb` |
+|                      | **API mode**: create an ApiKey via the [Xiaotiancai docs](https://www.xiaotiancai.tech/docs); lookups are billed per successful query                  |
 
 ## Quick Start
 
 ```bash
-# 1. Prepare the GeoIP database
-# Place GeoLite2-City.mmdb at geoip/GeoLite2-City.mmdb
+# 1. Prepare IP location (choose one based on [ip_location].type)
+# GeoIP mode: place GeoLite2-City.mmdb at geoip/GeoLite2-City.mmdb
+# API mode: set type = "api" and api_key in nextunnel-server.toml
 
-# 2. Copy and edit configuration (database, GeoIP path, timezone, etc.)
+# 2. Copy and edit configuration (database, IP location, timezone, etc.)
 cp nextunnel-server.example.toml nextunnel-server.toml
 
 # 3. Build and run (reads nextunnel-server.toml by default, or $NEXTUNNEL_SERVER_CONFIG)
@@ -55,21 +60,63 @@ go build -o nextunnel-server .
 ./nextunnel-server
 ```
 
-On startup the server: loads config → connects to PostgreSQL (auto-migration) → loads GeoIP → listens on
+On startup the server: loads config → connects to PostgreSQL (auto-migration) → initializes IP location (GeoIP or API) →
+listens on
 `0.0.0.0:<port>` → ensures CA and server TLS certificates exist under `[cert].dir`.
 
-### Generate Client Certificates
+### Client Onboarding
+
+End-to-end flow: **register client → generate certificates → client connects → proxies sync automatically**.
 
 ```bash
-./nextunnel-server client generate-certs ./client-certs
+# 1. Create a client (optional remote port range)
+./nextunnel-server client create --port-start 5000 --port-end 5005 macbook
+
+# Omit --port-start / --port-end to allow any remote port
+./nextunnel-server client create macbook
+
+# 2. Generate TLS certificates for that client
+./nextunnel-server client generate-certs --dir ./certs/macbook macbook
 ```
 
+**Create client:**
+
+- Inserts a row into the PostgreSQL `client` table with the client name and port range
+- `--port-start` and `--port-end` must be specified together; when omitted, the client may use any remote port
+- Client names are globally unique
+
+**Generate certificates:**
+
+- Verifies the client is registered in the database
 - Reads the CA from `[cert].dir` (`ca.crt` / `ca.key`); missing CA or server certs are generated automatically
-- Writes `client.crt` and `client.key` to the output directory; exits with an error if either file already exists
+- Writes `client.crt` and `client.key` to the directory given by `--dir`; exits with an error if either file already
+  exists
 - Client certificates are valid for 1 year; CA certificates for 10 years
 
-Configure the generated certificates in [nextunnel-client](https://github.com/xiaotiancaipro/nextunnel-client) to
-connect to this server.
+**Configure nextunnel-client:**
+
+Point [nextunnel-client](https://github.com/xiaotiancaipro/nextunnel-client) at the generated certs and client name:
+
+```toml
+[client]
+id = "macbook"
+
+[cert]
+ca_file = "certs/ca.crt"
+cert_file = "certs/macbook/client.crt"
+key_file = "certs/macbook/client.key"
+
+[[proxies]]
+name = "ssh"
+type = "tcp"
+local_ip = "127.0.0.1"
+local_port = 22
+remote_port = 5000
+```
+
+When the client connects, the server syncs `[[proxies]]` into the PostgreSQL `proxy` table. Proxies are marked
+`status = 1` (online) while connected and `status = 0` (offline) after disconnect. If a port range was assigned, each
+`remote_port` must fall within that range.
 
 ### Cross-Platform Builds
 
@@ -88,8 +135,8 @@ PostgreSQL alone).
 cd docker
 cp example.env .env
 # Edit .env (database credentials, ports, etc.)
-# Edit volumes/nextunnel/config/nextunnel-server.toml (timezone, GeoIP, logs, etc.)
-# Place GeoLite2-City.mmdb under volumes/nextunnel/geoip/
+# Edit volumes/nextunnel/config/nextunnel-server.toml (timezone, IP location, logs, etc.)
+# GeoIP mode: place GeoLite2-City.mmdb under volumes/nextunnel/geoip/
 
 # Start PostgreSQL + nextunnel-server
 docker compose up -d
@@ -127,6 +174,24 @@ Global flags:
 
 With no subcommand, the server runs in the foreground. Press `Ctrl+C` or send `SIGTERM` for graceful shutdown.
 
+### Client Management
+
+Client records and certificates are managed via the `client` subcommand and stored in PostgreSQL. Changes take effect
+while the server is running.
+
+```bash
+# Create a client (optional port range)
+nextunnel-server client create [--port-start <n>] [--port-end <n>] <name>
+
+# Generate certificates for a registered client
+nextunnel-server client generate-certs --dir <output-dir> <name>
+```
+
+| Command          | Description                                                                    |
+|------------------|--------------------------------------------------------------------------------|
+| `create`         | Inserts into the `client` table; omit port flags to allow any remote port      |
+| `generate-certs` | Verifies the client exists, then writes `client.crt` / `client.key` to `--dir` |
+
 ### Access Control Rules
 
 Rules are managed via the `ip-filter` subcommand and stored in PostgreSQL. They take effect **immediately** without
@@ -154,33 +219,52 @@ nextunnel-server ip-filter delete --block --country China
 
 **Rule semantics:**
 
-| Topic    | Details                                                                                                               |
-|----------|-----------------------------------------------------------------------------------------------------------------------|
-| IP       | IPv4 and IPv6 supported; addresses are normalized before storage                                                      |
-| Geo      | Names must match GeoIP results under `[geoip].locales` (see connection logs, e.g. `China` / `Guangdong` / `Shenzhen`) |
-| Status   | Allow list → `status = 1`; block list → `status = 0`                                                                  |
-| Default  | Connections are **allowed** when no rule matches                                                                      |
-| Priority | ① Allow beats Block at equal specificity; ② IP > City > Region > Country > category (LOCAL/REMOTE > ALL)              |
+| Topic    | Details                                                                                                                                                     |
+|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| IP       | IPv4 and IPv6 supported; addresses are normalized before storage                                                                                            |
+| Geo      | Names must match the active IP location provider (see connection logs; GeoIP mode depends on `geoip_locales`; API mode usually returns Chinese place names) |
+| Status   | Allow list → `status = 1`; block list → `status = 0`                                                                                                        |
+| Default  | Connections are **allowed** when no rule matches                                                                                                            |
+| Priority | ① Allow beats Block at equal specificity; ② IP > City > Region > Country > category (LOCAL/REMOTE > ALL)                                                    |
 
 ## Configuration
 
 See [`nextunnel-server.example.toml`](nextunnel-server.example.toml) for a full example.
 
-| Section      | Field                                            | Description                                                                                     |
-|--------------|--------------------------------------------------|-------------------------------------------------------------------------------------------------|
-| `[server]`   | `port`                                           | Listen port (binds to all interfaces, `0.0.0.0`)                                                |
-| `[cert]`     | `host`                                           | Hostname or IP for auto-generated certificate SAN (not the listen address)                      |
-|              | `dir`                                            | Certificate directory (CA, server, and client cert generation)                                  |
-| `[database]` | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection                                                                           |
-|              | `sslmode`                                        | libpq SSL mode; defaults to `disable`                                                           |
-| `[geoip]`    | `db_path`                                        | Path to GeoLite2-City database (required)                                                       |
-|              | `locales`                                        | Ordered locale codes for GeoIP names, e.g. `["zh-CN", "en"]`; geo rules must use resolved names |
-| `[logs]`     | `file`                                           | Log path (daily rotation with size-based segments)                                              |
-|              | `level`                                          | `debug`, `info`, `warn`, or `error`                                                             |
-|              | `maxSize`                                        | Max segment size, e.g. `100MB`, `1GB`; bare number = MB                                         |
-|              | `maxBackups`                                     | Max number of daily log files to retain                                                         |
-|              | `maxAge`                                         | Max log retention in days                                                                       |
-| `[timezone]` | `location`                                       | IANA timezone for log display and daily log rotation; defaults to `Asia/Shanghai`               |
+**GeoIP mode (local mmdb):**
+
+```toml
+[ip_location]
+type = "geoip"
+geoip_db_path = "geoip/GeoLite2-City.mmdb"
+geoip_locales = ["zh-CN", "en"]
+```
+
+**API mode (online lookup):**
+
+```toml
+[ip_location]
+type = "api"
+api_key = "your-api-key"
+```
+
+| Section         | Field                                            | Description                                                                                     |
+|-----------------|--------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `[server]`      | `port`                                           | Listen port (binds to all interfaces, `0.0.0.0`)                                                |
+| `[cert]`        | `host`                                           | Hostname or IP for auto-generated certificate SAN (not the listen address)                      |
+|                 | `dir`                                            | Certificate directory (CA, server, and client cert generation)                                  |
+| `[database]`    | `host` / `port` / `username` / `password` / `db` | PostgreSQL connection                                                                           |
+|                 | `sslmode`                                        | libpq SSL mode; defaults to `disable`                                                           |
+| `[ip_location]` | `type`                                           | Lookup provider: `geoip` (local mmdb, default) or `api` (online API)                            |
+|                 | `api_key`                                        | Required for API mode; see the [API docs](https://www.xiaotiancai.tech/docs) for ApiKey setup   |
+|                 | `geoip_db_path`                                  | Path to GeoLite2-City database for GeoIP mode                                                   |
+|                 | `geoip_locales`                                  | Ordered locale codes for GeoIP names, e.g. `["zh-CN", "en"]`; geo rules must use resolved names |
+| `[logs]`        | `file`                                           | Log path (daily rotation with size-based segments)                                              |
+|                 | `level`                                          | `debug`, `info`, `warn`, or `error`                                                             |
+|                 | `maxSize`                                        | Max segment size, e.g. `100MB`, `1GB`; bare number = MB                                         |
+|                 | `maxBackups`                                     | Max number of daily log files to retain                                                         |
+|                 | `maxAge`                                         | Max log retention in days                                                                       |
+| `[timezone]`    | `location`                                       | IANA timezone for log display and daily log rotation; defaults to `Asia/Shanghai`               |
 
 ## License
 
