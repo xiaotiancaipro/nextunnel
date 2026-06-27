@@ -141,15 +141,22 @@ func (a *App) acceptedConn(conn net.Conn) {
 
 	switch msgType {
 	case utils.MsgLogin:
-		defer func() { _ = conn.Close() }()
 		clientIdP, runIdP, err := a.serverService.Login(conn, payload)
 		if err != nil {
 			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
+			_ = conn.Close()
 			return
 		}
-		var ctrlWriteMu sync.Mutex
+		clientID := *clientIdP
 		clientStopCh := make(chan struct{})
-		defer close(clientStopCh)
+		defer func() {
+			close(clientStopCh)
+			if err := a.serverService.SetClientProxiesOffline(clientID); err != nil {
+				a.logger.Warn(fmt.Sprintf("Failed to mark client proxies offline: clientID=%s, err=%v", clientID, err))
+			}
+			_ = conn.Close()
+		}()
+		var ctrlWriteMu sync.Mutex
 		for {
 			msgType_, payload_, err := utils.ReadMsg(conn)
 			if err != nil {

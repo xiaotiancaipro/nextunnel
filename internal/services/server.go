@@ -129,6 +129,18 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 			replyErr(fmt.Sprintf("[%s]Proxy type is invalid", proxy.Name))
 			return fmt.Errorf("proxy type is invalid")
 		}
+		if proxy.LocalIP == "" {
+			replyErr(fmt.Sprintf("[%s] local_ip is empty", proxy.Name))
+			return fmt.Errorf("local_ip is empty")
+		}
+		if proxy.LocalPort < 1 || proxy.LocalPort > 65535 {
+			replyErr(fmt.Sprintf("[%s] local_port is invalid", proxy.Name))
+			return fmt.Errorf("local_port is invalid")
+		}
+		if proxy.RemotePort < 1 || proxy.RemotePort > 65535 {
+			replyErr(fmt.Sprintf("[%s] remote_port is invalid", proxy.Name))
+			return fmt.Errorf("remote_port is invalid")
+		}
 		if _, exists := desired[proxy.Name]; exists {
 			replyErr(fmt.Sprintf("[%s]Proxy name is duplicated", proxy.Name))
 			return fmt.Errorf("proxy name is duplicated")
@@ -146,11 +158,22 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		replyErr("client_id is invalid")
 		return fmt.Errorf("client_id is invalid")
 	}
-	for name := range desired {
-		if _, err := resolveProxyId(s.db, clientUUID, name); err != nil {
-			replyErr(fmt.Sprintf("[%s] proxy is not registered", name))
-			return fmt.Errorf("proxy is not registered")
+
+	var client models.Client
+	if err := s.db.Where("id = ?", clientUUID).First(&client).Error; err != nil {
+		replyErr("client_id is invalid")
+		return fmt.Errorf("client not found")
+	}
+	for name, proxy := range desired {
+		if !ClientPortAllowed(client, proxy.RemotePort) {
+			replyErr(fmt.Sprintf("[%s] remote port %d is outside allocated range %d-%d", name, proxy.RemotePort, client.PortStart, client.PortEnd))
+			return fmt.Errorf("remote port out of range")
 		}
+	}
+
+	if err := NewProxyRegistry(s.db).SyncFromApply(clientUUID, desired); err != nil {
+		replyErr(fmt.Sprintf("failed to sync proxies: %v", err))
+		return err
 	}
 
 	opened := make(map[string]net.Listener)
@@ -185,6 +208,14 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 	s.logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", *clientIdP, len(opened)))
 	return nil
 
+}
+
+func (s *Server) SetClientProxiesOffline(clientId string) error {
+	clientUUID, err := resolveClientId(s.db, clientId)
+	if err != nil {
+		return err
+	}
+	return NewProxyRegistry(s.db).SetAllOffline(clientUUID)
 }
 
 func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {

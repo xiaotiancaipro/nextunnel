@@ -42,6 +42,8 @@ type ProxiesApplyMsgItem struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
 	RemotePort int    `json:"remote_port"`
+	LocalIP    string `json:"local_ip"`
+	LocalPort  int    `json:"local_port"`
 }
 
 type ProxiesApplyRespMsg struct {
