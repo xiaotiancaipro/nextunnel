@@ -90,6 +90,10 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 		_ = utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{Error: "client_id cannot be empty"})
 		return nil, nil, fmt.Errorf("client_id is empty")
 	}
+	if _, err := resolveClientId(s.db, loginMsg.Id); err != nil {
+		_ = utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{Error: "client_id is invalid"})
+		return nil, nil, fmt.Errorf("client_id is invalid")
+	}
 
 	runID := uuid.New().String()
 	if err := utils.WriteMsg(conn, utils.MsgLoginResp, utils.LoginRespMsg{RunID: runID}); err != nil {
@@ -137,6 +141,18 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		usedPorts[proxy.RemotePort] = proxy.Name
 	}
 
+	clientUUID, err := resolveClientId(s.db, *clientIdP)
+	if err != nil {
+		replyErr("client_id is invalid")
+		return fmt.Errorf("client_id is invalid")
+	}
+	for name := range desired {
+		if _, err := resolveProxyId(s.db, clientUUID, name); err != nil {
+			replyErr(fmt.Sprintf("[%s] proxy is not registered", name))
+			return fmt.Errorf("proxy is not registered")
+		}
+	}
+
 	opened := make(map[string]net.Listener)
 	openedClose := func() {
 		for _, ln := range opened {
@@ -162,7 +178,7 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 			}
 			_ = ln.Close()
 		}()
-		go s.proxyAcceptLoop(conn, ctrlWriteMu, name, ln, serverStopCh, clientStopCh)
+		go s.proxyAcceptLoop(conn, ctrlWriteMu, *clientIdP, name, ln, serverStopCh, clientStopCh)
 	}
 
 	_ = WriteCtrlMsg(ctrlWriteMu, conn, utils.MsgProxiesApplyResp, utils.ProxiesApplyRespMsg{Error: ""})
@@ -191,7 +207,7 @@ func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
 	return nil
 }
 
-func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
+func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, clientId, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
 
 	defer func() {
 		_ = listener.Close()
@@ -213,7 +229,7 @@ func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, 
 			}
 		}
 
-		ipP, region, err := s.ipFilter(conn.RemoteAddr())
+		ipP, region, err := s.ipFilter(conn.RemoteAddr(), clientId, proxyName)
 		ip := unknownIp
 		if ipP != nil {
 			ip = *ipP
@@ -232,7 +248,7 @@ func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, 
 
 }
 
-func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
+func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, string, error) {
 
 	host := addr.String()
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
@@ -259,7 +275,7 @@ func (s *Server) ipFilter(addr net.Addr) (*string, string, error) {
 		status = 1
 	}
 	logSvc := newAccessLog(s.db)
-	if err := logSvc.record(*ipP, geo.Country, geo.Region, geo.City, isLocal, status); err != nil {
+	if err := logSvc.record(clientId, proxyName, *ipP, geo.Country, geo.Region, geo.City, isLocal, status); err != nil {
 		s.logger.Warn(fmt.Sprintf("Failed to record access log: ip=%s, err=%v", *ipP, err))
 	}
 

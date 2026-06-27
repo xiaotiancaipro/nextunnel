@@ -14,6 +14,8 @@ import (
 )
 
 var tables = map[string]any{
+	models.ClientTable:     models.Client{},
+	models.ProxyTable:      models.Proxy{},
 	models.AccessLogTable:  models.AccessLog{},
 	models.AccessRuleTable: models.AccessRule{},
 }
