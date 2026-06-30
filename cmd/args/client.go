@@ -34,9 +34,6 @@ func CreateClient(cmd *cobra.Command, cfg *configs.Configs, name string, portSta
 
 func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out, clientName string) error {
 	out = strings.TrimSpace(out)
-	if out == "" {
-		return fmt.Errorf("--dir is required")
-	}
 	clientName = strings.TrimSpace(clientName)
 	if clientName == "" {
 		return fmt.Errorf("client name is required")
@@ -50,13 +47,23 @@ func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out, clientName str
 		return err
 	}
 
-	if err := certs.GenerateClientToDir(cfg.Cert.Dir, cfg.Cert.Host, out); err != nil {
-		return err
-	}
-
-	abs, err := filepath.Abs(out)
-	if err != nil {
-		return err
+	var abs string
+	if out == "" {
+		if _, _, err := certs.WriteClientCertDir(cfg.Cert.Dir, cfg.Cert.Host, clientName); err != nil {
+			return err
+		}
+		abs, err = certs.ClientCertDir(cfg.Cert.Dir, clientName)
+		if err != nil {
+			return err
+		}
+	} else {
+		if err := certs.GenerateClientToDir(cfg.Cert.Dir, cfg.Cert.Host, out); err != nil {
+			return err
+		}
+		abs, err = filepath.Abs(out)
+		if err != nil {
+			return err
+		}
 	}
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "wrote %s and %s for client %q in %s\n", certs.FileClientCert, certs.FileClientKey, clientName, abs)

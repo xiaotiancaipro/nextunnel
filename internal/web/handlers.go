@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
@@ -17,7 +19,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/version", s.handleVersion)
 	mux.HandleFunc("GET /api/clients", s.handleListClients)
 	mux.HandleFunc("POST /api/clients", s.handleCreateClient)
+	mux.HandleFunc("DELETE /api/clients/{name}", s.handleDeleteClient)
 	mux.HandleFunc("GET /api/clients/{name}/certs", s.handleGenerateCerts)
+	mux.HandleFunc("GET /api/ca", s.handleDownloadCA)
 	mux.HandleFunc("GET /api/ip-filters", s.handleListIPFilters)
 	mux.HandleFunc("POST /api/ip-filters", s.handleUpsertIPFilter)
 	mux.HandleFunc("DELETE /api/ip-filters", s.handleDeleteIPFilter)
@@ -78,6 +82,27 @@ func (s *Server) handleCreateClient(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toClientResponse(*client))
 }
 
+func (s *Server) handleDeleteClient(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "client name is required")
+		return
+	}
+	if _, err := s.clientService.GetByName(name); err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if err := s.clientService.Delete(name); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := certs.RemoveClientCertDir(s.cfg.Cert.Dir, name); err != nil && !os.IsNotExist(err) {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ok"})
+}
+
 func (s *Server) handleGenerateCerts(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
 	if name == "" {
@@ -89,7 +114,7 @@ func (s *Server) handleGenerateCerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	certPEM, keyPEM, err := certs.GenerateClientPEM(s.cfg.Cert.Dir, s.cfg.Cert.Host)
+	certPEM, keyPEM, err := certs.WriteClientCertDir(s.cfg.Cert.Dir, s.cfg.Cert.Host, name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -120,6 +145,28 @@ func (s *Server) handleGenerateCerts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`-certs.zip"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
+}
+
+func (s *Server) handleDownloadCA(w http.ResponseWriter, _ *http.Request) {
+	if err := certs.Ensure(s.cfg.Cert.Dir, s.cfg.Cert.Host); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	abs, err := filepath.Abs(s.cfg.Cert.Dir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	caPEM, err := os.ReadFile(filepath.Join(abs, certs.FileCACert))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.Header().Set("Content-Disposition", `attachment; filename="ca.crt"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(caPEM)
 }
 
 type ipFilterResponse struct {

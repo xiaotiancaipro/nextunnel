@@ -63,6 +63,21 @@ func (r *ClientRegistry) GetByName(name string) (*models.Client, error) {
 	return &client, nil
 }
 
+func (r *ClientRegistry) Delete(name string) error {
+	name = trimName(name)
+	if name == "" {
+		return fmt.Errorf("client name cannot be empty")
+	}
+	result := r.db.Model(&models.Client{}).Where("name = ? AND is_delete = ?", name, false).Update("is_delete", true)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete client: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("client %q not found", name)
+	}
+	return nil
+}
+
 func ClientPortLimited(client models.Client) bool {
 	return client.PortStart > 0 && client.PortEnd > 0
 }

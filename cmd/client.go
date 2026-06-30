@@ -45,6 +45,6 @@ func (c *client) newGenerateCerts() *cobra.Command {
 			utils.ExitOnErr(cmd, args.GenerateCerts(cmd, cfg, dir, posArgs[0]))
 		},
 	}
-	cmd.Flags().StringVar(&dir, "dir", "", "output directory for client certificates")
+	cmd.Flags().StringVar(&dir, "dir", "", "output directory for client certificates (default: [cert].dir/clients/<name>)")
 	return cmd
 }

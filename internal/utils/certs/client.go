@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 const (
 	FileClientCert = "client.crt"
 	FileClientKey  = "client.key"
+	DirClients     = "clients"
 )
 
 func GenerateClientPEM(tlsDir string, listenHost string) (certPEM, keyPEM []byte, err error) {
@@ -85,6 +87,74 @@ func GenerateClientPEM(tlsDir string, listenHost string) (certPEM, keyPEM []byte
 	return certPEM, keyPEM, nil
 }
 
+func ClientCertDir(tlsDir string, clientName string) (string, error) {
+	if err := validateClientName(clientName); err != nil {
+		return "", err
+	}
+	tlsAbs, err := filepath.Abs(tlsDir)
+	if err != nil {
+		return "", fmt.Errorf("tls: certificate dir: %w", err)
+	}
+	return filepath.Join(tlsAbs, DirClients, strings.TrimSpace(clientName)), nil
+}
+
+func WriteClientCertDir(tlsDir string, listenHost string, clientName string) (certPEM, keyPEM []byte, err error) {
+	outDir, err := ClientCertDir(tlsDir, clientName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	certPEM, keyPEM, err = GenerateClientPEM(tlsDir, listenHost)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := writeClientPEMFiles(outDir, certPEM, keyPEM); err != nil {
+		return nil, nil, err
+	}
+	return certPEM, keyPEM, nil
+}
+
+func RemoveClientCertDir(tlsDir string, clientName string) error {
+	outDir, err := ClientCertDir(tlsDir, clientName)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(outDir); err != nil {
+		return fmt.Errorf("tls: remove client cert dir %q: %w", outDir, err)
+	}
+	return nil
+}
+
+func validateClientName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("tls: client name cannot be empty")
+	}
+	if name == "." || name == ".." {
+		return fmt.Errorf("tls: invalid client name %q", name)
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("tls: client name cannot contain path separators")
+	}
+	return nil
+}
+
+func writeClientPEMFiles(outDir string, certPEM, keyPEM []byte) error {
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("tls: mkdir %q: %w", outDir, err)
+	}
+	clientCrt := filepath.Join(outDir, FileClientCert)
+	clientKey := filepath.Join(outDir, FileClientKey)
+	if err := os.WriteFile(clientCrt, certPEM, 0o644); err != nil {
+		return fmt.Errorf("tls: write %s: %w", FileClientCert, err)
+	}
+	if err := os.WriteFile(clientKey, keyPEM, 0o600); err != nil {
+		return fmt.Errorf("tls: write %s: %w", FileClientKey, err)
+	}
+	return nil
+}
+
 func GenerateClientToDir(tlsDir string, listenHost string, outDir string) error {
 
 	if outDir == "" {
@@ -113,16 +183,5 @@ func GenerateClientToDir(tlsDir string, listenHost string, outDir string) error 
 		return err
 	}
 
-	if err := os.MkdirAll(outAbs, 0o755); err != nil {
-		return fmt.Errorf("tls: mkdir %q: %w", outAbs, err)
-	}
-	if err := os.WriteFile(clientCrt, certPEM, 0o644); err != nil {
-		return fmt.Errorf("tls: write %s: %w", FileClientCert, err)
-	}
-	if err := os.WriteFile(clientKey, keyPEM, 0o600); err != nil {
-		return fmt.Errorf("tls: write %s: %w", FileClientKey, err)
-	}
-
-	return nil
-
+	return writeClientPEMFiles(outAbs, certPEM, keyPEM)
 }
