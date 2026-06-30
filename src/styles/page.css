@@ -1,183 +1,189 @@
 .console-page {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .console-page-toolbar {
-  padding-bottom: 2px;
+    padding-bottom: 2px;
 }
 
 .console-page-desc {
-  font-size: var(--console-font-size);
-  color: var(--console-text-secondary);
-  margin: 0 !important;
-  max-width: 720px;
-  line-height: 1.65;
+    font-size: var(--console-font-size);
+    color: var(--console-text-secondary);
+    margin: 0 !important;
+    max-width: 720px;
+    line-height: 1.65;
 }
 
 .console-page-badges {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .console-count-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  background: var(--brand-blue-light);
-  color: var(--brand-blue);
-  font-size: 12px;
-  font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    background: var(--brand-blue-light);
+    color: var(--brand-blue);
+    font-size: 12px;
+    font-weight: 600;
 }
 
 .console-count-badge--danger {
-  background: rgba(220, 38, 38, 0.08);
-  color: #dc2626;
+    background: rgba(220, 38, 38, 0.08);
+    color: #dc2626;
 }
 
 .console-card.ant-card {
-  border: 1px solid var(--console-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--console-card-shadow);
-  background: var(--console-surface);
+    border: 1px solid var(--console-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--console-card-shadow);
+    background: var(--console-surface);
 }
 
 .console-card.ant-card-small > .ant-card-body {
-  padding: 0;
+    padding: 0;
 }
 
 .console-card .ant-table-small .ant-table-thead > tr > th {
-  font-size: var(--console-font-size);
-  font-weight: 600;
-  color: var(--console-text-secondary);
-  background: #fafafa;
-  border-bottom: 1px solid var(--console-border);
+    font-size: var(--console-font-size);
+    font-weight: 600;
+    color: var(--console-text-secondary);
+    background: #fafafa;
+    border-bottom: 1px solid var(--console-border);
+    white-space: nowrap;
 }
 
 .console-card .ant-table-small .ant-table-tbody > tr > td {
-  font-size: var(--console-font-size);
-  color: var(--console-text);
-  border-bottom: 1px solid #f3f4f6;
-  vertical-align: middle;
+    font-size: var(--console-font-size);
+    color: var(--console-text);
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.console-card .ant-table-cell-ellipsis {
+    overflow: hidden;
 }
 
 .console-card .ant-table-small .ant-table-tbody > tr:last-child > td {
-  border-bottom: none;
+    border-bottom: none;
 }
 
 .console-card .ant-table-small .ant-table-tbody > tr:hover > td {
-  background: #fafafa;
+    background: #fafafa;
 }
 
 .console-card .ant-pagination {
-  margin: 16px 18px 18px !important;
+    margin: 16px 18px 18px !important;
 }
 
 .console-empty-hint {
-  padding: 48px 24px;
-  text-align: center;
+    padding: 48px 24px;
+    text-align: center;
 }
 
 .console-id-text {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  color: var(--console-text-secondary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--console-text-secondary);
 }
 
 .console-name-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .console-name-chip__avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-hover));
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md);
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-hover));
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    flex-shrink: 0;
 }
 
 .console-rule-text {
-  color: var(--console-text);
-  font-weight: 500;
+    color: var(--console-text);
+    font-weight: 500;
 }
 
 .console-modal .ant-modal-content {
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
 }
 
 .console-modal .ant-modal-header {
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  padding: 16px 24px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    padding: 16px 24px;
 }
 
 .console-modal .ant-modal-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--console-primary);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--console-primary);
 }
 
 .console-modal .ant-modal-body {
-  padding: 16px 24px 20px;
+    padding: 16px 24px 20px;
 }
 
 .console-modal .ant-modal-footer {
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-  padding: 12px 24px;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+    padding: 12px 24px;
 }
 
 .console-shell .ant-btn-sm,
 .console-shell .ant-btn {
-  font-size: var(--console-font-size);
-  border-radius: var(--radius-md);
-  font-weight: 500;
+    font-size: var(--console-font-size);
+    border-radius: var(--radius-md);
+    font-weight: 500;
 }
 
 .console-shell .ant-btn-primary {
-  box-shadow: none;
+    box-shadow: none;
 }
 
 .console-shell .ant-btn-primary:not(:disabled):hover {
-  background: var(--brand-blue-hover) !important;
-  border-color: var(--brand-blue-hover) !important;
+    background: var(--brand-blue-hover) !important;
+    border-color: var(--brand-blue-hover) !important;
 }
 
 .console-shell .ant-btn-default {
-  color: var(--console-text);
-  border-color: var(--console-border);
-  background: var(--console-surface);
-  box-shadow: none;
+    color: var(--console-text);
+    border-color: var(--console-border);
+    background: var(--console-surface);
+    box-shadow: none;
 }
 
 .console-shell .ant-btn-default:not(:disabled):hover {
-  color: var(--console-primary) !important;
-  border-color: #9ca3af !important;
-  background: #f9fafb !important;
+    color: var(--console-primary) !important;
+    border-color: #9ca3af !important;
+    background: #f9fafb !important;
 }
 
 .console-shell .ant-tag {
-  font-size: 12px;
-  line-height: 20px;
-  border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 20px;
+    border-radius: var(--radius-sm);
 }
 
 @media (max-width: 768px) {
-  .console-page-toolbar {
-    flex-direction: column;
-    align-items: flex-start !important;
-  }
+    .console-page-toolbar {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
 }
