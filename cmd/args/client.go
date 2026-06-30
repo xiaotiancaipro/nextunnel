@@ -36,68 +36,12 @@ func CreateClient(cmd *cobra.Command, cfg *configs.Configs, name string, portSta
 	return nil
 }
 
-func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out, clientName, expiresAtRaw string) error {
-	out = strings.TrimSpace(out)
-	clientName = strings.TrimSpace(clientName)
-	if clientName == "" {
-		return fmt.Errorf("client name is required")
-	}
-
-	clientService, certService, err := newClientServices(cfg)
-	if err != nil {
-		return err
-	}
-	client, err := clientService.GetByName(clientName)
-	if err != nil {
-		return err
-	}
-
-	expiresAt, err := parseExpiresAt(expiresAtRaw)
-	if err != nil {
-		return err
-	}
-
-	if out == "" {
-		info, err := certService.Create(client, expiresAt)
-		if err != nil {
-			return err
-		}
-		abs, err := certs.AbsCertPath(cfg.Cert.Dir, certs.RelClientCertPath(clientName, info.ID))
-		if err != nil {
-			return err
-		}
-		expires := formatExpires(info.ExpiresAt)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created certificate %q (expires=%s) for client %q in %s\n",
-			info.ID, expires, clientName, abs)
-		return nil
-	}
-
-	if err := certs.GenerateClientToDir(cfg.Cert.Dir, cfg.Cert.Host, out, expiresAt); err != nil {
-		return err
-	}
-	abs, err := filepath.Abs(out)
-	if err != nil {
-		return err
-	}
-
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "wrote %s and %s for client %q in %s\n", certs.FileClientCert, certs.FileClientKey, clientName, abs)
-	return nil
-}
-
 func newClientRegistry(cfg *configs.Configs) (*services.ClientRegistry, error) {
 	db, err := newDB(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return services.NewClientRegistry(db), nil
-}
-
-func newClientCertRegistry(cfg *configs.Configs) (*services.ClientCertRegistry, error) {
-	db, err := newDB(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return services.NewClientCertRegistry(db, cfg.Cert.Dir, cfg.Cert.Host), nil
 }
 
 func newClientServices(cfg *configs.Configs) (*services.ClientRegistry, *services.ClientCertRegistry, error) {

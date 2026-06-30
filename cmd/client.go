@@ -15,7 +15,6 @@ func (c *client) new() *cobra.Command {
 	}
 	cmd.AddCommand(c.newCreate())
 	cmd.AddCommand(c.newCert())
-	cmd.AddCommand(c.newGenerateCerts())
 	return cmd
 }
 
@@ -100,22 +99,5 @@ func (c *client) newCertDownload() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", "", "output directory (default: stored certificate directory)")
-	return cmd
-}
-
-func (c *client) newGenerateCerts() *cobra.Command {
-	var dir, expiresAt string
-	cmd := &cobra.Command{
-		Use:        "generate-certs [name]",
-		Short:      "generate client TLS certificates (alias for cert create)",
-		Deprecated: "use \"client cert create\" instead",
-		Args:       cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils.LoadConfig(cmd)
-			utils.ExitOnErr(cmd, args.GenerateCerts(cmd, cfg, dir, posArgs[0], expiresAt))
-		},
-	}
-	cmd.Flags().StringVar(&dir, "dir", "", "output directory for client certificates (default: [cert].dir/clients/<name>/<cert-id>)")
-	cmd.Flags().StringVar(&expiresAt, "expires-at", "", "certificate expiry time in RFC3339 format (default: never expires)")
 	return cmd
 }
