@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/migrations"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
@@ -68,6 +69,9 @@ func (d *database) migrate() error {
 		if err_ := db.AutoMigrate(&table); err_ != nil {
 			return fmt.Errorf("table migration failed, TableName=%s: %v", name, err_)
 		}
+	}
+	if err := db.Exec(migrations.OptimizeIndexesUp).Error; err != nil {
+		return fmt.Errorf("migration failed: %v", err)
 	}
 	return nil
 }
