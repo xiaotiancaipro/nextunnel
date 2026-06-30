@@ -23,6 +23,17 @@ export type IPFilterField =
     | 'local'
     | 'remote'
 
+export interface ClientCert {
+    id: string
+    createdAt: string
+    expiresAt?: string | null
+    serial: string
+}
+
+export interface CreateClientCertRequest {
+    expiresAt?: string | null
+}
+
 export interface CreateClientRequest {
     name: string
     portStart?: number

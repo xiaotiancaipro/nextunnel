@@ -1,12 +1,43 @@
 import {useCallback, useEffect, useMemo, useState} from 'react'
-import {Button, Empty, Form, Input, InputNumber, message, Modal, Popconfirm, Space, Switch, Table, Tag} from 'antd'
-import {DeleteOutlined, DownloadOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
+import {
+    Button,
+    DatePicker,
+    Divider,
+    Empty,
+    Form,
+    Input,
+    InputNumber,
+    message,
+    Modal,
+    Popconfirm,
+    Space,
+    Switch,
+    Table,
+    Tag,
+} from 'antd'
+import {
+    DeleteOutlined,
+    DownloadOutlined,
+    PlusOutlined,
+    ReloadOutlined,
+    SafetyCertificateOutlined
+} from '@ant-design/icons'
 import type {ColumnsType} from 'antd/es/table'
+import dayjs, {type Dayjs} from 'dayjs'
 import PageCard from '../components/PageCard'
 import PageHeader from '../components/PageHeader'
-import {createClient, deleteClient, downloadCACert, downloadClientCerts, listClients} from '../api'
+import {
+    createClient,
+    createClientCert,
+    deleteClient,
+    deleteClientCert,
+    downloadCACert,
+    downloadClientCert,
+    listClientCerts,
+    listClients,
+} from '../api'
 import {formatPortRange, useI18n} from '../i18n'
-import type {Client} from '../types'
+import type {Client, ClientCert} from '../types'
 
 interface CreateFormValues {
     name: string
@@ -15,8 +46,17 @@ interface CreateFormValues {
     portEnd?: number
 }
 
+interface AddCertFormValues {
+    neverExpires: boolean
+    expiresAt?: Dayjs
+}
+
 function clientInitial(name: string) {
     return name.trim().charAt(0).toUpperCase() || '?'
+}
+
+function formatTimestamp(value: string) {
+    return value.replace('T', ' ').replace(/\.\d+Z$/, '').replace('Z', '')
 }
 
 export default function ClientsPage() {
@@ -25,10 +65,18 @@ export default function ClientsPage() {
     const [loading, setLoading] = useState(false)
     const [modalOpen, setModalOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
-    const [downloading, setDownloading] = useState<string | null>(null)
     const [downloadingCA, setDownloadingCA] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [form] = Form.useForm<CreateFormValues>()
+
+    const [certModalOpen, setCertModalOpen] = useState(false)
+    const [certClientName, setCertClientName] = useState<string | null>(null)
+    const [certItems, setCertItems] = useState<ClientCert[]>([])
+    const [certLoading, setCertLoading] = useState(false)
+    const [certSubmitting, setCertSubmitting] = useState(false)
+    const [certDeleting, setCertDeleting] = useState<string | null>(null)
+    const [certDownloading, setCertDownloading] = useState<string | null>(null)
+    const [certForm] = Form.useForm<AddCertFormValues>()
 
     const loadClients = useCallback(async () => {
         setLoading(true)
@@ -41,9 +89,26 @@ export default function ClientsPage() {
         }
     }, [t])
 
+    const loadCerts = useCallback(async (name: string) => {
+        setCertLoading(true)
+        try {
+            setCertItems(await listClientCerts(name))
+        } catch (err) {
+            message.error(err instanceof Error ? err.message : t('clients.certLoadFailed'))
+        } finally {
+            setCertLoading(false)
+        }
+    }, [t])
+
     useEffect(() => {
         void loadClients()
     }, [loadClients])
+
+    useEffect(() => {
+        if (certModalOpen && certClientName) {
+            void loadCerts(certClientName)
+        }
+    }, [certModalOpen, certClientName, loadCerts])
 
     const handleCreate = async (values: CreateFormValues) => {
         setSubmitting(true)
@@ -64,21 +129,73 @@ export default function ClientsPage() {
         }
     }
 
-    const handleDownloadCerts = async (name: string) => {
-        setDownloading(name)
+    const openCertModal = (name: string) => {
+        setCertClientName(name)
+        setCertModalOpen(true)
+        certForm.resetFields()
+    }
+
+    const closeCertModal = () => {
+        setCertModalOpen(false)
+        setCertClientName(null)
+        setCertItems([])
+        certForm.resetFields()
+    }
+
+    const handleAddCert = async (values: AddCertFormValues) => {
+        if (!certClientName) {
+            return
+        }
+        setCertSubmitting(true)
         try {
-            const blob = await downloadClientCerts(name)
+            const payload = values.neverExpires
+                ? {}
+                : {expiresAt: values.expiresAt?.toDate().toISOString()}
+            const created = await createClientCert(certClientName, payload)
+            message.success(t('clients.certCreateSuccess', {id: created.id}))
+            certForm.resetFields()
+            await loadCerts(certClientName)
+        } catch (err) {
+            message.error(err instanceof Error ? err.message : t('clients.certCreateFailed'))
+        } finally {
+            setCertSubmitting(false)
+        }
+    }
+
+    const handleDownloadCert = async (certId: string) => {
+        if (!certClientName) {
+            return
+        }
+        setCertDownloading(certId)
+        try {
+            const blob = await downloadClientCert(certClientName, certId)
             const url = URL.createObjectURL(blob)
             const anchor = document.createElement('a')
             anchor.href = url
-            anchor.download = `${name}-certs.zip`
+            anchor.download = `${certClientName}-${certId}-certs.zip`
             anchor.click()
             URL.revokeObjectURL(url)
-            message.success(t('clients.downloadSuccess', {name}))
+            message.success(t('clients.downloadSuccess', {name: certClientName}))
         } catch (err) {
             message.error(err instanceof Error ? err.message : t('clients.certFailed'))
         } finally {
-            setDownloading(null)
+            setCertDownloading(null)
+        }
+    }
+
+    const handleDeleteCert = async (certId: string) => {
+        if (!certClientName) {
+            return
+        }
+        setCertDeleting(certId)
+        try {
+            await deleteClientCert(certClientName, certId)
+            message.success(t('clients.certDeleteSuccess', {id: certId}))
+            await loadCerts(certClientName)
+        } catch (err) {
+            message.error(err instanceof Error ? err.message : t('clients.certDeleteFailed'))
+        } finally {
+            setCertDeleting(null)
         }
     }
 
@@ -112,6 +229,78 @@ export default function ClientsPage() {
             setDeleting(null)
         }
     }
+
+    const certColumns: ColumnsType<ClientCert> = useMemo(
+        () => [
+            {
+                title: 'ID',
+                dataIndex: 'id',
+                key: 'id',
+                width: 220,
+                ellipsis: true,
+                render: (id: string) => <span className="console-id-text">{id}</span>,
+            },
+            {
+                title: t('common.createdAt'),
+                dataIndex: 'createdAt',
+                key: 'createdAt',
+                width: 168,
+                render: (value: string) => <span className="console-id-text">{formatTimestamp(value)}</span>,
+            },
+            {
+                title: t('clients.certExpiresAt'),
+                dataIndex: 'expiresAt',
+                key: 'expiresAt',
+                width: 168,
+                render: (value?: string | null) =>
+                    value ? (
+                        <span className="console-id-text">{formatTimestamp(value)}</span>
+                    ) : (
+                        <Tag bordered={false} color="success">
+                            {t('clients.certNeverExpires')}
+                        </Tag>
+                    ),
+            },
+            {
+                title: t('common.actions'),
+                key: 'actions',
+                width: 160,
+                fixed: 'right',
+                render: (_, record) => (
+                    <Space size={12}>
+                        <Button
+                            type="link"
+                            icon={<DownloadOutlined/>}
+                            loading={certDownloading === record.id}
+                            onClick={() => void handleDownloadCert(record.id)}
+                            style={{paddingInline: 0, whiteSpace: 'nowrap'}}
+                        >
+                            {t('common.download')}
+                        </Button>
+                        <Popconfirm
+                            title={t('clients.certDeleteConfirmTitle')}
+                            description={t('clients.certDeleteConfirmDesc')}
+                            onConfirm={() => void handleDeleteCert(record.id)}
+                            okText={t('common.delete')}
+                            cancelText={t('common.cancel')}
+                            okButtonProps={{danger: true}}
+                        >
+                            <Button
+                                type="link"
+                                danger
+                                icon={<DeleteOutlined/>}
+                                loading={certDeleting === record.id}
+                                style={{paddingInline: 0, whiteSpace: 'nowrap'}}
+                            >
+                                {t('common.delete')}
+                            </Button>
+                        </Popconfirm>
+                    </Space>
+                ),
+            },
+        ],
+        [t, certDownloading, certDeleting, certClientName],
+    )
 
     const columns: ColumnsType<Client> = useMemo(
         () => [
@@ -156,8 +345,7 @@ export default function ClientsPage() {
                 key: 'createdAt',
                 width: 176,
                 render: (value: string) => (
-                    <span
-                        className="console-id-text">{value.replace('T', ' ').replace(/\.\d+Z$/, '').replace('Z', '')}</span>
+                    <span className="console-id-text">{formatTimestamp(value)}</span>
                 ),
             },
             {
@@ -169,12 +357,11 @@ export default function ClientsPage() {
                     <Space size={12}>
                         <Button
                             type="link"
-                            icon={<DownloadOutlined/>}
-                            loading={downloading === record.name}
-                            onClick={() => void handleDownloadCerts(record.name)}
+                            icon={<SafetyCertificateOutlined/>}
+                            onClick={() => openCertModal(record.name)}
                             style={{paddingInline: 0, whiteSpace: 'nowrap'}}
                         >
-                            {t('clients.generateCerts')}
+                            {t('clients.manageCerts')}
                         </Button>
                         <Popconfirm
                             title={t('clients.deleteConfirmTitle')}
@@ -198,7 +385,7 @@ export default function ClientsPage() {
                 ),
             },
         ],
-        [t, downloading, deleting],
+        [t, deleting],
     )
 
     return (
@@ -297,6 +484,67 @@ export default function ClientsPage() {
                             ) : null
                         }
                     </Form.Item>
+                </Form>
+            </Modal>
+
+            <Modal
+                className="console-modal"
+                title={t('clients.certModalTitle', {name: certClientName ?? ''})}
+                open={certModalOpen}
+                onCancel={closeCertModal}
+                footer={null}
+                width={860}
+                destroyOnHidden
+            >
+                <Table
+                    rowKey="id"
+                    size="small"
+                    loading={certLoading}
+                    columns={certColumns}
+                    dataSource={certItems}
+                    tableLayout="fixed"
+                    scroll={{x: 760}}
+                    pagination={false}
+                    locale={{
+                        emptyText: (
+                            <div className="console-empty-hint">
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('clients.certEmpty')}/>
+                            </div>
+                        ),
+                    }}
+                />
+
+                <Divider style={{margin: '20px 0 16px'}}/>
+
+                <Form
+                    form={certForm}
+                    layout="vertical"
+                    initialValues={{neverExpires: true}}
+                    onFinish={(values) => void handleAddCert(values)}
+                >
+                    <Form.Item name="neverExpires" label={t('clients.certNeverExpires')} valuePropName="checked">
+                        <Switch/>
+                    </Form.Item>
+                    <Form.Item noStyle shouldUpdate={(prev, next) => prev.neverExpires !== next.neverExpires}>
+                        {({getFieldValue}) =>
+                            !getFieldValue('neverExpires') ? (
+                                <Form.Item
+                                    name="expiresAt"
+                                    label={t('clients.certExpiresAt')}
+                                    rules={[{required: true, message: t('clients.certExpiresAtRequired')}]}
+                                >
+                                    <DatePicker
+                                        showTime
+                                        style={{width: '100%'}}
+                                        disabledDate={(current) => current && current < dayjs().startOf('day')}
+                                    />
+                                </Form.Item>
+                            ) : null
+                        }
+                    </Form.Item>
+                    <Button type="primary" icon={<PlusOutlined/>} htmlType="submit" loading={certSubmitting}>
+                        {t('clients.addCert')}
+                    </Button>
                 </Form>
             </Modal>
         </div>
