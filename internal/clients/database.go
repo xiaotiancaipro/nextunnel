@@ -70,8 +70,10 @@ func (d *database) migrate() error {
 			return fmt.Errorf("table migration failed, TableName=%s: %v", name, err_)
 		}
 	}
-	if err := db.Exec(migrations.OptimizeIndexesUp).Error; err != nil {
-		return fmt.Errorf("migration failed: %v", err)
+	for _, sql := range migrations.UpSQL() {
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("migration failed: %v", err)
+		}
 	}
 	return nil
 }
