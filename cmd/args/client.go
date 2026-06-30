@@ -13,7 +13,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timeformat"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
 	"gorm.io/gorm"
 )
 
@@ -69,7 +69,7 @@ func parseExpiresAt(raw string) (*time.Time, error) {
 	if raw == "" {
 		return nil, nil
 	}
-	parsed, err := timeformat.ParseRFC3339(raw)
+	parsed, err := timezone.ParseRFC3339(raw)
 	if err != nil {
 		return nil, fmt.Errorf("invalid --expires-at value: %w", err)
 	}
@@ -80,7 +80,7 @@ func formatExpires(expiresAt *time.Time) string {
 	if expiresAt == nil {
 		return "never"
 	}
-	return timeformat.FormatUTC(*expiresAt)
+	return timezone.FormatUTC(*expiresAt)
 }
 
 func certOutputDir(cfg *configs.Configs, clientName, certID string) (string, error) {

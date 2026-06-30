@@ -15,7 +15,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timeformat"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
 )
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
@@ -51,7 +51,7 @@ func toClientResponse(client models.Client) clientResponse {
 		Name:      client.Name,
 		PortStart: client.PortStart,
 		PortEnd:   client.PortEnd,
-		CreatedAt: timeformat.FormatUTC(client.CreatedAt),
+		CreatedAt: timezone.FormatUTC(client.CreatedAt),
 	}
 }
 
@@ -115,11 +115,11 @@ type clientCertResponse struct {
 func toClientCertResponse(info services.ClientCertView) clientCertResponse {
 	resp := clientCertResponse{
 		ID:        info.ID,
-		CreatedAt: timeformat.FormatUTC(info.CreatedAt),
+		CreatedAt: timezone.FormatUTC(info.CreatedAt),
 		Serial:    info.Serial,
 	}
 	if info.ExpiresAt != nil {
-		formatted := timeformat.FormatUTC(*info.ExpiresAt)
+		formatted := timezone.FormatUTC(*info.ExpiresAt)
 		resp.ExpiresAt = &formatted
 	}
 	return resp
@@ -178,7 +178,7 @@ func (s *Server) handleCreateClientCert(w http.ResponseWriter, r *http.Request) 
 	if req.ExpiresAt != nil {
 		raw := strings.TrimSpace(*req.ExpiresAt)
 		if raw != "" {
-			parsed, err := timeformat.ParseRFC3339(raw)
+			parsed, err := timezone.ParseRFC3339(raw)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, "expiresAt must be RFC3339 timestamp")
 				return
@@ -305,7 +305,7 @@ func toIPFilterResponse(rule models.AccessRule) ipFilterResponse {
 	resp := ipFilterResponse{
 		ID:        rule.Id.String(),
 		Status:    rule.Status,
-		CreatedAt: timeformat.FormatUTC(rule.CreatedAt),
+		CreatedAt: timezone.FormatUTC(rule.CreatedAt),
 	}
 	switch {
 	case rule.Category != nil:
