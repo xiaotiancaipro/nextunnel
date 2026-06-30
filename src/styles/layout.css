@@ -91,6 +91,13 @@
   background: transparent;
 }
 
+.console-sider-status {
+  width: 100%;
+  flex-shrink: 0;
+  padding: 12px var(--console-sider-inset) 16px;
+  border-top: 1px solid var(--console-border);
+}
+
 .console-sider-footer {
   flex-shrink: 0;
   padding: 12px var(--console-sider-inset) 16px;
