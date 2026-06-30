@@ -4,10 +4,12 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
@@ -20,7 +22,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/clients", s.handleListClients)
 	mux.HandleFunc("POST /api/clients", s.handleCreateClient)
 	mux.HandleFunc("DELETE /api/clients/{name}", s.handleDeleteClient)
-	mux.HandleFunc("GET /api/clients/{name}/certs", s.handleGenerateCerts)
+	mux.HandleFunc("GET /api/clients/{name}/certs", s.handleListClientCerts)
+	mux.HandleFunc("POST /api/clients/{name}/certs", s.handleCreateClientCert)
+	mux.HandleFunc("GET /api/clients/{name}/certs/{id}/download", s.handleDownloadClientCert)
+	mux.HandleFunc("DELETE /api/clients/{name}/certs/{id}", s.handleDeleteClientCert)
 	mux.HandleFunc("GET /api/ca", s.handleDownloadCA)
 	mux.HandleFunc("GET /api/ip-filters", s.handleListIPFilters)
 	mux.HandleFunc("POST /api/ip-filters", s.handleUpsertIPFilter)
@@ -103,23 +108,115 @@ func (s *Server) handleDeleteClient(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "ok"})
 }
 
-func (s *Server) handleGenerateCerts(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSpace(r.PathValue("name"))
+type clientCertResponse struct {
+	ID        string  `json:"id"`
+	CreatedAt string  `json:"createdAt"`
+	ExpiresAt *string `json:"expiresAt,omitempty"`
+	Serial    string  `json:"serial"`
+}
+
+func toClientCertResponse(info certs.ClientCertInfo) clientCertResponse {
+	resp := clientCertResponse{
+		ID:        info.ID,
+		CreatedAt: info.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		Serial:    info.Serial,
+	}
+	if info.ExpiresAt != nil {
+		formatted := info.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
+		resp.ExpiresAt = &formatted
+	}
+	return resp
+}
+
+func (s *Server) requireClientByName(w http.ResponseWriter, name string) bool {
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "client name is required")
-		return
+		return false
 	}
 	if _, err := s.clientService.GetByName(name); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
+		return false
+	}
+	return true
+}
+
+func (s *Server) handleListClientCerts(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if !s.requireClientByName(w, name) {
 		return
 	}
 
-	certPEM, keyPEM, err := certs.WriteClientCertDir(s.cfg.Cert.Dir, s.cfg.Cert.Host, name)
+	items, err := certs.ListClientCerts(s.cfg.Cert.Dir, name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	resp := make([]clientCertResponse, 0, len(items))
+	for i := range items {
+		resp = append(resp, toClientCertResponse(items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": resp})
+}
 
+type createClientCertRequest struct {
+	ExpiresAt *string `json:"expiresAt"`
+}
+
+func (s *Server) handleCreateClientCert(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if !s.requireClientByName(w, name) {
+		return
+	}
+
+	var req createClientCertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var expiresAt *time.Time
+	if req.ExpiresAt != nil {
+		raw := strings.TrimSpace(*req.ExpiresAt)
+		if raw != "" {
+			parsed, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "expiresAt must be RFC3339 timestamp")
+				return
+			}
+			expiresAt = &parsed
+		}
+	}
+
+	info, _, _, err := certs.CreateClientCert(s.cfg.Cert.Dir, s.cfg.Cert.Host, name, expiresAt)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, toClientCertResponse(info))
+}
+
+func (s *Server) handleDeleteClientCert(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	certID := strings.TrimSpace(r.PathValue("id"))
+	if !s.requireClientByName(w, name) {
+		return
+	}
+	if certID == "" {
+		writeError(w, http.StatusBadRequest, "certificate id is required")
+		return
+	}
+	if err := certs.DeleteClientCert(s.cfg.Cert.Dir, name, certID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ok"})
+}
+
+func writeClientCertZip(w http.ResponseWriter, clientName, certID string, certPEM, keyPEM []byte) error {
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
 	for fileName, content := range map[string][]byte{
@@ -128,23 +225,46 @@ func (s *Server) handleGenerateCerts(w http.ResponseWriter, r *http.Request) {
 	} {
 		fw, err := zw.Create(fileName)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
 		if _, err := fw.Write(content); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
 	}
 	if err := zw.Close(); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return err
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`-certs.zip"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+clientName+`-`+certID+`-certs.zip"`)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(buf.Bytes())
+	_, err := w.Write(buf.Bytes())
+	return err
+}
+
+func (s *Server) handleDownloadClientCert(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	certID := strings.TrimSpace(r.PathValue("id"))
+	if !s.requireClientByName(w, name) {
+		return
+	}
+	if certID == "" {
+		writeError(w, http.StatusBadRequest, "certificate id is required")
+		return
+	}
+
+	certPEM, keyPEM, err := certs.ReadClientCertFiles(s.cfg.Cert.Dir, name, certID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := writeClientCertZip(w, name, certID, certPEM, keyPEM); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+	}
 }
 
 func (s *Server) handleDownloadCA(w http.ResponseWriter, _ *http.Request) {

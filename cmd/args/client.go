@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
@@ -32,7 +33,7 @@ func CreateClient(cmd *cobra.Command, cfg *configs.Configs, name string, portSta
 	return nil
 }
 
-func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out, clientName string) error {
+func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out, clientName, expiresAtRaw string) error {
 	out = strings.TrimSpace(out)
 	clientName = strings.TrimSpace(clientName)
 	if clientName == "" {
@@ -47,23 +48,41 @@ func GenerateCerts(cmd *cobra.Command, cfg *configs.Configs, out, clientName str
 		return err
 	}
 
-	var abs string
+	var expiresAt *time.Time
+	expiresAtRaw = strings.TrimSpace(expiresAtRaw)
+	if expiresAtRaw != "" {
+		parsed, err := time.Parse(time.RFC3339, expiresAtRaw)
+		if err != nil {
+			return fmt.Errorf("invalid --expires-at value: %w", err)
+		}
+		expiresAt = &parsed
+	}
+
 	if out == "" {
-		if _, _, err := certs.WriteClientCertDir(cfg.Cert.Dir, cfg.Cert.Host, clientName); err != nil {
-			return err
-		}
-		abs, err = certs.ClientCertDir(cfg.Cert.Dir, clientName)
+		info, _, _, err := certs.CreateClientCert(cfg.Cert.Dir, cfg.Cert.Host, clientName, expiresAt)
 		if err != nil {
 			return err
 		}
-	} else {
-		if err := certs.GenerateClientToDir(cfg.Cert.Dir, cfg.Cert.Host, out); err != nil {
-			return err
-		}
-		abs, err = filepath.Abs(out)
+		abs, err := certs.ClientCertDir(cfg.Cert.Dir, clientName)
 		if err != nil {
 			return err
 		}
+		abs = filepath.Join(abs, info.ID)
+		expires := "never"
+		if info.ExpiresAt != nil {
+			expires = info.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created certificate %q (expires=%s) for client %q in %s\n",
+			info.ID, expires, clientName, abs)
+		return nil
+	}
+
+	if err := certs.GenerateClientToDir(cfg.Cert.Dir, cfg.Cert.Host, out, expiresAt); err != nil {
+		return err
+	}
+	abs, err := filepath.Abs(out)
+	if err != nil {
+		return err
 	}
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "wrote %s and %s for client %q in %s\n", certs.FileClientCert, certs.FileClientKey, clientName, abs)
