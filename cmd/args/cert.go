@@ -8,6 +8,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timeformat"
 )
 
 func ListClientCerts(cmd *cobra.Command, cfg *configs.Configs, clientName string) error {
@@ -37,7 +38,7 @@ func ListClientCerts(cmd *cobra.Command, cfg *configs.Configs, clientName string
 	for _, item := range items {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\tcreated=%s\texpires=%s\tserial=%s\n",
 			item.ID,
-			item.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			timeformat.FormatUTC(item.CreatedAt),
 			formatExpires(item.ExpiresAt),
 			item.Serial,
 		)

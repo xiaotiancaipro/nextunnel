@@ -99,7 +99,7 @@ func ResolveNotAfter(expiresAt *time.Time) (time.Time, error) {
 		return time.Now().AddDate(clientNeverExpires, 0, 0), nil
 	}
 	t := expiresAt.UTC()
-	if !t.After(time.Now()) {
+	if !t.After(time.Now().UTC()) {
 		return time.Time{}, fmt.Errorf("tls: certificate expiry must be in the future")
 	}
 	return t, nil
