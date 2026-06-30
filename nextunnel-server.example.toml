@@ -28,3 +28,7 @@ maxAge = 7
 
 [timezone]
 location = "Asia/Shanghai"
+
+[web]
+enabled = true
+port = 25001

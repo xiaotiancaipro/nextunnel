@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -13,21 +14,27 @@ import (
 	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
 	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
 	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
+	"github.com/xiaotiancaipro/nextunnel-server/internal/web"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type App struct {
+	version       string
+	config        *configs.Configs
 	logger        *zap.Logger
+	db            *gorm.DB
 	ipLocator     clients.IPLocator
 	tlsService    *services.Tls
 	serverService *services.Server
+	webServer     *web.Server
 	stopCh        chan struct{}
 	stopOnce      sync.Once
 	listenerMu    sync.Mutex
 	listener      net.Listener
 }
 
-func NewApp(config *configs.Configs) (*App, error) {
+func NewApp(config *configs.Configs, version string) (*App, error) {
 
 	logger, err := logger_.NewLogger(config.Logs)
 	if err != nil {
@@ -52,11 +59,18 @@ func NewApp(config *configs.Configs) (*App, error) {
 	}
 
 	app := App{
+		version:       version,
+		config:        config,
 		logger:        logger,
+		db:            db,
 		tlsService:    services.NewTls(config.Cert, logger),
 		serverService: services.NewServer(config.Server, logger, db, ipLocator),
 		ipLocator:     ipLocator,
 		stopCh:        make(chan struct{}),
+	}
+
+	if config.Web.IsEnabled() {
+		app.webServer = web.NewServer(version, config, db, logger)
 	}
 
 	return &app, nil
@@ -64,6 +78,14 @@ func NewApp(config *configs.Configs) (*App, error) {
 }
 
 func (a *App) Start() error {
+
+	if a.webServer != nil {
+		go func() {
+			if err := a.webServer.Start(); err != nil {
+				a.logger.Error(fmt.Sprintf("Web management API stopped: %v", err))
+			}
+		}()
+	}
 
 	listener, err := a.serverService.Listen()
 	if err != nil {
@@ -110,6 +132,11 @@ func (a *App) Stop() {
 		a.listenerMu.Unlock()
 		if ln != nil {
 			_ = ln.Close()
+		}
+		if a.webServer != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = a.webServer.Stop(ctx)
 		}
 		if a.ipLocator != nil {
 			_ = a.ipLocator.Close()

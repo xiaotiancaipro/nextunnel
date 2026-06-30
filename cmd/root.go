@@ -30,7 +30,7 @@ func (r *Root) run(cmd *cobra.Command, _ []string) {
 
 	cfg := utils.LoadConfig(cmd)
 
-	app, err := internal.NewApp(cfg)
+	app, err := internal.NewApp(cfg, cmd.Version)
 	if err != nil {
 		cmd.PrintErr(err)
 		os.Exit(1)

@@ -15,6 +15,7 @@ type Configs struct {
 	IPLocation *IPLocation `toml:"ip_location"`
 	Logs       *Logs       `toml:"logs"`
 	Timezone   *Timezone   `toml:"timezone"`
+	Web        *Web        `toml:"web"`
 }
 
 func NewConfigs(file string) (*Configs, error) {

@@ -40,6 +40,14 @@ func (r *ClientRegistry) Create(name string, portStart, portEnd int) (*models.Cl
 	return &client, nil
 }
 
+func (r *ClientRegistry) List() ([]models.Client, error) {
+	var clients []models.Client
+	if err := r.db.Where("is_delete = ?", false).Order("created_at ASC").Find(&clients).Error; err != nil {
+		return nil, fmt.Errorf("failed to query clients: %w", err)
+	}
+	return clients, nil
+}
+
 func (r *ClientRegistry) GetByName(name string) (*models.Client, error) {
 	name = trimName(name)
 	if name == "" {
