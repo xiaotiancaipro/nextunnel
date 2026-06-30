@@ -89,19 +89,15 @@ func (s *Server) handleCreateClient(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteClient(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "client name is required")
-		return
-	}
-	if _, err := s.clientService.GetByName(name); err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+	client, ok := s.requireClientByName(w, name)
+	if !ok {
 		return
 	}
 	if err := s.clientService.Delete(name); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := certs.RemoveClientCertDir(s.cfg.Cert.Dir, name); err != nil && !os.IsNotExist(err) {
+	if err := s.clientCertService.DeleteAllForClient(client.Id, name); err != nil && !os.IsNotExist(err) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -115,7 +111,7 @@ type clientCertResponse struct {
 	Serial    string  `json:"serial"`
 }
 
-func toClientCertResponse(info certs.ClientCertInfo) clientCertResponse {
+func toClientCertResponse(info services.ClientCertView) clientCertResponse {
 	resp := clientCertResponse{
 		ID:        info.ID,
 		CreatedAt: info.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
@@ -128,25 +124,27 @@ func toClientCertResponse(info certs.ClientCertInfo) clientCertResponse {
 	return resp
 }
 
-func (s *Server) requireClientByName(w http.ResponseWriter, name string) bool {
+func (s *Server) requireClientByName(w http.ResponseWriter, name string) (*models.Client, bool) {
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "client name is required")
-		return false
+		return nil, false
 	}
-	if _, err := s.clientService.GetByName(name); err != nil {
+	client, err := s.clientService.GetByName(name)
+	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
-		return false
+		return nil, false
 	}
-	return true
+	return client, true
 }
 
 func (s *Server) handleListClientCerts(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
-	if !s.requireClientByName(w, name) {
+	client, ok := s.requireClientByName(w, name)
+	if !ok {
 		return
 	}
 
-	items, err := certs.ListClientCerts(s.cfg.Cert.Dir, name)
+	items, err := s.clientCertService.List(client.Id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -164,7 +162,8 @@ type createClientCertRequest struct {
 
 func (s *Server) handleCreateClientCert(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
-	if !s.requireClientByName(w, name) {
+	client, ok := s.requireClientByName(w, name)
+	if !ok {
 		return
 	}
 
@@ -187,7 +186,7 @@ func (s *Server) handleCreateClientCert(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	info, _, _, err := certs.CreateClientCert(s.cfg.Cert.Dir, s.cfg.Cert.Host, name, expiresAt)
+	info, err := s.clientCertService.Create(client, expiresAt)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -197,15 +196,17 @@ func (s *Server) handleCreateClientCert(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleDeleteClientCert(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
-	certID := strings.TrimSpace(r.PathValue("id"))
-	if !s.requireClientByName(w, name) {
+	certIDRaw := strings.TrimSpace(r.PathValue("id"))
+	client, ok := s.requireClientByName(w, name)
+	if !ok {
 		return
 	}
-	if certID == "" {
-		writeError(w, http.StatusBadRequest, "certificate id is required")
+	certID, err := services.ParseCertID(certIDRaw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := certs.DeleteClientCert(s.cfg.Cert.Dir, name, certID); err != nil {
+	if err := s.clientCertService.Delete(client.Id, certID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, err.Error())
 			return
@@ -244,16 +245,18 @@ func writeClientCertZip(w http.ResponseWriter, clientName, certID string, certPE
 
 func (s *Server) handleDownloadClientCert(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
-	certID := strings.TrimSpace(r.PathValue("id"))
-	if !s.requireClientByName(w, name) {
+	certIDRaw := strings.TrimSpace(r.PathValue("id"))
+	client, ok := s.requireClientByName(w, name)
+	if !ok {
 		return
 	}
-	if certID == "" {
-		writeError(w, http.StatusBadRequest, "certificate id is required")
+	certID, err := services.ParseCertID(certIDRaw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	certPEM, keyPEM, err := certs.ReadClientCertFiles(s.cfg.Cert.Dir, name, certID)
+	certPEM, keyPEM, err := s.clientCertService.ReadFiles(client.Id, certID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, err.Error())
@@ -262,7 +265,7 @@ func (s *Server) handleDownloadClientCert(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := writeClientCertZip(w, name, certID, certPEM, keyPEM); err != nil {
+	if err := writeClientCertZip(w, name, certIDRaw, certPEM, keyPEM); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}
 }

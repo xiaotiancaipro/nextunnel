@@ -14,21 +14,23 @@ import (
 )
 
 type Server struct {
-	version       string
-	cfg           *configs.Configs
-	logger        *zap.Logger
-	clientService *services.ClientRegistry
-	ruleService   *services.AccessRule
-	httpServer    *http.Server
+	version           string
+	cfg               *configs.Configs
+	logger            *zap.Logger
+	clientService     *services.ClientRegistry
+	clientCertService *services.ClientCertRegistry
+	ruleService       *services.AccessRule
+	httpServer        *http.Server
 }
 
 func NewServer(version string, cfg *configs.Configs, db *gorm.DB, logger *zap.Logger) *Server {
 	return &Server{
-		version:       version,
-		cfg:           cfg,
-		logger:        logger,
-		clientService: services.NewClientRegistry(db),
-		ruleService:   services.NewAccessRule(db),
+		version:           version,
+		cfg:               cfg,
+		logger:            logger,
+		clientService:     services.NewClientRegistry(db),
+		clientCertService: services.NewClientCertRegistry(db, cfg.Cert.Dir, cfg.Cert.Host),
+		ruleService:       services.NewAccessRule(db),
 	}
 }
 
