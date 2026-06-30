@@ -55,6 +55,10 @@ const en: TranslationSchema = {
     portStartRequired: 'Enter start port',
     portEndRequired: 'Enter end port',
     allPorts: 'All ports',
+    deleteSuccess: 'Client {{name}} deleted',
+    deleteFailed: 'Failed to delete client',
+    deleteConfirmTitle: 'Delete this client?',
+    deleteConfirmDesc: 'This removes the client record and its certificate directory. This cannot be undone.',
   },
   ipFilters: {
     title: 'Access Control',

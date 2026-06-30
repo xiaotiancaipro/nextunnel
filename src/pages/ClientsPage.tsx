@@ -1,10 +1,10 @@
 import {useCallback, useEffect, useMemo, useState} from 'react'
-import {Button, Empty, Form, Input, InputNumber, message, Modal, Space, Switch, Table, Tag} from 'antd'
-import {DownloadOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
+import {Button, Empty, Form, Input, InputNumber, message, Modal, Popconfirm, Space, Switch, Table, Tag} from 'antd'
+import {DeleteOutlined, DownloadOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
 import type {ColumnsType} from 'antd/es/table'
 import PageCard from '../components/PageCard'
 import PageHeader from '../components/PageHeader'
-import {createClient, downloadCACert, downloadClientCerts, listClients} from '../api'
+import {createClient, deleteClient, downloadCACert, downloadClientCerts, listClients} from '../api'
 import {formatPortRange, useI18n} from '../i18n'
 import type {Client} from '../types'
 
@@ -27,6 +27,7 @@ export default function ClientsPage() {
     const [submitting, setSubmitting] = useState(false)
     const [downloading, setDownloading] = useState<string | null>(null)
     const [downloadingCA, setDownloadingCA] = useState(false)
+    const [deleting, setDeleting] = useState<string | null>(null)
     const [form] = Form.useForm<CreateFormValues>()
 
     const loadClients = useCallback(async () => {
@@ -99,6 +100,19 @@ export default function ClientsPage() {
         }
     }
 
+    const handleDelete = async (name: string) => {
+        setDeleting(name)
+        try {
+            await deleteClient(name)
+            message.success(t('clients.deleteSuccess', {name}))
+            await loadClients()
+        } catch (err) {
+            message.error(err instanceof Error ? err.message : t('clients.deleteFailed'))
+        } finally {
+            setDeleting(null)
+        }
+    }
+
     const columns: ColumnsType<Client> = useMemo(
         () => [
             {
@@ -149,22 +163,42 @@ export default function ClientsPage() {
             {
                 title: t('common.actions'),
                 key: 'actions',
-                width: 148,
+                width: 220,
                 fixed: 'right',
                 render: (_, record) => (
-                    <Button
-                        type="link"
-                        icon={<DownloadOutlined/>}
-                        loading={downloading === record.name}
-                        onClick={() => void handleDownloadCerts(record.name)}
-                        style={{paddingInline: 0, whiteSpace: 'nowrap'}}
-                    >
-                        {t('clients.generateCerts')}
-                    </Button>
+                    <Space size={12}>
+                        <Button
+                            type="link"
+                            icon={<DownloadOutlined/>}
+                            loading={downloading === record.name}
+                            onClick={() => void handleDownloadCerts(record.name)}
+                            style={{paddingInline: 0, whiteSpace: 'nowrap'}}
+                        >
+                            {t('clients.generateCerts')}
+                        </Button>
+                        <Popconfirm
+                            title={t('clients.deleteConfirmTitle')}
+                            description={t('clients.deleteConfirmDesc')}
+                            onConfirm={() => void handleDelete(record.name)}
+                            okText={t('common.delete')}
+                            cancelText={t('common.cancel')}
+                            okButtonProps={{danger: true}}
+                        >
+                            <Button
+                                type="link"
+                                danger
+                                icon={<DeleteOutlined/>}
+                                loading={deleting === record.name}
+                                style={{paddingInline: 0, whiteSpace: 'nowrap'}}
+                            >
+                                {t('common.delete')}
+                            </Button>
+                        </Popconfirm>
+                    </Space>
                 ),
             },
         ],
-        [t, downloading],
+        [t, downloading, deleting],
     )
 
     return (
@@ -199,7 +233,7 @@ export default function ClientsPage() {
                     columns={columns}
                     dataSource={clients}
                     tableLayout="fixed"
-                    scroll={{x: 908}}
+                    scroll={{x: 980}}
                     pagination={{pageSize: 10, showSizeChanger: true, showTotal: (total) => t('common.total', {total})}}
                     locale={{
                         emptyText: (

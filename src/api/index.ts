@@ -54,6 +54,12 @@ export async function createClient(payload: CreateClientRequest): Promise<Client
     })
 }
 
+export async function deleteClient(name: string): Promise<void> {
+    await request(`/clients/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+    })
+}
+
 export async function downloadClientCerts(name: string): Promise<Blob> {
     const response = await fetch(`${API_BASE}/clients/${encodeURIComponent(name)}/certs`)
     if (!response.ok) {

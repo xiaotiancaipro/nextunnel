@@ -53,6 +53,10 @@ const zh = {
     portStartRequired: '请输入起始端口',
     portEndRequired: '请输入结束端口',
     allPorts: '全部端口',
+    deleteSuccess: '客户端 {{name}} 已删除',
+    deleteFailed: '删除失败',
+    deleteConfirmTitle: '确认删除此客户端？',
+    deleteConfirmDesc: '将删除客户端记录及对应证书目录，且不可恢复。',
   },
   ipFilters: {
     title: '访问控制',
