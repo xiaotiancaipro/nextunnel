@@ -1,0 +1,34 @@
+[server]
+port = 25930
+
+[cert]
+host = "127.0.0.1"
+dir = "certs"
+
+[database]
+host = "127.0.0.1"
+port = 5432
+username = "postgres"
+password = "nextunnel"
+db = "nextunnel"
+sslmode = "disable"
+
+[ip_location]
+type = "api" # "api" or "geoip"
+api_key = ""
+geoip_db_path = "geoip/GeoLite2-City.mmdb"
+geoip_locales = ["en"]
+
+[logs]
+file = "logs/nextunnel-server.log"
+level = "info"
+maxSize = "100MB"
+maxBackups = 30
+maxAge = 7
+
+[timezone]
+location = "Asia/Shanghai"
+
+[web]
+enabled = true
+port = 25001

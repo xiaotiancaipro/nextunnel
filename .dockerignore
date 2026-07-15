@@ -1,0 +1,16 @@
+.git/
+.idea/
+.vscode/
+bin/
+config/
+build/
+test/
+logs/
+data/
+docker/
+.DS_Store
+*.toml
+*.mmdb
+*.log
+*.pid
+.env
