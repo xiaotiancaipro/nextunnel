@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/timezone"
 )
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {

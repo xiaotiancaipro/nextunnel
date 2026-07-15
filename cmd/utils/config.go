@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
 )
 
 const (

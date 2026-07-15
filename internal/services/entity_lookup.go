@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/models"
 	"gorm.io/gorm"
 )
 

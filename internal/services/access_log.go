@@ -3,8 +3,8 @@ package services
 import (
 	"fmt"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 	"gorm.io/gorm"
 )
 

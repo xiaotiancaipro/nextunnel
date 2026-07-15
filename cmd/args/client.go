@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
-	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/clients"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/certs"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/timezone"
 	"gorm.io/gorm"
 )
 

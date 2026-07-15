@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/timezone"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-const moduleImportPath = "github.com/xiaotiancaipro/nextunnel-server"
+const moduleImportPath = "github.com/xiaotiancaipro/nextunnel"
 
 var repoRootDir string
 

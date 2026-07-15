@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/timezone"
 )
 
 func ListClientCerts(cmd *cobra.Command, cfg *configs.Configs, clientName string) error {

@@ -6,8 +6,8 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel-server/cmd/utils"
-	"github.com/xiaotiancaipro/nextunnel-server/internal"
+	"github.com/xiaotiancaipro/nextunnel/cmd/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal"
 )
 
 type Root struct{}

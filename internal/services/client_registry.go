@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/models"
 	"gorm.io/gorm"
 )
 

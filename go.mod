@@ -1,4 +1,4 @@
-module github.com/xiaotiancaipro/nextunnel-server
+module github.com/xiaotiancaipro/nextunnel
 
 go 1.26.3
 

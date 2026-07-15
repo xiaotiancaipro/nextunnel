@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 	"go.uber.org/zap"
 )
 

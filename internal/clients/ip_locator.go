@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
 	"go.uber.org/zap"
 )
 

@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel-server/cmd/args"
-	"github.com/xiaotiancaipro/nextunnel-server/cmd/utils"
+	"github.com/xiaotiancaipro/nextunnel/cmd/args"
+	"github.com/xiaotiancaipro/nextunnel/cmd/utils"
 )
 
 type client struct{}

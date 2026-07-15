@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/certs"
 	"gorm.io/gorm"
 )
 

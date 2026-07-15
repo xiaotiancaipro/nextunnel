@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/timezone"
 )
 
 const (

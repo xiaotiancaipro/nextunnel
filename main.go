@@ -1,6 +1,6 @@
 package main
 
-import "github.com/xiaotiancaipro/nextunnel-server/cmd"
+import "github.com/xiaotiancaipro/nextunnel/cmd"
 
 var version = "v1.0.0"
 

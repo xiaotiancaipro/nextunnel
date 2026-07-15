@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils/timezone"
 )
 
 type Configs struct {

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/oschwald/geoip2-golang"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 )
 
 type GeoIP struct {

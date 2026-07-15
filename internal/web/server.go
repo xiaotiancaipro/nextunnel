@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/services"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

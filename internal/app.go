@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/services"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
-	logger_ "github.com/xiaotiancaipro/nextunnel-server/internal/utils/logger"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/web"
+	"github.com/xiaotiancaipro/nextunnel/internal/clients"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/utils/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/web"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

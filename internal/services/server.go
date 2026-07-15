@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/clients"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/configs"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/models"
-	"github.com/xiaotiancaipro/nextunnel-server/internal/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/clients"
+	"github.com/xiaotiancaipro/nextunnel/internal/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
