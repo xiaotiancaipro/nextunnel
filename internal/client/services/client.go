@@ -1,0 +1,177 @@
+package services
+
+import (
+	"fmt"
+	"io"
+	"net"
+	"strconv"
+	"time"
+
+	configs2 "github.com/xiaotiancaipro/nextunnel/internal/client/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/utils"
+	"go.uber.org/zap"
+)
+
+type Client struct {
+	Config   *configs2.Client
+	Proxies  []configs2.Proxy
+	Logger   *zap.Logger
+	Conn     net.Conn
+	DialWork func() (net.Conn, error)
+}
+
+func (c *Client) Login() error {
+	payload := utils.LoginMsg{
+		Id: c.Config.Id,
+	}
+	if err := utils.WriteMsg(c.Conn, utils.MsgLogin, payload); err != nil {
+		c.Logger.Error(fmt.Sprintf("failed to write login msg: %v", err))
+		return fmt.Errorf("failed to send LoginMsg")
+	}
+	return nil
+}
+
+func (c *Client) LoginResponse() (*string, error) {
+
+	_ = c.Conn.SetDeadline(time.Now().Add(10 * time.Second))
+	msgType, payload, err := utils.ReadMsg(c.Conn)
+	_ = c.Conn.SetDeadline(time.Time{})
+	if err != nil {
+		c.Logger.Error(fmt.Sprintf("failed to read login msg: %v", err))
+		return nil, fmt.Errorf("failed to read LoginResp")
+	}
+	if msgType != utils.MsgLoginResp {
+		c.Logger.Error(fmt.Sprintf("invalid login msg type: %v", msgType))
+		return nil, fmt.Errorf("expected LoginResp")
+	}
+
+	var loginResp utils.LoginRespMsg
+	if err := utils.Decode(payload, &loginResp); err != nil {
+		c.Logger.Error(fmt.Sprintf("failed to decode LoginResp: %v", err))
+		return nil, fmt.Errorf("failed to parse LoginResp")
+	}
+	if loginResp.Error != "" {
+		c.Logger.Error(fmt.Sprintf("login response error: %v", loginResp.Error))
+		return nil, fmt.Errorf("login error")
+	}
+
+	return &loginResp.RunID, nil
+
+}
+
+func (c *Client) ProxiesApply() error {
+
+	proxies := make([]utils.ProxiesApplyMsgItem, 0, len(c.Proxies))
+	for _, proxy := range c.Proxies {
+		proxies = append(proxies, utils.ProxiesApplyMsgItem{
+			Name:       proxy.Name,
+			Type:       proxy.Type,
+			RemotePort: proxy.RemotePort,
+			LocalIP:    proxy.LocalIP,
+			LocalPort:  proxy.LocalPort,
+		})
+	}
+
+	payload := utils.ProxiesApplyMsg{
+		Proxies: proxies,
+	}
+	if err := utils.WriteMsg(c.Conn, utils.MsgProxiesApply, payload); err != nil {
+		c.Logger.Error(fmt.Sprintf("failed to write proxies msg: %v", err))
+		return fmt.Errorf("failed to send ApplyConfigMsg")
+	}
+
+	return nil
+
+}
+
+func (c *Client) ProxiesApplyResponse() error {
+
+	_ = c.Conn.SetDeadline(time.Now().Add(10 * time.Second))
+	msgType, payload, err := utils.ReadMsg(c.Conn)
+	_ = c.Conn.SetDeadline(time.Time{})
+	if err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to read proxies msg: %v", err))
+		return fmt.Errorf("failed to read ApplyConfigResp")
+	}
+	if msgType != utils.MsgProxiesApplyResp {
+		c.Logger.Error(fmt.Sprintf("Invalid proxies msg type: %v", msgType))
+		return fmt.Errorf("expected ApplyConfigResp")
+	}
+
+	var resp utils.ProxiesApplyRespMsg
+	if err := utils.Decode(payload, &resp); err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to decode ApplyConfigResp: %v", err))
+		return fmt.Errorf("failed to parse ApplyConfigResp")
+	}
+	if resp.Error != "" {
+		c.Logger.Error(fmt.Sprintf("Failed to parse ApplyConfigResp: %v", resp.Error))
+		return fmt.Errorf("apply config rejected by server")
+	}
+
+	for _, proxy := range c.Proxies {
+		c.Logger.Info(fmt.Sprintf("Proxy applied successfully: name=%s", proxy.Name))
+	}
+	return nil
+
+}
+
+func (c *Client) WorkConn(msg utils.NewWorkConnMsg) {
+
+	proxy := c.FindProxy(msg.ProxyName)
+	if proxy == nil {
+		c.Logger.Error(fmt.Sprintf("Received work connection request for unknown proxy: %s", msg.ProxyName))
+		return
+	}
+
+	if c.DialWork == nil {
+		c.Logger.Error("DialWork is not configured; cannot open work channel")
+		return
+	}
+
+	workTLS, err := c.DialWork()
+	if err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to dial work TLS connection: %v", err))
+		return
+	}
+
+	payload := utils.StartWorkConnMsg{WorkID: msg.WorkID}
+	if err := utils.WriteMsg(workTLS, utils.MsgStartWorkConn, payload); err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to send StartWorkConn: %v", err))
+		_ = workTLS.Close()
+		return
+	}
+
+	localAddr := net.JoinHostPort(proxy.LocalIP, strconv.Itoa(proxy.LocalPort))
+	localConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
+	if err != nil {
+		c.Logger.Error(fmt.Sprintf("Failed to connect to local service [%s -> %s]: %v", msg.ProxyName, localAddr, err))
+		_ = workTLS.Close()
+		return
+	}
+	c.Logger.Info(fmt.Sprintf("Work connection bridged: proxy=%s, workID=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
+
+	c.Pipe(workTLS, localConn)
+
+}
+
+func (c *Client) FindProxy(name string) *configs2.Proxy {
+	for i := range c.Proxies {
+		if c.Proxies[i].Name == name {
+			return &c.Proxies[i]
+		}
+	}
+	return nil
+}
+
+func (c *Client) Pipe(a, b net.Conn) {
+	defer func() { _ = a.Close() }()
+	defer func() { _ = b.Close() }()
+	done := make(chan struct{}, 2)
+	copyFn := func(dst, src net.Conn) {
+		_, _ = io.Copy(dst, src)
+		done <- struct{}{}
+	}
+	go copyFn(a, b)
+	go copyFn(b, a)
+	<-done
+}
