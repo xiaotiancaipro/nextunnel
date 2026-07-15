@@ -36,6 +36,11 @@ type Server struct {
 	ruleCacheAt time.Time
 }
 
+type ServerClient struct {
+	Config *configs.ServerClient
+	Logger *zap.Logger
+}
+
 type pendingWorkItem struct {
 	userConn net.Conn
 	certFP   [sha256.Size]byte
@@ -487,4 +492,14 @@ func (s *Server) pipe(a, b net.Conn) {
 	go copyFn(a, b)
 	go copyFn(b, a)
 	<-done
+}
+
+func (s *ServerClient) DialServer(c *tls.Config) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	addr := s.AddrStr()
+	return tls.DialWithDialer(dialer, "tcp", addr, c)
+}
+
+func (s *ServerClient) AddrStr() string {
+	return net.JoinHostPort(s.Config.Host, strconv.Itoa(s.Config.Port))
 }

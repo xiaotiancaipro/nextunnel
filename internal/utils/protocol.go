@@ -55,6 +55,8 @@ type NewWorkConnMsg struct {
 	ProxyName string `json:"proxy_name"`
 }
 
+type HeartbeatMsg struct{}
+
 type HeartbeatRespMsg struct{}
 
 type StartWorkConnMsg struct {
