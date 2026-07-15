@@ -10,7 +10,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 )
 
 const (

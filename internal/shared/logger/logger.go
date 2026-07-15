@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

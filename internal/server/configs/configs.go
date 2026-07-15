@@ -5,8 +5,12 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/timezone"
+	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
+
+type Logs = sharedconfigs.Logs
+type Timezone = sharedconfigs.Timezone
 
 type Configs struct {
 	Server     *Server     `toml:"server"`

@@ -8,7 +8,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/certs"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
 func ListClientCerts(cmd *cobra.Command, cfg *configs.Configs, clientName string) error {

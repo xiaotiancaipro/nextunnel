@@ -15,7 +15,8 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	utils2 "github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -53,7 +54,7 @@ func NewServer(config *configs.Server, logger *zap.Logger, db *gorm.DB, ipLocato
 func WriteCtrlMsg(mu *sync.Mutex, conn net.Conn, msgType byte, payload interface{}) error {
 	mu.Lock()
 	defer mu.Unlock()
-	return utils2.WriteMsg(conn, msgType, payload)
+	return protocol.WriteMsg(conn, msgType, payload)
 }
 
 func (s *Server) Listen() (net.Listener, error) {
@@ -80,23 +81,23 @@ func (s *Server) EstablishConn(connRaw net.Conn, tlsConfig *tls.Config) (net.Con
 
 func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) {
 
-	var loginMsg utils2.LoginMsg
-	if err := utils2.Decode(payload, &loginMsg); err != nil {
+	var loginMsg protocol.LoginMsg
+	if err := protocol.Decode(payload, &loginMsg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to parse LoginMsg: %v", err))
 		return nil, nil, fmt.Errorf("failed to parse LoginMsg")
 	}
 
 	if loginMsg.Id == "" {
-		_ = utils2.WriteMsg(conn, utils2.MsgLoginResp, utils2.LoginRespMsg{Error: "client_id cannot be empty"})
+		_ = protocol.WriteMsg(conn, protocol.MsgLoginResp, protocol.LoginRespMsg{Error: "client_id cannot be empty"})
 		return nil, nil, fmt.Errorf("client_id is empty")
 	}
 	if _, err := resolveClientId(s.db, loginMsg.Id); err != nil {
-		_ = utils2.WriteMsg(conn, utils2.MsgLoginResp, utils2.LoginRespMsg{Error: "client_id is invalid"})
+		_ = protocol.WriteMsg(conn, protocol.MsgLoginResp, protocol.LoginRespMsg{Error: "client_id is invalid"})
 		return nil, nil, fmt.Errorf("client_id is invalid")
 	}
 
 	runID := uuid.New().String()
-	if err := utils2.WriteMsg(conn, utils2.MsgLoginResp, utils2.LoginRespMsg{RunID: runID}); err != nil {
+	if err := protocol.WriteMsg(conn, protocol.MsgLoginResp, protocol.LoginRespMsg{RunID: runID}); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
 		return nil, nil, fmt.Errorf("failed to send LoginResp")
 	}
@@ -108,17 +109,17 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientIdP *string, serverStopCh, clientStopCh chan struct{}) error {
 
 	replyErr := func(e string) {
-		_ = WriteCtrlMsg(ctrlWriteMu, conn, utils2.MsgProxiesApplyResp, utils2.ProxiesApplyRespMsg{Error: e})
+		_ = WriteCtrlMsg(ctrlWriteMu, conn, protocol.MsgProxiesApplyResp, protocol.ProxiesApplyRespMsg{Error: e})
 		s.logger.Error(e)
 	}
 
-	var msg utils2.ProxiesApplyMsg
-	if err := utils2.Decode(payload, &msg); err != nil {
+	var msg protocol.ProxiesApplyMsg
+	if err := protocol.Decode(payload, &msg); err != nil {
 		replyErr(fmt.Sprintf("failed to parse ApplyConfigMsg: %v", err))
 		return fmt.Errorf("failed to parse ApplyConfigMsg")
 	}
 
-	desired := make(map[string]utils2.ProxiesApplyMsgItem, len(msg.Proxies))
+	desired := make(map[string]protocol.ProxiesApplyMsgItem, len(msg.Proxies))
 	usedPorts := make(map[int]string, len(msg.Proxies))
 	for _, proxy := range msg.Proxies {
 		if proxy.Name == "" {
@@ -204,7 +205,7 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		go s.proxyAcceptLoop(conn, ctrlWriteMu, *clientIdP, name, ln, serverStopCh, clientStopCh)
 	}
 
-	_ = WriteCtrlMsg(ctrlWriteMu, conn, utils2.MsgProxiesApplyResp, utils2.ProxiesApplyRespMsg{Error: ""})
+	_ = WriteCtrlMsg(ctrlWriteMu, conn, protocol.MsgProxiesApplyResp, protocol.ProxiesApplyRespMsg{Error: ""})
 	s.logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", *clientIdP, len(opened)))
 	return nil
 
@@ -219,8 +220,8 @@ func (s *Server) SetClientProxiesOffline(clientId string) error {
 }
 
 func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
-	var msg utils2.StartWorkConnMsg
-	if err := utils2.Decode(payload, &msg); err != nil {
+	var msg protocol.StartWorkConnMsg
+	if err := protocol.Decode(payload, &msg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
 		return fmt.Errorf("failed to parse StartWorkConnMsg")
 	}
@@ -286,14 +287,14 @@ func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, s
 		host = parsedHost
 	}
 
-	ipP, err := utils2.NormalizeIP(host)
+	ipP, err := utils.NormalizeIP(host)
 	if err != nil {
 		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
 	}
 
 	geo := s.ipLocator.Lookup(*ipP)
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
-	isLocal := utils2.IsLocalIP(*ipP)
+	isLocal := utils.IsLocalIP(*ipP)
 
 	rules, err := s.cachedRules()
 	if err != nil {
@@ -361,11 +362,11 @@ func (s *Server) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 	default:
 	}
 
-	msg := utils2.NewWorkConnMsg{
+	msg := protocol.NewWorkConnMsg{
 		WorkID:    workID,
 		ProxyName: proxyName,
 	}
-	if err := WriteCtrlMsg(ctrlWriteMu, controlConn, utils2.MsgNewWorkConn, msg); err != nil {
+	if err := WriteCtrlMsg(ctrlWriteMu, controlConn, protocol.MsgNewWorkConn, msg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
 		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()

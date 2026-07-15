@@ -12,9 +12,9 @@ import (
 	clients2 "github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/web"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -158,7 +158,7 @@ func (a *App) handleConn(connRaw net.Conn, tlsConfig *tls.Config) {
 func (a *App) acceptedConn(conn net.Conn) {
 
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
-	msgType, payload, err := utils.ReadMsg(conn)
+	msgType, payload, err := protocol.ReadMsg(conn)
 	if err != nil {
 		a.logger.Error(fmt.Sprintf("Failed to read first message [%s]: %v", conn.RemoteAddr(), err))
 		_ = conn.Close()
@@ -167,7 +167,7 @@ func (a *App) acceptedConn(conn net.Conn) {
 	_ = conn.SetDeadline(time.Time{})
 
 	switch msgType {
-	case utils.MsgLogin:
+	case protocol.MsgLogin:
 		clientIdP, runIdP, err := a.serverService.Login(conn, payload)
 		if err != nil {
 			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
@@ -185,19 +185,19 @@ func (a *App) acceptedConn(conn net.Conn) {
 		}()
 		var ctrlWriteMu sync.Mutex
 		for {
-			msgType_, payload_, err := utils.ReadMsg(conn)
+			msgType_, payload_, err := protocol.ReadMsg(conn)
 			if err != nil {
 				a.logger.Error(fmt.Sprintf("Client control connection disconnected, clientID=%s, runID=%s: %v", *clientIdP, *runIdP, err))
 				return
 			}
 			switch msgType_ {
-			case utils.MsgProxiesApply:
+			case protocol.MsgProxiesApply:
 				if err := a.serverService.ProxiesApply(conn, &ctrlWriteMu, payload_, clientIdP, a.stopCh, clientStopCh); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
 					return
 				}
-			case utils.MsgHeartbeat:
-				if err := services2.WriteCtrlMsg(&ctrlWriteMu, conn, utils.MsgHeartbeatResp, utils.HeartbeatRespMsg{}); err != nil {
+			case protocol.MsgHeartbeat:
+				if err := services2.WriteCtrlMsg(&ctrlWriteMu, conn, protocol.MsgHeartbeatResp, protocol.HeartbeatRespMsg{}); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
 					return
 				}
@@ -205,7 +205,7 @@ func (a *App) acceptedConn(conn net.Conn) {
 				a.logger.Error(fmt.Sprintf("Unknown message received on control connection 0x%02x runID=%s", msgType_, *runIdP))
 			}
 		}
-	case utils.MsgStartWorkConn:
+	case protocol.MsgStartWorkConn:
 		if err := a.serverService.StartWorkConn(conn, payload); err != nil {
 			a.logger.Error(fmt.Sprintf("Failed to start work connection: %v", err))
 			_ = conn.Close()

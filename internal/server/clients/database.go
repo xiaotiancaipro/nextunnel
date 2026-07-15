@@ -7,8 +7,8 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/migrations"
 	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/timezone"
+	gormlogger "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -92,7 +92,7 @@ func (d *database) connect() (*gorm.DB, error) {
 		d.config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
-		Logger:  logger.NewGormLogger(d.logger, 0),
+		Logger:  gormlogger.NewGormLogger(d.logger, 0),
 		NowFunc: func() time.Time { return timezone.NowUTC() },
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)

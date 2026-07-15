@@ -12,8 +12,8 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/certs"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/timezone"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"gorm.io/gorm"
 )
 

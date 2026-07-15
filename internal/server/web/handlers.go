@@ -15,7 +15,7 @@ import (
 	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
 	certs2 "github.com/xiaotiancaipro/nextunnel/internal/server/utils/certs"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/timezone"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {

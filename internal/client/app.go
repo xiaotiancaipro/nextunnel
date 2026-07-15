@@ -8,8 +8,8 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
 	services2 "github.com/xiaotiancaipro/nextunnel/internal/client/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/client/utils"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/client/utils/logger"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
 
@@ -180,7 +180,7 @@ func (a *App) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durati
 				a.logger.Warn(fmt.Sprintf("heartbeat: set write deadline failed: %v", err))
 				return false
 			}
-			err := utils.WriteMsg(conn, utils.MsgHeartbeat, utils.HeartbeatMsg{})
+			err := protocol.WriteMsg(conn, protocol.MsgHeartbeat, protocol.HeartbeatMsg{})
 			_ = conn.SetWriteDeadline(time.Time{})
 			if err != nil {
 				a.logger.Warn(fmt.Sprintf("heartbeat send failed: %v", err))
@@ -197,14 +197,14 @@ func (a *App) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durati
 				return false
 			}
 			switch result.msgType {
-			case utils.MsgNewWorkConn:
-				var msg utils.NewWorkConnMsg
-				if err := utils.Decode(result.payload, &msg); err != nil {
+			case protocol.MsgNewWorkConn:
+				var msg protocol.NewWorkConnMsg
+				if err := protocol.Decode(result.payload, &msg); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to parse NewWorkConnMsg: %v", err))
 					continue
 				}
 				go a.clientService.WorkConn(msg)
-			case utils.MsgHeartbeatResp:
+			case protocol.MsgHeartbeatResp:
 			default:
 				a.logger.Warn(fmt.Sprintf("Received unknown control message 0x%02x", result.msgType))
 			}
@@ -252,7 +252,7 @@ func (a *App) controlLoop(conn net.Conn, msgCh chan msgChan, doneCh chan struct{
 			}
 			return
 		}
-		msgType, payload, err := utils.ReadMsg(conn)
+		msgType, payload, err := protocol.ReadMsg(conn)
 		select {
 		case msgCh <- msgChan{msgType, payload, err}:
 		case <-stopNotify:
