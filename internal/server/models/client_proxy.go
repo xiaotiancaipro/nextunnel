@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const ProxyTable = "proxy"
+const ClientProxyTable = "client_proxy"
 
 type Proxy struct {
 	Id        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey;"`                       // Primary key UUID
@@ -22,5 +22,5 @@ type Proxy struct {
 }
 
 func (Proxy) TableName() string {
-	return ProxyTable
+	return ClientProxyTable
 }

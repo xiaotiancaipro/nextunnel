@@ -6,8 +6,8 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/migrations"
-	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	gormlogger "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
@@ -15,11 +15,11 @@ import (
 )
 
 var tables = map[string]any{
-	models2.ClientTable:     models2.Client{},
-	models2.ClientCertTable: models2.ClientCert{},
-	models2.ProxyTable:      models2.Proxy{},
-	models2.AccessLogTable:  models2.AccessLog{},
-	models2.AccessRuleTable: models2.AccessRule{},
+	models.ClientTable:      models.Client{},
+	models.ClientCertTable:  models.ClientCert{},
+	models.ClientProxyTable: models.Proxy{},
+	models.AccessLogTable:   models.AccessLog{},
+	models.AccessRuleTable:  models.AccessRule{},
 }
 
 type database struct {
@@ -65,15 +65,16 @@ func (d *database) migrate() error {
 	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
 		return fmt.Errorf("failed to enable uuid-ossp extension: %v", err)
 	}
+	if err := migrations.Apply(db, true); err != nil {
+		return fmt.Errorf("pre-migration failed: %w", err)
+	}
 	for name, table := range d.tables {
 		if err_ := db.AutoMigrate(&table); err_ != nil {
 			return fmt.Errorf("table migration failed, TableName=%s: %v", name, err_)
 		}
 	}
-	for _, sql := range migrations.UpSQL() {
-		if err := db.Exec(sql).Error; err != nil {
-			return fmt.Errorf("migration failed: %v", err)
-		}
+	if err := migrations.Apply(db, false); err != nil {
+		return fmt.Errorf("migration failed: %w", err)
 	}
 	return nil
 }
@@ -92,7 +93,7 @@ func (d *database) connect() (*gorm.DB, error) {
 		d.config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
-		Logger:  gormlogger.NewGormLogger(d.logger, 0),
+		Logger:  logger_.NewGormLogger(d.logger, 0),
 		NowFunc: func() time.Time { return timezone.NowUTC() },
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)

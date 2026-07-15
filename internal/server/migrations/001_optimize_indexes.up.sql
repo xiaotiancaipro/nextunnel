@@ -11,9 +11,9 @@ CREATE INDEX IF NOT EXISTS idx_client_cert_client_active_created_at
     ON client_cert (client_id, created_at ASC)
     WHERE is_delete = false;
 
--- proxy: SyncFromApply/resolveProxyId -> WHERE client_id = ? [AND name = ?]
+-- client_proxy: SyncFromApply/resolveProxyId -> WHERE client_id = ? [AND name = ?]
 CREATE UNIQUE INDEX IF NOT EXISTS uk_proxy_client_name
-    ON proxy (client_id, name);
+    ON client_proxy (client_id, name);
 
 -- access_rule: ListRules/cachedRules -> WHERE is_delete = false ORDER BY status DESC, created_at ASC
 CREATE INDEX IF NOT EXISTS idx_access_rule_active_order
