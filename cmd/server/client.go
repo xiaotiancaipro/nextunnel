@@ -2,8 +2,8 @@ package server
 
 import (
 	"github.com/spf13/cobra"
-	args2 "github.com/xiaotiancaipro/nextunnel/cmd/server/args"
-	utils2 "github.com/xiaotiancaipro/nextunnel/cmd/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/cmd/server/args"
+	"github.com/xiaotiancaipro/nextunnel/cmd/shared"
 )
 
 type client struct{}
@@ -25,8 +25,8 @@ func (c *client) newCreate() *cobra.Command {
 		Short: "create a new client access record",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils2.LoadConfig(cmd)
-			utils2.ExitOnErr(cmd, args2.CreateClient(cmd, cfg, posArgs[0], portStart, portEnd))
+			cfg := shared.LoadServerConfig(cmd)
+			shared.ExitOnErr(cmd, args.CreateClient(cmd, cfg, posArgs[0], portStart, portEnd))
 		},
 	}
 	cmd.Flags().IntVar(&portStart, "port-start", 0, "inclusive start of allocated remote port range")
@@ -52,8 +52,8 @@ func (c *client) newCertList() *cobra.Command {
 		Short: "list certificates for a client",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils2.LoadConfig(cmd)
-			utils2.ExitOnErr(cmd, args2.ListClientCerts(cmd, cfg, posArgs[0]))
+			cfg := shared.LoadServerConfig(cmd)
+			shared.ExitOnErr(cmd, args.ListClientCerts(cmd, cfg, posArgs[0]))
 		},
 	}
 	return cmd
@@ -66,8 +66,8 @@ func (c *client) newCertCreate() *cobra.Command {
 		Short: "create a new client TLS certificate",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils2.LoadConfig(cmd)
-			utils2.ExitOnErr(cmd, args2.CreateClientCert(cmd, cfg, posArgs[0], expiresAt))
+			cfg := shared.LoadServerConfig(cmd)
+			shared.ExitOnErr(cmd, args.CreateClientCert(cmd, cfg, posArgs[0], expiresAt))
 		},
 	}
 	cmd.Flags().StringVar(&expiresAt, "expires-at", "", "certificate expiry time in RFC3339 format (default: never expires)")
@@ -80,8 +80,8 @@ func (c *client) newCertDelete() *cobra.Command {
 		Short: "delete a client TLS certificate",
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils2.LoadConfig(cmd)
-			utils2.ExitOnErr(cmd, args2.DeleteClientCert(cmd, cfg, posArgs[0], posArgs[1]))
+			cfg := shared.LoadServerConfig(cmd)
+			shared.ExitOnErr(cmd, args.DeleteClientCert(cmd, cfg, posArgs[0], posArgs[1]))
 		},
 	}
 	return cmd
@@ -94,8 +94,8 @@ func (c *client) newCertDownload() *cobra.Command {
 		Short: "download a client TLS certificate to a directory",
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils2.LoadConfig(cmd)
-			utils2.ExitOnErr(cmd, args2.DownloadClientCert(cmd, cfg, posArgs[0], posArgs[1], dir))
+			cfg := shared.LoadServerConfig(cmd)
+			shared.ExitOnErr(cmd, args.DownloadClientCert(cmd, cfg, posArgs[0], posArgs[1], dir))
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", "", "output directory (default: stored certificate directory)")

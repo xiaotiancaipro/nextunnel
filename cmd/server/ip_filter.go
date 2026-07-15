@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/cmd/server/args"
-	utils2 "github.com/xiaotiancaipro/nextunnel/cmd/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/cmd/shared"
 )
 
 var ipFilterFields = []ipFilterField{
@@ -43,8 +43,8 @@ func (f *ipFilter) newIPFilterList() *cobra.Command {
 		Short: "list current IP filtering rules",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			cfg := utils2.LoadConfig(cmd)
-			utils2.ExitOnErr(cmd, args.ListIPFilters(cmd, cfg))
+			cfg := shared.LoadServerConfig(cmd)
+			shared.ExitOnErr(cmd, args.ListIPFilters(cmd, cfg))
 		},
 	}
 }
@@ -63,17 +63,17 @@ func (f *ipFilter) newIPFilterMutate(use, short string, delete bool) *cobra.Comm
 		Short: short,
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := utils2.LoadConfig(cmd)
+			cfg := shared.LoadServerConfig(cmd)
 			status, field, value, err := f.parseIPFilterFlags(cmd, posArgs)
 			if err != nil {
-				utils2.ExitOnErr(cmd, err)
+				shared.ExitOnErr(cmd, err)
 				return
 			}
 			if delete {
-				utils2.ExitOnErr(cmd, args.DeleteIPFilter(cmd, cfg, status, field, value))
+				shared.ExitOnErr(cmd, args.DeleteIPFilter(cmd, cfg, status, field, value))
 				return
 			}
-			utils2.ExitOnErr(cmd, args.UpsertIPFilter(cmd, cfg, status, field, value))
+			shared.ExitOnErr(cmd, args.UpsertIPFilter(cmd, cfg, status, field, value))
 		},
 	}
 	c.Flags().Bool("allow", false, "allow matching traffic")
