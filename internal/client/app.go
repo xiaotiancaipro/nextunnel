@@ -8,8 +8,8 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/client/services"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
+	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
+	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
 
@@ -32,7 +32,7 @@ type msgChan struct {
 
 func NewApp(config *configs.Configs) (*App, error) {
 
-	logger, err := logger_.NewLogger(config.Logs)
+	logger, err := sharedlogger.NewLogger(config.Logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %v", err)
 	}
@@ -180,7 +180,7 @@ func (a *App) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durati
 				a.logger.Warn(fmt.Sprintf("heartbeat: set write deadline failed: %v", err))
 				return false
 			}
-			err := protocol.WriteMsg(conn, protocol.MsgHeartbeat, protocol.HeartbeatMsg{})
+			err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgHeartbeat, sharedprotocol.HeartbeatMsg{})
 			_ = conn.SetWriteDeadline(time.Time{})
 			if err != nil {
 				a.logger.Warn(fmt.Sprintf("heartbeat send failed: %v", err))
@@ -197,14 +197,14 @@ func (a *App) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durati
 				return false
 			}
 			switch result.msgType {
-			case protocol.MsgNewWorkConn:
-				var msg protocol.NewWorkConnMsg
-				if err := protocol.Decode(result.payload, &msg); err != nil {
+			case sharedprotocol.MsgNewWorkConn:
+				var msg sharedprotocol.NewWorkConnMsg
+				if err := sharedprotocol.Decode(result.payload, &msg); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to parse NewWorkConnMsg: %v", err))
 					continue
 				}
 				go a.clientService.WorkConn(msg)
-			case protocol.MsgHeartbeatResp:
+			case sharedprotocol.MsgHeartbeatResp:
 			default:
 				a.logger.Warn(fmt.Sprintf("Received unknown control message 0x%02x", result.msgType))
 			}
@@ -252,7 +252,7 @@ func (a *App) controlLoop(conn net.Conn, msgCh chan msgChan, doneCh chan struct{
 			}
 			return
 		}
-		msgType, payload, err := protocol.ReadMsg(conn)
+		msgType, payload, err := sharedprotocol.ReadMsg(conn)
 		select {
 		case msgCh <- msgChan{msgType, payload, err}:
 		case <-stopNotify:

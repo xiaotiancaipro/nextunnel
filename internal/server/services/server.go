@@ -15,8 +15,8 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
+	sharednetwork "github.com/xiaotiancaipro/nextunnel/internal/shared/network"
+	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -54,7 +54,7 @@ func NewServer(config *configs.Server, logger *zap.Logger, db *gorm.DB, ipLocato
 func WriteCtrlMsg(mu *sync.Mutex, conn net.Conn, msgType byte, payload interface{}) error {
 	mu.Lock()
 	defer mu.Unlock()
-	return protocol.WriteMsg(conn, msgType, payload)
+	return sharedprotocol.WriteMsg(conn, msgType, payload)
 }
 
 func (s *Server) Listen() (net.Listener, error) {
@@ -81,23 +81,23 @@ func (s *Server) EstablishConn(connRaw net.Conn, tlsConfig *tls.Config) (net.Con
 
 func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) {
 
-	var loginMsg protocol.LoginMsg
-	if err := protocol.Decode(payload, &loginMsg); err != nil {
+	var loginMsg sharedprotocol.LoginMsg
+	if err := sharedprotocol.Decode(payload, &loginMsg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to parse LoginMsg: %v", err))
 		return nil, nil, fmt.Errorf("failed to parse LoginMsg")
 	}
 
 	if loginMsg.Id == "" {
-		_ = protocol.WriteMsg(conn, protocol.MsgLoginResp, protocol.LoginRespMsg{Error: "client_id cannot be empty"})
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id cannot be empty"})
 		return nil, nil, fmt.Errorf("client_id is empty")
 	}
 	if _, err := resolveClientId(s.db, loginMsg.Id); err != nil {
-		_ = protocol.WriteMsg(conn, protocol.MsgLoginResp, protocol.LoginRespMsg{Error: "client_id is invalid"})
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id is invalid"})
 		return nil, nil, fmt.Errorf("client_id is invalid")
 	}
 
 	runID := uuid.New().String()
-	if err := protocol.WriteMsg(conn, protocol.MsgLoginResp, protocol.LoginRespMsg{RunID: runID}); err != nil {
+	if err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{RunID: runID}); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
 		return nil, nil, fmt.Errorf("failed to send LoginResp")
 	}
@@ -109,17 +109,17 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientIdP *string, serverStopCh, clientStopCh chan struct{}) error {
 
 	replyErr := func(e string) {
-		_ = WriteCtrlMsg(ctrlWriteMu, conn, protocol.MsgProxiesApplyResp, protocol.ProxiesApplyRespMsg{Error: e})
+		_ = WriteCtrlMsg(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: e})
 		s.logger.Error(e)
 	}
 
-	var msg protocol.ProxiesApplyMsg
-	if err := protocol.Decode(payload, &msg); err != nil {
+	var msg sharedprotocol.ProxiesApplyMsg
+	if err := sharedprotocol.Decode(payload, &msg); err != nil {
 		replyErr(fmt.Sprintf("failed to parse ApplyConfigMsg: %v", err))
 		return fmt.Errorf("failed to parse ApplyConfigMsg")
 	}
 
-	desired := make(map[string]protocol.ProxiesApplyMsgItem, len(msg.Proxies))
+	desired := make(map[string]sharedprotocol.ProxiesApplyMsgItem, len(msg.Proxies))
 	usedPorts := make(map[int]string, len(msg.Proxies))
 	for _, proxy := range msg.Proxies {
 		if proxy.Name == "" {
@@ -205,7 +205,7 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		go s.proxyAcceptLoop(conn, ctrlWriteMu, *clientIdP, name, ln, serverStopCh, clientStopCh)
 	}
 
-	_ = WriteCtrlMsg(ctrlWriteMu, conn, protocol.MsgProxiesApplyResp, protocol.ProxiesApplyRespMsg{Error: ""})
+	_ = WriteCtrlMsg(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: ""})
 	s.logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", *clientIdP, len(opened)))
 	return nil
 
@@ -220,8 +220,8 @@ func (s *Server) SetClientProxiesOffline(clientId string) error {
 }
 
 func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
-	var msg protocol.StartWorkConnMsg
-	if err := protocol.Decode(payload, &msg); err != nil {
+	var msg sharedprotocol.StartWorkConnMsg
+	if err := sharedprotocol.Decode(payload, &msg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
 		return fmt.Errorf("failed to parse StartWorkConnMsg")
 	}
@@ -287,14 +287,14 @@ func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, s
 		host = parsedHost
 	}
 
-	ipP, err := network.NormalizeIP(host)
+	ipP, err := sharednetwork.NormalizeIP(host)
 	if err != nil {
 		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
 	}
 
 	geo := s.ipLocator.Lookup(*ipP)
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
-	isLocal := network.IsLocalIP(*ipP)
+	isLocal := sharednetwork.IsLocalIP(*ipP)
 
 	rules, err := s.cachedRules()
 	if err != nil {
@@ -362,11 +362,11 @@ func (s *Server) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 	default:
 	}
 
-	msg := protocol.NewWorkConnMsg{
+	msg := sharedprotocol.NewWorkConnMsg{
 		WorkID:    workID,
 		ProxyName: proxyName,
 	}
-	if err := WriteCtrlMsg(ctrlWriteMu, controlConn, protocol.MsgNewWorkConn, msg); err != nil {
+	if err := WriteCtrlMsg(ctrlWriteMu, controlConn, sharedprotocol.MsgNewWorkConn, msg); err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
 		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()

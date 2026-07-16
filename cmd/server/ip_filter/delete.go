@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 func NewDeleteCommand() *cobra.Command {
@@ -22,17 +22,17 @@ func NewDeleteCommand() *cobra.Command {
 func deleteRun(cmd *cobra.Command, args []string) {
 
 	status, field, value, err := cli.ParseIPFilterFlags(cmd, args)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	cfg := cli.LoadServerConfig(cmd)
 	service, err := cli.NewAccessRuleFromConfig(cfg)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	target, format, msgArgs, err := cli.BuildRuleTarget(service, field, value)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	if err := service.DeleteRule(target, status); err != nil {
-		shared.ExitOnErr(cmd, err)
+		sharedcli.ExitOnErr(cmd, err)
 	}
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "deleted "+format+"\n", append([]any{cli.RuleAction(status)}, msgArgs...)...)

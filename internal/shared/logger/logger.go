@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
+	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
+	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -18,7 +18,7 @@ const moduleImportPath = "github.com/xiaotiancaipro/nextunnel"
 
 var repoRootDir string
 
-func NewLogger(config *configs.Logs) (*zap.Logger, error) {
+func NewLogger(config *sharedconfigs.Logs) (*zap.Logger, error) {
 
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:          "time",
@@ -30,7 +30,7 @@ func NewLogger(config *configs.Logs) (*zap.Logger, error) {
 		LineEnding:       zapcore.DefaultLineEnding,
 		ConsoleSeparator: " - ",
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-			enc.AppendString(timezone.Format(t))
+			enc.AppendString(sharedtimezone.Format(t))
 		},
 		EncodeLevel:    zapcore.CapitalLevelEncoder,
 		EncodeCaller:   repoRelativeCallerEncoder,
@@ -120,7 +120,7 @@ func pathRelativeToRepoRoot(file string) (string, bool) {
 }
 
 func scheduleDailyLogRotation(logger *dailyLogWriter) {
-	loc := timezone.Location()
+	loc := sharedtimezone.Location()
 	for {
 		now := time.Now().In(loc)
 		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)

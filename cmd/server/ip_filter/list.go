@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 func NewListCommand() *cobra.Command {
@@ -22,10 +22,10 @@ func listRun(cmd *cobra.Command, _ []string) {
 
 	cfg := cli.LoadServerConfig(cmd)
 	service, err := cli.NewAccessRuleFromConfig(cfg)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	rules, err := service.ListRules()
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	if len(rules) == 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no ip filter rules")

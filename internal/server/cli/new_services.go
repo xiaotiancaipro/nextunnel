@@ -6,12 +6,12 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
+	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	"gorm.io/gorm"
 )
 
 func NewDBFromConfig(cfg *configs.Configs) (*gorm.DB, error) {
-	logger, err := logger_.NewLogger(cfg.Logs)
+	logger, err := sharedlogger.NewLogger(cfg.Logs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
 	}

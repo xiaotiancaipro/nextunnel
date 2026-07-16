@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
+	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
 func ParseExpiresAt(raw string) (*time.Time, error) {
@@ -17,7 +17,7 @@ func ParseExpiresAt(raw string) (*time.Time, error) {
 	if raw == "" {
 		return nil, nil
 	}
-	parsed, err := timezone.ParseRFC3339(raw)
+	parsed, err := sharedtimezone.ParseRFC3339(raw)
 	if err != nil {
 		return nil, fmt.Errorf("invalid --expires-at value: %w", err)
 	}
@@ -28,12 +28,12 @@ func FormatExpires(expiresAt *time.Time) string {
 	if expiresAt == nil {
 		return "never"
 	}
-	return timezone.FormatUTC(*expiresAt)
+	return sharedtimezone.FormatUTC(*expiresAt)
 }
 
 func CertOutputDir(cfg *configs.Configs, clientName, certID string) (string, error) {
-	recordPath := certs.RelClientCertPath(clientName, certID)
-	return certs.AbsCertPath(cfg.Cert.Dir, recordPath)
+	recordPath := sharedcerts.RelClientCertPath(clientName, certID)
+	return sharedcerts.AbsCertPath(cfg.Cert.Dir, recordPath)
 }
 
 func EnsureOutputDir(outDir string) (string, error) {

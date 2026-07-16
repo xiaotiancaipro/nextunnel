@@ -13,9 +13,9 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
+	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	sharednetwork "github.com/xiaotiancaipro/nextunnel/internal/shared/network"
+	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
@@ -23,10 +23,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/clients", s.handleListClients)
 	mux.HandleFunc("POST /api/clients", s.handleCreateClient)
 	mux.HandleFunc("DELETE /api/clients/{name}", s.handleDeleteClient)
-	mux.HandleFunc("GET /api/clients/{name}/certs", s.handleListClientCerts)
-	mux.HandleFunc("POST /api/clients/{name}/certs", s.handleCreateClientCert)
-	mux.HandleFunc("GET /api/clients/{name}/certs/{id}/download", s.handleDownloadClientCert)
-	mux.HandleFunc("DELETE /api/clients/{name}/certs/{id}", s.handleDeleteClientCert)
+	mux.HandleFunc("GET /api/clients/{name}/sharedcerts", s.handleListClientCerts)
+	mux.HandleFunc("POST /api/clients/{name}/sharedcerts", s.handleCreateClientCert)
+	mux.HandleFunc("GET /api/clients/{name}/sharedcerts/{id}/download", s.handleDownloadClientCert)
+	mux.HandleFunc("DELETE /api/clients/{name}/sharedcerts/{id}", s.handleDeleteClientCert)
 	mux.HandleFunc("GET /api/ca", s.handleDownloadCA)
 	mux.HandleFunc("GET /api/ip-filters", s.handleListIPFilters)
 	mux.HandleFunc("POST /api/ip-filters", s.handleUpsertIPFilter)
@@ -51,7 +51,7 @@ func toClientResponse(client models.Client) clientResponse {
 		Name:      client.Name,
 		PortStart: client.PortStart,
 		PortEnd:   client.PortEnd,
-		CreatedAt: timezone.FormatUTC(client.CreatedAt),
+		CreatedAt: sharedtimezone.FormatUTC(client.CreatedAt),
 	}
 }
 
@@ -115,11 +115,11 @@ type clientCertResponse struct {
 func toClientCertResponse(info services.ClientCertView) clientCertResponse {
 	resp := clientCertResponse{
 		ID:        info.ID,
-		CreatedAt: timezone.FormatUTC(info.CreatedAt),
+		CreatedAt: sharedtimezone.FormatUTC(info.CreatedAt),
 		Serial:    info.Serial,
 	}
 	if info.ExpiresAt != nil {
-		formatted := timezone.FormatUTC(*info.ExpiresAt)
+		formatted := sharedtimezone.FormatUTC(*info.ExpiresAt)
 		resp.ExpiresAt = &formatted
 	}
 	return resp
@@ -178,7 +178,7 @@ func (s *Server) handleCreateClientCert(w http.ResponseWriter, r *http.Request) 
 	if req.ExpiresAt != nil {
 		raw := strings.TrimSpace(*req.ExpiresAt)
 		if raw != "" {
-			parsed, err := timezone.ParseRFC3339(raw)
+			parsed, err := sharedtimezone.ParseRFC3339(raw)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, "expiresAt must be RFC3339 timestamp")
 				return
@@ -222,8 +222,8 @@ func writeClientCertZip(w http.ResponseWriter, clientName, certID string, certPE
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
 	for fileName, content := range map[string][]byte{
-		certs.FileClientCert: certPEM,
-		certs.FileClientKey:  keyPEM,
+		sharedcerts.FileClientCert: certPEM,
+		sharedcerts.FileClientKey:  keyPEM,
 	} {
 		fw, err := zw.Create(fileName)
 		if err != nil {
@@ -238,7 +238,7 @@ func writeClientCertZip(w http.ResponseWriter, clientName, certID string, certPE
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+clientName+`-`+certID+`-certs.zip"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+clientName+`-`+certID+`-sharedcerts.zip"`)
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write(buf.Bytes())
 	return err
@@ -272,7 +272,7 @@ func (s *Server) handleDownloadClientCert(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDownloadCA(w http.ResponseWriter, _ *http.Request) {
-	if err := certs.Ensure(s.cfg.Cert.Dir, s.cfg.Cert.Host); err != nil {
+	if err := sharedcerts.Ensure(s.cfg.Cert.Dir, s.cfg.Cert.Host); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -281,7 +281,7 @@ func (s *Server) handleDownloadCA(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	caPEM, err := os.ReadFile(filepath.Join(abs, certs.FileCACert))
+	caPEM, err := os.ReadFile(filepath.Join(abs, sharedcerts.FileCACert))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -305,7 +305,7 @@ func toIPFilterResponse(rule models.AccessRule) ipFilterResponse {
 	resp := ipFilterResponse{
 		ID:        rule.Id.String(),
 		Status:    rule.Status,
-		CreatedAt: timezone.FormatUTC(rule.CreatedAt),
+		CreatedAt: sharedtimezone.FormatUTC(rule.CreatedAt),
 	}
 	switch {
 	case rule.Category != nil:
@@ -352,7 +352,7 @@ func (s *Server) buildRuleTarget(field, value string) (services.RuleTarget, erro
 	case "ALL", "LOCAL", "REMOTE":
 		return s.ruleService.NewCategoryRuleTarget(field)
 	case "IP":
-		ip, err := network.NormalizeIP(value)
+		ip, err := sharednetwork.NormalizeIP(value)
 		if err != nil {
 			return services.RuleTarget{}, err
 		}

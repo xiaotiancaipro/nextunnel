@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"gorm.io/gorm"
 )
 
@@ -56,23 +56,23 @@ func (r *ClientCertRegistry) List(clientID uuid.UUID) ([]ClientCertView, error) 
 }
 
 func (r *ClientCertRegistry) Create(client *models.Client, expiresAt *time.Time) (ClientCertView, error) {
-	notAfter, err := certs.ResolveNotAfter(expiresAt)
+	notAfter, err := sharedcerts.ResolveNotAfter(expiresAt)
 	if err != nil {
 		return ClientCertView{}, err
 	}
 
 	certID := uuid.New()
-	relPath := certs.RelClientCertPath(client.Name, certID.String())
-	absPath, err := certs.AbsCertPath(r.certDir, relPath)
+	relPath := sharedcerts.RelClientCertPath(client.Name, certID.String())
+	absPath, err := sharedcerts.AbsCertPath(r.certDir, relPath)
 	if err != nil {
 		return ClientCertView{}, err
 	}
 
-	certPEM, keyPEM, err := certs.GenerateClientPEM(r.certDir, r.listenHost, expiresAt)
+	certPEM, keyPEM, err := sharedcerts.GenerateClientPEM(r.certDir, r.listenHost, expiresAt)
 	if err != nil {
 		return ClientCertView{}, err
 	}
-	if err := certs.WriteClientPEMToDir(absPath, certPEM, keyPEM); err != nil {
+	if err := sharedcerts.WriteClientPEMToDir(absPath, certPEM, keyPEM); err != nil {
 		return ClientCertView{}, err
 	}
 
@@ -83,7 +83,7 @@ func (r *ClientCertRegistry) Create(client *models.Client, expiresAt *time.Time)
 		ExpiredAt: notAfter.UTC(),
 	}
 	if err := r.db.Create(&record).Error; err != nil {
-		_ = certs.RemoveCertDir(absPath)
+		_ = sharedcerts.RemoveCertDir(absPath)
 		return ClientCertView{}, fmt.Errorf("failed to create client certificate record: %w", err)
 	}
 
@@ -110,8 +110,8 @@ func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error 
 		return fmt.Errorf("certificate %q not found", certID)
 	}
 
-	if absPath, err := certs.AbsCertPath(r.certDir, record.CertPath); err == nil {
-		if err := certs.RemoveCertDir(absPath); err != nil && !os.IsNotExist(err) {
+	if absPath, err := sharedcerts.AbsCertPath(r.certDir, record.CertPath); err == nil {
+		if err := sharedcerts.RemoveCertDir(absPath); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
@@ -125,7 +125,7 @@ func (r *ClientCertRegistry) DeleteAllForClient(clientID uuid.UUID, clientName s
 		return fmt.Errorf("failed to delete client certificates: %w", err)
 	}
 
-	if err := certs.RemoveClientCertDir(r.certDir, clientName); err != nil && !os.IsNotExist(err) {
+	if err := sharedcerts.RemoveClientCertDir(r.certDir, clientName); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -136,11 +136,11 @@ func (r *ClientCertRegistry) ReadFiles(clientID uuid.UUID, certID uuid.UUID) ([]
 	if err != nil {
 		return nil, nil, err
 	}
-	absPath, err := certs.AbsCertPath(r.certDir, record.CertPath)
+	absPath, err := sharedcerts.AbsCertPath(r.certDir, record.CertPath)
 	if err != nil {
 		return nil, nil, err
 	}
-	return certs.ReadCertFiles(absPath)
+	return sharedcerts.ReadCertFiles(absPath)
 }
 
 func (r *ClientCertRegistry) getActive(clientID, certID uuid.UUID) (*models.ClientCert, error) {
@@ -160,23 +160,23 @@ func (r *ClientCertRegistry) toView(record models.ClientCert) (ClientCertView, e
 		ID:        record.Id.String(),
 		CreatedAt: record.CreatedAt.UTC(),
 	}
-	if !certs.IsNeverExpires(record.ExpiredAt) {
+	if !sharedcerts.IsNeverExpires(record.ExpiredAt) {
 		expires := record.ExpiredAt.UTC()
 		view.ExpiresAt = &expires
 	}
 
-	absPath, err := certs.AbsCertPath(r.certDir, record.CertPath)
+	absPath, err := sharedcerts.AbsCertPath(r.certDir, record.CertPath)
 	if err != nil {
 		return ClientCertView{}, err
 	}
-	certPEM, err := os.ReadFile(filepath.Join(absPath, certs.FileClientCert))
+	certPEM, err := os.ReadFile(filepath.Join(absPath, sharedcerts.FileClientCert))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return view, nil
 		}
 		return ClientCertView{}, fmt.Errorf("read certificate file: %w", err)
 	}
-	serial, err := certs.ParseSerial(certPEM)
+	serial, err := sharedcerts.ParseSerial(certPEM)
 	if err != nil {
 		return ClientCertView{}, err
 	}

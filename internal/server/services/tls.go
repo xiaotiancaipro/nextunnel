@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"go.uber.org/zap"
 )
 
@@ -26,7 +26,7 @@ func NewTls(config *configs.Cert, logger *zap.Logger) *Tls {
 
 func (t *Tls) Init() (*tls.Config, error) {
 
-	if err := certs.Ensure(t.config.Dir, t.config.Host); err != nil {
+	if err := sharedcerts.Ensure(t.config.Dir, t.config.Host); err != nil {
 		return nil, err
 	}
 
@@ -34,9 +34,9 @@ func (t *Tls) Init() (*tls.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tls: %w", err)
 	}
-	caPath := filepath.Join(abs, certs.FileCACert)
-	srvCert := filepath.Join(abs, certs.FileSrvCert)
-	srvKey := filepath.Join(abs, certs.FileSrvKey)
+	caPath := filepath.Join(abs, sharedcerts.FileCACert)
+	srvCert := filepath.Join(abs, sharedcerts.FileSrvCert)
+	srvKey := filepath.Join(abs, sharedcerts.FileSrvKey)
 
 	caCert, err := os.ReadFile(caPath)
 	if err != nil {

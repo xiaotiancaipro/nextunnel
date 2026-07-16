@@ -5,18 +5,18 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
+	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
+	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
 type Configs struct {
-	Server     *Server          `toml:"server"`
-	Cert       *Cert            `toml:"cert"`
-	Database   *Database        `toml:"database"`
-	IPLocation *IPLocation      `toml:"ip_location"`
-	Logs       *shared.Logs     `toml:"logs"`
-	Timezone   *shared.Timezone `toml:"timezone"`
-	Web        *Web             `toml:"web"`
+	Server     *Server                 `toml:"server"`
+	Cert       *Cert                   `toml:"cert"`
+	Database   *Database               `toml:"database"`
+	IPLocation *IPLocation             `toml:"ip_location"`
+	Logs       *sharedconfigs.Logs     `toml:"logs"`
+	Timezone   *sharedconfigs.Timezone `toml:"timezone"`
+	Web        *Web                    `toml:"web"`
 }
 
 func NewConfigs(file string) (*Configs, error) {
@@ -30,7 +30,7 @@ func NewConfigs(file string) (*Configs, error) {
 		return nil, err
 	}
 
-	if err := timezone.Init(cfg.Timezone.NameOrDefault()); err != nil {
+	if err := sharedtimezone.Init(cfg.Timezone.NameOrDefault()); err != nil {
 		return nil, fmt.Errorf("invalid timezone config: %w", err)
 	}
 

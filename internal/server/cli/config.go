@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 const (
@@ -12,9 +12,9 @@ const (
 )
 
 func LoadServerConfig(cmd *cobra.Command) *configs.Configs {
-	return shared.LoadConfig(
+	return sharedcli.LoadConfig(
 		cmd,
-		shared.ConfigSpec{
+		sharedcli.ConfigSpec{
 			DefaultPath: ServerDefaultConfigPath,
 			EnvVar:      ServerEnvConfigPath,
 		},

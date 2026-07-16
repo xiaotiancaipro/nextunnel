@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
+	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
 const (
@@ -99,7 +99,7 @@ func (d *dailyLogWriter) pathForSegment(date string, segment int) string {
 }
 
 func (d *dailyLogWriter) today() string {
-	return timezone.Today()
+	return sharedtimezone.Today()
 }
 
 func (d *dailyLogWriter) Write(p []byte) (int, error) {
@@ -284,7 +284,7 @@ func (d *dailyLogWriter) cleanupLocked() {
 	}
 
 	if d.maxAge > 0 {
-		cutoff := timezone.DaysAgo(d.maxAge)
+		cutoff := sharedtimezone.DaysAgo(d.maxAge)
 		for date, paths := range byDate {
 			if date < cutoff {
 				for _, path := range paths {

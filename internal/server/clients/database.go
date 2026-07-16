@@ -6,8 +6,8 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/migrations"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
+	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
+	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -71,8 +71,8 @@ func (d *database) connect() (*gorm.DB, error) {
 		d.config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
-		Logger:  logger_.NewGormLogger(d.logger, 0),
-		NowFunc: func() time.Time { return timezone.NowUTC() },
+		Logger:  sharedlogger.NewGormLogger(d.logger, 0),
+		NowFunc: func() time.Time { return sharedtimezone.NowUTC() },
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)
 }

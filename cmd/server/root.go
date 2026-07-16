@@ -6,7 +6,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/cmd/server/ip_filter"
 	"github.com/xiaotiancaipro/nextunnel/internal/server"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 func New(version string) *cobra.Command {
@@ -26,6 +26,6 @@ func New(version string) *cobra.Command {
 func run(cmd *cobra.Command, _ []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	app, err := server.NewApp(cfg, cmd.Version)
-	shared.ExitOnErr(cmd, err)
-	shared.RunApp(cmd, app)
+	sharedcli.ExitOnErr(cmd, err)
+	sharedcli.RunApp(cmd, app)
 }

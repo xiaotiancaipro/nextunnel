@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
+	sharedstring "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
 	"gorm.io/gorm"
 )
 
@@ -30,9 +30,9 @@ func (l *accessLog) record(clientId, proxyName, ip, country, region, city string
 		"ProxyId":  proxyUUID,
 		"Ip":       ip,
 		"Category": l.categoryFromIP(isLocal),
-		"Country":  shared.NullIfEmpty(country),
-		"Region":   shared.NullIfEmpty(region),
-		"City":     shared.NullIfEmpty(city),
+		"Country":  sharedstring.NullIfEmpty(country),
+		"Region":   sharedstring.NullIfEmpty(region),
+		"City":     sharedstring.NullIfEmpty(city),
 		"Status":   status,
 	}).Error
 }

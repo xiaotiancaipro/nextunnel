@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 var dir string
@@ -28,40 +28,40 @@ func downloadRun(cmd *cobra.Command, args []string) {
 
 	clientName := strings.TrimSpace(args[0])
 	if clientName == "" {
-		shared.ExitOnErr(cmd, fmt.Errorf("client name is required"))
+		sharedcli.ExitOnErr(cmd, fmt.Errorf("client name is required"))
 	}
 
 	cfg := cli.LoadServerConfig(cmd)
 	registry, certService, err := cli.NewClientRegistryAndCertFromConfig(cfg)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	client, err := registry.GetByName(clientName)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	certID, err := services.ParseCertID(args[1])
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	certPEM, keyPEM, err := certService.ReadFiles(client.Id, certID)
-	shared.ExitOnErr(cmd, err)
+	sharedcli.ExitOnErr(cmd, err)
 
 	outDir := strings.TrimSpace(dir)
 	if outDir == "" {
 		outDir, err = cli.CertOutputDir(cfg, clientName, certID.String())
-		shared.ExitOnErr(cmd, err)
+		sharedcli.ExitOnErr(cmd, err)
 	} else {
 		outDir, err = cli.EnsureOutputDir(outDir)
-		shared.ExitOnErr(cmd, err)
+		sharedcli.ExitOnErr(cmd, err)
 	}
 
-	if err := certs.WriteClientPEMToDir(outDir, certPEM, keyPEM); err != nil {
-		shared.ExitOnErr(cmd, err)
+	if err := sharedcerts.WriteClientPEMToDir(outDir, certPEM, keyPEM); err != nil {
+		sharedcli.ExitOnErr(cmd, err)
 	}
 
 	_, _ = fmt.Fprintf(
 		cmd.OutOrStdout(),
 		"wrote %s and %s for certificate %q in %s\n",
-		certs.FileClientCert,
-		certs.FileClientKey,
+		sharedcerts.FileClientCert,
+		sharedcerts.FileClientKey,
 		certID,
 		outDir,
 	)

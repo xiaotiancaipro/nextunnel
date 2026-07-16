@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
+	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
 
@@ -21,10 +21,10 @@ type Client struct {
 }
 
 func (c *Client) Login() error {
-	payload := protocol.LoginMsg{
+	payload := sharedprotocol.LoginMsg{
 		Id: c.Config.Id,
 	}
-	if err := protocol.WriteMsg(c.Conn, protocol.MsgLogin, payload); err != nil {
+	if err := sharedprotocol.WriteMsg(c.Conn, sharedprotocol.MsgLogin, payload); err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to write login msg: %v", err))
 		return fmt.Errorf("failed to send LoginMsg")
 	}
@@ -34,19 +34,19 @@ func (c *Client) Login() error {
 func (c *Client) LoginResponse() (*string, error) {
 
 	_ = c.Conn.SetDeadline(time.Now().Add(10 * time.Second))
-	msgType, payload, err := protocol.ReadMsg(c.Conn)
+	msgType, payload, err := sharedprotocol.ReadMsg(c.Conn)
 	_ = c.Conn.SetDeadline(time.Time{})
 	if err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to read login msg: %v", err))
 		return nil, fmt.Errorf("failed to read LoginResp")
 	}
-	if msgType != protocol.MsgLoginResp {
+	if msgType != sharedprotocol.MsgLoginResp {
 		c.Logger.Error(fmt.Sprintf("invalid login msg type: %v", msgType))
 		return nil, fmt.Errorf("expected LoginResp")
 	}
 
-	var loginResp protocol.LoginRespMsg
-	if err := protocol.Decode(payload, &loginResp); err != nil {
+	var loginResp sharedprotocol.LoginRespMsg
+	if err := sharedprotocol.Decode(payload, &loginResp); err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to decode LoginResp: %v", err))
 		return nil, fmt.Errorf("failed to parse LoginResp")
 	}
@@ -61,9 +61,9 @@ func (c *Client) LoginResponse() (*string, error) {
 
 func (c *Client) ProxiesApply() error {
 
-	proxies := make([]protocol.ProxiesApplyMsgItem, 0, len(c.Proxies))
+	proxies := make([]sharedprotocol.ProxiesApplyMsgItem, 0, len(c.Proxies))
 	for _, proxy := range c.Proxies {
-		proxies = append(proxies, protocol.ProxiesApplyMsgItem{
+		proxies = append(proxies, sharedprotocol.ProxiesApplyMsgItem{
 			Name:       proxy.Name,
 			Type:       proxy.Type,
 			RemotePort: proxy.RemotePort,
@@ -72,10 +72,10 @@ func (c *Client) ProxiesApply() error {
 		})
 	}
 
-	payload := protocol.ProxiesApplyMsg{
+	payload := sharedprotocol.ProxiesApplyMsg{
 		Proxies: proxies,
 	}
-	if err := protocol.WriteMsg(c.Conn, protocol.MsgProxiesApply, payload); err != nil {
+	if err := sharedprotocol.WriteMsg(c.Conn, sharedprotocol.MsgProxiesApply, payload); err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to write proxies msg: %v", err))
 		return fmt.Errorf("failed to send ApplyConfigMsg")
 	}
@@ -87,19 +87,19 @@ func (c *Client) ProxiesApply() error {
 func (c *Client) ProxiesApplyResponse() error {
 
 	_ = c.Conn.SetDeadline(time.Now().Add(10 * time.Second))
-	msgType, payload, err := protocol.ReadMsg(c.Conn)
+	msgType, payload, err := sharedprotocol.ReadMsg(c.Conn)
 	_ = c.Conn.SetDeadline(time.Time{})
 	if err != nil {
 		c.Logger.Error(fmt.Sprintf("Failed to read proxies msg: %v", err))
 		return fmt.Errorf("failed to read ApplyConfigResp")
 	}
-	if msgType != protocol.MsgProxiesApplyResp {
+	if msgType != sharedprotocol.MsgProxiesApplyResp {
 		c.Logger.Error(fmt.Sprintf("Invalid proxies msg type: %v", msgType))
 		return fmt.Errorf("expected ApplyConfigResp")
 	}
 
-	var resp protocol.ProxiesApplyRespMsg
-	if err := protocol.Decode(payload, &resp); err != nil {
+	var resp sharedprotocol.ProxiesApplyRespMsg
+	if err := sharedprotocol.Decode(payload, &resp); err != nil {
 		c.Logger.Error(fmt.Sprintf("Failed to decode ApplyConfigResp: %v", err))
 		return fmt.Errorf("failed to parse ApplyConfigResp")
 	}
@@ -115,7 +115,7 @@ func (c *Client) ProxiesApplyResponse() error {
 
 }
 
-func (c *Client) WorkConn(msg protocol.NewWorkConnMsg) {
+func (c *Client) WorkConn(msg sharedprotocol.NewWorkConnMsg) {
 
 	proxy := c.FindProxy(msg.ProxyName)
 	if proxy == nil {
@@ -134,8 +134,8 @@ func (c *Client) WorkConn(msg protocol.NewWorkConnMsg) {
 		return
 	}
 
-	payload := protocol.StartWorkConnMsg{WorkID: msg.WorkID}
-	if err := protocol.WriteMsg(workTLS, protocol.MsgStartWorkConn, payload); err != nil {
+	payload := sharedprotocol.StartWorkConnMsg{WorkID: msg.WorkID}
+	if err := sharedprotocol.WriteMsg(workTLS, sharedprotocol.MsgStartWorkConn, payload); err != nil {
 		c.Logger.Error(fmt.Sprintf("Failed to send StartWorkConn: %v", err))
 		_ = workTLS.Close()
 		return

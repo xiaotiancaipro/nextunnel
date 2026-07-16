@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
+	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +19,7 @@ func NewProxyRegistry(db *gorm.DB) *ProxyRegistry {
 	return &ProxyRegistry{db: db}
 }
 
-func (r *ProxyRegistry) SyncFromApply(clientId uuid.UUID, desired map[string]protocol.ProxiesApplyMsgItem) error {
+func (r *ProxyRegistry) SyncFromApply(clientId uuid.UUID, desired map[string]sharedprotocol.ProxiesApplyMsgItem) error {
 	var existing []models.Proxy
 	if err := r.db.Where("client_id = ?", clientId).Find(&existing).Error; err != nil {
 		return fmt.Errorf("failed to query proxies: %w", err)
@@ -51,7 +51,7 @@ func (r *ProxyRegistry) SetAllOffline(clientId uuid.UUID) error {
 	return nil
 }
 
-func (r *ProxyRegistry) upsert(clientId uuid.UUID, name string, proxy protocol.ProxiesApplyMsgItem) error {
+func (r *ProxyRegistry) upsert(clientId uuid.UUID, name string, proxy sharedprotocol.ProxiesApplyMsgItem) error {
 	var row models.Proxy
 	err := r.db.Where("client_id = ? AND name = ?", clientId, name).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

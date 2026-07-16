@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/client"
 	"github.com/xiaotiancaipro/nextunnel/internal/client/cli"
-	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 func New(version string) *cobra.Command {
@@ -22,6 +22,6 @@ func New(version string) *cobra.Command {
 func run(cmd *cobra.Command, _ []string) {
 	configs := cli.LoadClientConfig(cmd)
 	app, err := client.NewApp(configs)
-	shared.ExitOnErr(cmd, err)
-	shared.RunApp(cmd, app)
+	sharedcli.ExitOnErr(cmd, err)
+	sharedcli.RunApp(cmd, app)
 }
