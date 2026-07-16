@@ -1,3 +1,13 @@
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web-builder
+
+WORKDIR /src/web/server
+
+COPY web/server/package.json web/server/package-lock.json ./
+RUN npm ci
+
+COPY web/server/ ./
+RUN npm run build
+
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
 WORKDIR /src
@@ -8,6 +18,7 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
+COPY --from=web-builder /src/internal/server/webui/dist ./internal/server/controllers/dist
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64

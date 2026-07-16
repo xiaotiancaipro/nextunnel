@@ -69,26 +69,26 @@ export async function deleteClient(name: string): Promise<void> {
 }
 
 export async function listClientCerts(name: string): Promise<ClientCert[]> {
-    const data = await request<{ items: ClientCert[] }>(`/clients/${encodeURIComponent(name)}/certs`)
+    const data = await request<{ items: ClientCert[] }>(`/clients/${encodeURIComponent(name)}/sharedcerts`)
     return data.items
 }
 
 export async function createClientCert(name: string, payload: CreateClientCertRequest = {}): Promise<ClientCert> {
-    return request<ClientCert>(`/clients/${encodeURIComponent(name)}/certs`, {
+    return request<ClientCert>(`/clients/${encodeURIComponent(name)}/sharedcerts`, {
         method: 'POST',
         body: JSON.stringify(payload),
     })
 }
 
 export async function deleteClientCert(name: string, certId: string): Promise<void> {
-    await request(`/clients/${encodeURIComponent(name)}/certs/${encodeURIComponent(certId)}`, {
+    await request(`/clients/${encodeURIComponent(name)}/sharedcerts/${encodeURIComponent(certId)}`, {
         method: 'DELETE',
     })
 }
 
 export async function downloadClientCert(name: string, certId: string): Promise<Blob> {
     const response = await fetch(
-        `${API_BASE}/clients/${encodeURIComponent(name)}/certs/${encodeURIComponent(certId)}/download`,
+        `${API_BASE}/clients/${encodeURIComponent(name)}/sharedcerts/${encodeURIComponent(certId)}/download`,
     )
     if (!response.ok) {
         let message = response.statusText

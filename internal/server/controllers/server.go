@@ -38,6 +38,12 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
+	uiHandler, err := Handler()
+	if err != nil {
+		return fmt.Errorf("initialize web ui: %w", err)
+	}
+	mux.Handle("/", uiHandler)
+
 	addr := fmt.Sprintf("0.0.0.0:%d", s.cfg.Web.PortOrDefault())
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -45,7 +51,7 @@ func (s *Server) Start() error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	s.logger.Info("Web management API listening on " + addr)
+	s.logger.Info("Web management listening on " + addr)
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
