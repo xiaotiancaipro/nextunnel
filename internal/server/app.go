@@ -24,7 +24,7 @@ type App struct {
 	config        *configs.Configs
 	logger        *zap.Logger
 	db            *gorm.DB
-	ipLocator     clients.IPLocator
+	ipLocation    *clients.IPLocation
 	tlsService    *services.Tls
 	serverService *services.Server
 	webServer     *controllers.Server
@@ -47,15 +47,9 @@ func NewApp(config *configs.Configs, version string) (*App, error) {
 	}
 	logger.Info("initialize database successfully")
 
-	ipLocator, err := clients.NewIPLocator(config.IPLocation, logger)
+	ipLocation, err := clients.NewIPLocation(config.IPLocation.APIKey, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ip location: %v", err)
-	}
-	switch config.IPLocation.Type {
-	case "api":
-		logger.Info("IP location provider: api")
-	default:
-		logger.Info("IP location provider: geoip, database=" + config.IPLocation.GeoIPDbPath)
 	}
 
 	app := App{
@@ -64,8 +58,8 @@ func NewApp(config *configs.Configs, version string) (*App, error) {
 		logger:        logger,
 		db:            db,
 		tlsService:    services.NewTls(config.Cert, logger),
-		serverService: services.NewServer(config.Server, logger, db, ipLocator),
-		ipLocator:     ipLocator,
+		serverService: services.NewServer(config.Server, logger, db, ipLocation),
+		ipLocation:    ipLocation,
 		stopCh:        make(chan struct{}),
 	}
 
@@ -138,8 +132,8 @@ func (a *App) Stop() {
 			defer cancel()
 			_ = a.webServer.Stop(ctx)
 		}
-		if a.ipLocator != nil {
-			_ = a.ipLocator.Close()
+		if a.ipLocation != nil {
+			_ = a.ipLocation.Close()
 		}
 		a.logger.Info("Shutting down gracefully")
 	})

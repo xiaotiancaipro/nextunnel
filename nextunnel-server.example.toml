@@ -14,10 +14,7 @@ db = "nextunnel"
 sslmode = "disable"
 
 [ip_location]
-type = "api" # "api" or "geoip"
 api_key = ""
-geoip_db_path = "geoip/GeoLite2-City.mmdb"
-geoip_locales = ["en"]
 
 [logs]
 file = "logs/nextunnel-server.log"

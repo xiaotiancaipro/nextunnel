@@ -16,10 +16,16 @@ import (
 
 const ipLocationAPIURL = "https://api.xiaotiancai.tech/api/v1/ip"
 
-type IPLocationAPI struct {
+type IPLocation struct {
 	apiKey string
 	client *http.Client
 	logger *zap.Logger
+}
+
+type IPLocationResult struct {
+	Country string
+	Region  string
+	City    string
 }
 
 type ipLocationAPIRequest struct {
@@ -38,23 +44,19 @@ type ipLocationAPIResponse struct {
 	} `json:"data"`
 }
 
-func NewIPLocationAPI(apiKey string, logger *zap.Logger) (*IPLocationAPI, error) {
+func NewIPLocation(apiKey string, logger *zap.Logger) (*IPLocation, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return nil, fmt.Errorf("ip_location api_key is required when type is api")
 	}
-	return &IPLocationAPI{
+	return &IPLocation{
 		apiKey: apiKey,
 		client: &http.Client{Timeout: 5 * time.Second},
 		logger: logger,
 	}, nil
 }
 
-func (a *IPLocationAPI) Close() error {
-	return nil
-}
-
-func (a *IPLocationAPI) Lookup(ipStr string) IPLocationResult {
+func (a *IPLocation) Lookup(ipStr string) IPLocationResult {
 	ip := net.ParseIP(strings.TrimSpace(ipStr))
 	if ip == nil {
 		return IPLocationResult{}
@@ -105,4 +107,8 @@ func (a *IPLocationAPI) Lookup(ipStr string) IPLocationResult {
 		Region:  parsed.Data.Location.Province,
 		City:    parsed.Data.Location.City,
 	}
+}
+
+func (a *IPLocation) Close() error {
+	return nil
 }

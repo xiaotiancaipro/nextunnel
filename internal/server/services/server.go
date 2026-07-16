@@ -29,7 +29,7 @@ type Server struct {
 	config      *configs.Server
 	logger      *zap.Logger
 	db          *gorm.DB
-	ipLocator   clients.IPLocator
+	ipLocation  *clients.IPLocation
 	pendingMu   sync.Mutex
 	pendingWork map[string]*pendingWorkItem
 	ruleCacheMu sync.RWMutex
@@ -42,12 +42,12 @@ type pendingWorkItem struct {
 	certFP   [sha256.Size]byte
 }
 
-func NewServer(config *configs.Server, logger *zap.Logger, db *gorm.DB, ipLocator clients.IPLocator) *Server {
+func NewServer(config *configs.Server, logger *zap.Logger, db *gorm.DB, ipLocator *clients.IPLocation) *Server {
 	return &Server{
-		config:    config,
-		logger:    logger,
-		db:        db,
-		ipLocator: ipLocator,
+		config:     config,
+		logger:     logger,
+		db:         db,
+		ipLocation: ipLocator,
 	}
 }
 
@@ -292,7 +292,7 @@ func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, s
 		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
 	}
 
-	geo := s.ipLocator.Lookup(*ipP)
+	geo := s.ipLocation.Lookup(*ipP)
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
 	isLocal := sharednetwork.IsLocalIP(*ipP)
 
