@@ -1,10 +1,18 @@
-package ip_filter
+package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/cli/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+)
+
+const (
+	actionAllow = "allowed"
+	actionBlock = "blocked"
 )
 
 var ipFilterFields = []ipFilterField{
@@ -23,25 +31,7 @@ type ipFilterField struct {
 	needsValue bool
 }
 
-func NewAddCommand() *cobra.Command {
-	c := &cobra.Command{
-		Use:   "add [--allow | --block] [--ip | --country | --region | --city | --all | --local | --remote] [value]",
-		Short: "add IP filtering rules",
-		Args:  cobra.MaximumNArgs(1),
-		Run:   addRun,
-	}
-	setFlags(c)
-	return c
-}
-
-func addRun(cmd *cobra.Command, args []string) {
-	cfg := utils.LoadServerConfig(cmd)
-	status, field, value, err := parseIPFilterFlags(cmd, args)
-	utils.ExitOnErr(cmd, err)
-	utils.ExitOnErr(cmd, utils.UpsertIPFilter(cmd, cfg, status, field, value))
-}
-
-func setFlags(cmd *cobra.Command) {
+func SetFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("allow", false, "allow matching traffic")
 	cmd.Flags().Bool("block", false, "block matching traffic")
 	cmd.Flags().Bool("ip", false, "match by IP address (requires value)")
@@ -53,7 +43,7 @@ func setFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("remote", false, "match remote network traffic")
 }
 
-func parseIPFilterFlags(cmd *cobra.Command, posArgs []string) (status int16, field, value string, err error) {
+func ParseIPFilterFlags(cmd *cobra.Command, posArgs []string) (status int16, field, value string, err error) {
 
 	allow, _ := cmd.Flags().GetBool("allow")
 	block, _ := cmd.Flags().GetBool("block")
@@ -95,4 +85,70 @@ func parseIPFilterFlags(cmd *cobra.Command, posArgs []string) (status int16, fie
 
 	return status, field, value, nil
 
+}
+
+func BuildRuleTarget(service *services.AccessRule, field, value string) (services.RuleTarget, string, []any, error) {
+	if isCategoryField(field) {
+		target, err := service.NewCategoryRuleTarget(field)
+		if err != nil {
+			return services.RuleTarget{}, "", nil, err
+		}
+		return target, "%s category %s", []any{field}, nil
+	}
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return services.RuleTarget{}, "", nil, fmt.Errorf("value is required for field %q", field)
+	}
+
+	if field == "ip" {
+		ip, err := utils.NormalizeIP(value)
+		if err != nil {
+			return services.RuleTarget{}, "", nil, err
+		}
+		value = *ip
+	}
+
+	target, err := service.NewRuleTarget(field, value)
+	if err != nil {
+		return services.RuleTarget{}, "", nil, err
+	}
+	return target, "%s %s %s", []any{field, value}, nil
+}
+
+func RuleAction(status int16) string {
+	if status == 1 {
+		return actionAllow
+	}
+	return actionBlock
+}
+
+func FormatAccessRule(rule models.AccessRule) string {
+	action := actionBlock
+	if rule.Status == 1 {
+		action = actionAllow
+	}
+	switch {
+	case rule.Category != nil:
+		return fmt.Sprintf("%s category %s", action, *rule.Category)
+	case rule.Ip != nil:
+		return fmt.Sprintf("%s ip %s", action, *rule.Ip)
+	case rule.Country != nil:
+		return fmt.Sprintf("%s country %s", action, *rule.Country)
+	case rule.Region != nil:
+		return fmt.Sprintf("%s region %s", action, *rule.Region)
+	case rule.City != nil:
+		return fmt.Sprintf("%s city %s", action, *rule.City)
+	default:
+		return action
+	}
+}
+
+func isCategoryField(field string) bool {
+	switch field {
+	case "ALL", "LOCAL", "REMOTE":
+		return true
+	default:
+		return false
+	}
 }

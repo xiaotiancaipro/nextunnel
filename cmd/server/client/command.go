@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/cli/client/cert"
+	"github.com/xiaotiancaipro/nextunnel/cmd/server/client/cert"
 )
 
 func NewCommand() *cobra.Command {
