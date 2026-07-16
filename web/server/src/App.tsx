@@ -1,0 +1,124 @@
+import {useEffect, useMemo, useState} from 'react'
+import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
+import {CloudServerOutlined, SafetyOutlined} from '@ant-design/icons'
+import {Flex, Layout, Menu, theme, Typography} from 'antd'
+import {fetchVersion} from './api'
+import LanguageSwitcher from './components/LanguageSwitcher'
+import {useI18n} from './i18n'
+import ClientsPage from './pages/ClientsPage'
+import IpFilterPage from './pages/IpFilterPage'
+import './styles/layout.css'
+
+const SIDER_WIDTH = 220
+
+function AppLayout() {
+    const location = useLocation()
+    const navigate = useNavigate()
+    const {t} = useI18n()
+    const [version, setVersion] = useState<string>()
+    const [versionLoading, setVersionLoading] = useState(true)
+    const {token: themeToken} = theme.useToken()
+
+    const {Header, Sider, Content} = Layout
+
+    useEffect(() => {
+        void fetchVersion()
+            .then(setVersion)
+            .catch(() => setVersion(undefined))
+            .finally(() => setVersionLoading(false))
+    }, [])
+
+    const selectedKey = location.pathname.startsWith('/ip-filters') ? 'ip-filters' : 'clients'
+    const pageTitle = selectedKey === 'ip-filters' ? t('ipFilters.title') : t('clients.title')
+    const apiOnline = Boolean(version)
+
+    const menuItems = useMemo(
+        () => [
+            {
+                key: 'clients',
+                icon: <CloudServerOutlined/>,
+                label: t('nav.clients'),
+            },
+            {
+                key: 'ip-filters',
+                icon: <SafetyOutlined/>,
+                label: t('nav.ipFilters'),
+            },
+        ],
+        [t],
+    )
+
+    return (
+        <Layout className="console-shell">
+            <Header className="console-top-header">
+                <Flex align="center" gap={10} className="console-top-brand">
+                    <img src="/favicon.svg" alt="" className="console-sidebar-brand-icon"/>
+                    <span className="console-sidebar-brand-text">Nextunnel Server</span>
+                </Flex>
+                <Flex align="center" gap={12}>
+                    <LanguageSwitcher/>
+                </Flex>
+            </Header>
+
+            <Layout className="console-body">
+                <Sider
+                    width={SIDER_WIDTH}
+                    breakpoint="lg"
+                    collapsedWidth={64}
+                    theme="light"
+                    className="console-sider"
+                    style={{borderRight: `1px solid ${themeToken.colorBorderSecondary}`}}
+                >
+                    <div className="console-sider-inner">
+                        <Menu
+                            mode="inline"
+                            inlineIndent={12}
+                            selectedKeys={[selectedKey]}
+                            items={menuItems}
+                            onClick={({key}) => navigate(key === 'ip-filters' ? '/ip-filters' : '/clients')}
+                            className="console-sider-menu"
+                        />
+                        <Flex align="center" justify="center" className="console-sider-status">
+                            <div className="console-status">
+                                <span
+                                    className={`console-status__dot${apiOnline ? ' console-status__dot--online' : ''}`}/>
+                                <span className="console-status__text">
+                                    {versionLoading
+                                        ? t('status.connecting')
+                                        : apiOnline
+                                            ? t('status.apiOnline', {version: version ?? ''})
+                                            : t('status.apiOffline')}
+                                </span>
+                            </div>
+                        </Flex>
+                    </div>
+                </Sider>
+
+                <Content className="console-content">
+                    <div className="page-enter console-page-wrapper">
+                        <header className="console-page-header">
+                            <Typography.Title level={4} className="console-page-title">
+                                {pageTitle}
+                            </Typography.Title>
+                        </header>
+                        <div className="console-page-body">
+                            <Routes>
+                                <Route path="/" element={<Navigate to="/clients" replace/>}/>
+                                <Route path="/clients" element={<ClientsPage/>}/>
+                                <Route path="/ip-filters" element={<IpFilterPage/>}/>
+                            </Routes>
+                        </div>
+                    </div>
+                </Content>
+            </Layout>
+        </Layout>
+    )
+}
+
+export default function App() {
+    return (
+        <BrowserRouter>
+            <AppLayout/>
+        </BrowserRouter>
+    )
+}
