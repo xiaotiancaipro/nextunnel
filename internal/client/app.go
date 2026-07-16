@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
-	services2 "github.com/xiaotiancaipro/nextunnel/internal/client/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/services"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
@@ -19,9 +19,9 @@ type App struct {
 	stopOnce      sync.Once
 	ctrlMu        sync.Mutex
 	ctrlConn      net.Conn
-	tlsService    *services2.Tls
-	serverService *services2.Server
-	clientService *services2.Client
+	tlsService    *services.Tls
+	serverService *services.Server
+	clientService *services.Client
 }
 
 type msgChan struct {
@@ -37,15 +37,15 @@ func NewApp(config *configs.Configs) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize logging: %v", err)
 	}
 
-	tls := services2.Tls{
+	tls := services.Tls{
 		Config: config.Cert,
 		Logger: logger,
 	}
-	server := services2.Server{
+	server := services.Server{
 		Config: config.Server,
 		Logger: logger,
 	}
-	client := services2.Client{
+	client := services.Client{
 		Config:  config.Client,
 		Proxies: config.Proxies,
 		Logger:  logger,

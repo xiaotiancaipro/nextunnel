@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
-	clients2 "github.com/xiaotiancaipro/nextunnel/internal/server/clients"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/controllers"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
@@ -23,10 +24,10 @@ type App struct {
 	config        *configs.Configs
 	logger        *zap.Logger
 	db            *gorm.DB
-	ipLocator     clients2.IPLocator
-	tlsService    *services2.Tls
-	serverService *services2.Server
-	webServer     *controller.Server
+	ipLocator     clients.IPLocator
+	tlsService    *services.Tls
+	serverService *services.Server
+	webServer     *controllers.Server
 	stopCh        chan struct{}
 	stopOnce      sync.Once
 	listenerMu    sync.Mutex
@@ -40,13 +41,13 @@ func NewApp(config *configs.Configs, version string) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize logging: %v", err)
 	}
 
-	db, err := clients2.NewDB(config.Database, logger)
+	db, err := clients.NewDB(config.Database, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}
 	logger.Info("initialize database successfully")
 
-	ipLocator, err := clients2.NewIPLocator(config.IPLocation, logger)
+	ipLocator, err := clients.NewIPLocator(config.IPLocation, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ip location: %v", err)
 	}
@@ -62,14 +63,14 @@ func NewApp(config *configs.Configs, version string) (*App, error) {
 		config:        config,
 		logger:        logger,
 		db:            db,
-		tlsService:    services2.NewTls(config.Cert, logger),
-		serverService: services2.NewServer(config.Server, logger, db, ipLocator),
+		tlsService:    services.NewTls(config.Cert, logger),
+		serverService: services.NewServer(config.Server, logger, db, ipLocator),
 		ipLocator:     ipLocator,
 		stopCh:        make(chan struct{}),
 	}
 
 	if config.Web.IsEnabled() {
-		app.webServer = controller.NewServer(version, config, db, logger)
+		app.webServer = controllers.NewServer(version, config, db, logger)
 	}
 
 	return &app, nil
@@ -196,7 +197,7 @@ func (a *App) acceptedConn(conn net.Conn) {
 					return
 				}
 			case protocol.MsgHeartbeat:
-				if err := services2.WriteCtrlMsg(&ctrlWriteMu, conn, protocol.MsgHeartbeatResp, protocol.HeartbeatRespMsg{}); err != nil {
+				if err := services.WriteCtrlMsg(&ctrlWriteMu, conn, protocol.MsgHeartbeatResp, protocol.HeartbeatRespMsg{}); err != nil {
 					a.logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
 					return
 				}
