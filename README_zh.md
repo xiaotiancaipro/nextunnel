@@ -2,66 +2,93 @@
 
 <h1 style="border-bottom: none"><b>Nextunnel</b></h1>
 
-**下一代内网穿透工具**
+**面向内网服务的安全反向 TCP 隧道**
 
-反向隧道 · 出站即连 · 传输层 mTLS 原生内建 · Go 单体二进制
+出站即连 · 默认 mTLS · PostgreSQL 控制面 · Go 单体二进制
 
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
-[![License](https://img.shields.io/badge/license-Apache%20License%20Version%202.0-blue)](./LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%20License%202.0-blue)](./LICENSE)
 
 <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
 <a href="./README_zh.md"><img alt="简体中文文件" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
-
-**[nextunnel-server](https://github.com/xiaotiancaipro/nextunnel-server)** ·
-**[nextunnel-client](https://github.com/xiaotiancaipro/nextunnel-client)**
 
 </div>
 
 ## 什么是 Nextunnel
 
-**Nextunnel** 是一套专注于 出站反向隧道 的组件：**服务端（nextunnel-server）** 暴露在公网的端口接收连接；
-**客户端（nextunnel-client）** 从内网出站建立 TLS 1.2+ 控制连接，注册多条 TCP 转发规则。控制面和数据面均采用 TLS
-；服务端 RequireAndVerifyClientCert，仅以同一 CA 下发的客户端证书作为接入凭证——这是相对许多「单 token + 可选
-TLS」方案的差异点。
+Nextunnel 是一套用于把内网 TCP 服务暴露到公网服务端的反向隧道组件。`nextunnel-client` 运行在内网侧并主动连接 `nextunnel-server`；服务端监听公网代理端口，并把被允许的连接通过 mTLS 控制/工作通道转发回客户端。
 
-## 核心理念与特性
+与只依赖共享 token 的穿透方案不同，Nextunnel 把客户端证书作为主要接入边界。服务端持有 CA，通过 `RequireAndVerifyClientCert` 校验客户端证书，并把运行状态存储在 PostgreSQL 中。
 
-1. mTLS 即接入控制：接入不仅依赖「知道地址与端口」，还依赖有效客户端证书；服务端可签发 `client.crt` / `client.key`，与
-   `ca.crt` 信任链 绑定，更接近设备 / workload 入网模型。
-2. 面向自动化的运维体验：服务端 `tls.dir` 四件套全无时可一键生成 CA + 服务端证书；支持 `--generate-certs`
-   为边缘节点批量签发客户端证书（存在则拒绝覆盖）。
-3. 健壮性：控制连接断开后客户端 2s～30s 指数退避自动重连；服务端 `ip_blacklist` 可作粗粒度来源过滤。
+```mermaid
+flowchart LR
+    User[用户] -->|TCP| Port[公网 remote_port]
+    Port --> Server[nextunnel-server]
+    Server <-->|mTLS 控制/工作通道| Client[nextunnel-client]
+    Client --> Service[内网 TCP 服务]
+    Server --> PG[(PostgreSQL)]
+```
 
-## 与其他开源项目的对比
+## 功能特性
 
-| 能力                             | **Nextunnel** | **frp**（[fatedier/frp](https://github.com/fatedier/frp)） | **nps**（[ehang-io/nps](https://github.com/ehang-io/nps)） |
-|--------------------------------|:-------------:|:--------------------------------------------------------:|:--------------------------------------------------------:|
-| **TCP 反向穿透**                   |       ✅       |                            ✅                             |                            ✅                             |
-| **UDP 穿透**                     |      🔜       |                            ✅                             |                            ✅                             |
-| **HTTP / HTTPS 路由**            |      🔜       |                            ✅                             |                            ✅                             |
-| **控制与数据链路默认全程 TLS**            |       ✅       |                            △                             |                            △                             |
-| **接入侧默认 mTLS（校验客户端证书）**        |       ✅       |                            ❌                             |                            ❌                             |
-| **内置 CA、一键 bootstrap、签发客户端证书** |       ✅       |                            ❌                             |                            ❌                             |
-| **多用户登录体系**                    |      🔜       |                            △                             |                            ✅                             |
-| **用量统计**                       |      🔜       |                            △                             |                            ✅                             |
-| **Web 管理 / 控制页面**              |      🔜       |                            △                             |                            ✅                             |
-| **证书策略增强（吊销窗口）**               |      🔜       |                            △                             |                            △                             |
+- **TCP 反向代理**：通过服务端端口暴露 SSH、数据库、开发服务等内网 TCP 服务。
+- **mTLS 优先的接入控制**：服务端可初始化 CA/服务端证书，并校验每个客户端证书。
+- **客户端接入管理**：注册客户端、分配可选远程端口范围、创建/查看/下载/删除客户端证书。
+- **访问控制**：按 IP、国家、省/区域、城市、本地流量、远程流量或全部流量放行/阻断。
+- **连接记录**：代理状态和访问日志写入 PostgreSQL。
+- **客户端自恢复**：断线后按 2s 到 30s 指数退避自动重连，并通过心跳维护控制通道。
+- **可选管理 API**：通过 `[web].enabled = true` 开启服务端 HTTP API。
 
-✅ 已具备
+## 快速开始
 
-❌ 当前不具备
+```bash
+# 构建服务端和客户端。
+mkdir -p bin
+make build
 
-△ 视配置或生态、非开箱默认
+# 或显式构建。
+mkdir -p bin
+go build -o bin/nextunnel-server ./cmd/server
+go build -o bin/nextunnel-client ./cmd/client
+```
 
-🔜 未来支持
+1. 启动 PostgreSQL 和 `nextunnel-server`。
+2. 使用 `nextunnel-server client create <name>` 创建客户端。
+3. 使用 `nextunnel-server client cert create/list/download` 创建并下载客户端证书。
+4. 将 `ca.crt`、`client.crt`、`client.key` 复制到客户端主机。
+5. 配置 `nextunnel-client.toml` 并启动 `nextunnel-client`。
 
-## 未来特性
+完整命令与配置见组件文档：
 
-1. **代理类型**：UDP、HTTP/HTTPS 等。
-2. **认证与密钥**：加强签发证书逻辑；支持证书有效/吊销时间与校验策略等。
-3. **多用户**：多用户登录与统计 / 租户维度的用量与控制。
-4. **WEB 页面**：服务端与客户端的 Web 控制台。
+- [服务端指南](./docs/zh/server.md)
+- [客户端指南](./docs/zh/client.md)
+- [文档索引](./docs/README.md)
 
-## 贡献
+## 仓库结构
 
-欢迎在对应子仓库提交 Issue / PR，功能广度与安全默认策略一起讨论。
+```text
+cmd/server/       nextunnel-server CLI 入口
+cmd/client/       nextunnel-client CLI 入口
+internal/server/  服务端应用、服务、控制器和持久化逻辑
+internal/client/  客户端应用和转发逻辑
+internal/shared/  共享协议、证书、日志和配置工具
+docker/server/    服务端与 PostgreSQL Compose 文件
+docker/client/    客户端 Compose 文件
+docs/             中英文详细文档
+```
+
+## 配置示例
+
+- [`nextunnel-server.example.toml`](./nextunnel-server.example.toml)
+- [`nextunnel-client.example.toml`](./nextunnel-client.example.toml)
+
+## 未来规划
+
+- 更多代理类型，包括 UDP 与 HTTP/HTTPS 路由。
+- 更完整的证书策略与吊销工作流。
+- 面向用户和租户的管理能力。
+- 基于管理 API 的 Web 控制台。
+
+## 许可证
+
+Nextunnel 采用 [Apache License 2.0](./LICENSE)。
