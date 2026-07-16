@@ -1,8 +1,8 @@
-package server
+package root
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/cmd/server/args"
+	"github.com/xiaotiancaipro/nextunnel/cmd/server/root/args"
 	"github.com/xiaotiancaipro/nextunnel/cmd/shared"
 )
 

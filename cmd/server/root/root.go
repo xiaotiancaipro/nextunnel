@@ -1,4 +1,4 @@
-package server
+package root
 
 import (
 	"os"
@@ -10,12 +10,13 @@ import (
 
 type Root struct{}
 
-func (r *Root) New() *cobra.Command {
+func (r *Root) New(version string) *cobra.Command {
 	c := &cobra.Command{
-		Use:   "server",
-		Short: "server",
-		Args:  cobra.ExactArgs(0),
-		Run:   r.run,
+		Use:     "nextunnel-server",
+		Short:   "nextunnel-server",
+		Version: version,
+		Args:    cobra.ExactArgs(0),
+		Run:     r.run,
 	}
 	c.PersistentFlags().String("config", shared.ServerDefaultConfigPath, "configuration file path (overrides $"+shared.ServerEnvConfigPath+")")
 	c.AddCommand(new(client).new())

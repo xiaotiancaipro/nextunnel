@@ -1,4 +1,4 @@
-package client
+package root
 
 import (
 	"os"
@@ -10,11 +10,13 @@ import (
 
 type Root struct{}
 
-func (r *Root) New() *cobra.Command {
+func (r *Root) New(version string) *cobra.Command {
 	c := &cobra.Command{
-		Short: "nextunnel-client",
-		Args:  cobra.ExactArgs(0),
-		Run:   r.run,
+		Use:     "nextunnel-client",
+		Short:   "nextunnel-client",
+		Version: version,
+		Args:    cobra.ExactArgs(0),
+		Run:     r.run,
 	}
 	c.Flags().StringP("config", "c", shared.ClientDefaultConfigPath, "Configuration File Path")
 	return c
