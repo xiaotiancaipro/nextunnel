@@ -1,0 +1,14 @@
+services:
+  nextunnel-client:
+    build:
+      context: ../..
+      dockerfile: docker/client/Dockerfile
+      args:
+        VERSION: ${VERSION:-v0.0.0}
+    container_name: nextunnel-client
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./volumes/nextunnel/config/nextunnel-client.toml:/etc/nextunnel/nextunnel-client.toml
+      - ./volumes/nextunnel/certs:/etc/nextunnel/certs
+      - ./volumes/nextunnel/logs:/var/log/nextunnel

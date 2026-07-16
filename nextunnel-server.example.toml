@@ -3,7 +3,7 @@ port = 25930
 
 [cert]
 host = "127.0.0.1"
-dir = "certs"
+dir = "certs" # If using Docker to start, this parameter must be in /etc/nextunnel/certs
 
 [database]
 host = "127.0.0.1"
@@ -17,7 +17,7 @@ sslmode = "disable"
 api_key = ""
 
 [logs]
-file = "logs/nextunnel-server.log"
+file = "logs/nextunnel-server.log" # If using Docker to start, this parameter must be in /var/log/nextunnel/nextunnel-server.log
 level = "info"
 maxSize = "100MB"
 maxBackups = 30

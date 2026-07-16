@@ -1,0 +1,17 @@
+.git/
+.idea/
+.vscode/
+bin/
+config/
+build/
+test/
+logs/
+data/
+.DS_Store
+*.toml
+*.mmdb
+*.log
+*.pid
+.env
+docker/**/docker-compose*.yaml
+docker/**/*.env
