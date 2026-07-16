@@ -1,9 +1,9 @@
 package main
 
-import "github.com/xiaotiancaipro/nextunnel/cmd/server/root"
+import "github.com/xiaotiancaipro/nextunnel/internal/server/cli"
 
 var version = "v0.0.0"
 
 func main() {
-	_ = new(root.Root).New(version)
+	_ = cli.New(version).Execute()
 }

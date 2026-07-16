@@ -1,4 +1,4 @@
-package shared
+package utils
 
 import (
 	"os"
@@ -27,11 +27,24 @@ type ConfigSpec struct {
 type configLoader[T any] func(path string) (*T, error)
 
 func LoadClientConfig(cmd *cobra.Command) *clientconfigs.Configs {
-	return loadConfig(cmd, ConfigSpec{DefaultPath: ClientDefaultConfigPath}, clientconfigs.NewConfigs, "Failed to load client config")
+	return loadConfig(
+		cmd,
+		ConfigSpec{DefaultPath: ClientDefaultConfigPath},
+		clientconfigs.NewConfigs,
+		"Failed to load client config",
+	)
 }
 
 func LoadServerConfig(cmd *cobra.Command) *serverconfigs.Configs {
-	return loadConfig(cmd, ConfigSpec{DefaultPath: ServerDefaultConfigPath, EnvVar: ServerEnvConfigPath}, serverconfigs.NewConfigs, "Failed to load config")
+	return loadConfig(
+		cmd,
+		ConfigSpec{
+			DefaultPath: ServerDefaultConfigPath,
+			EnvVar:      ServerEnvConfigPath,
+		},
+		serverconfigs.NewConfigs,
+		"Failed to load config",
+	)
 }
 
 func loadConfig[T any](cmd *cobra.Command, spec ConfigSpec, loader configLoader[T], failMsg string) *T {

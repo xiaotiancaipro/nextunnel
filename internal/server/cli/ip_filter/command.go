@@ -1,11 +1,10 @@
-package root
+package ip_filter
 
 import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaotiancaipro/nextunnel/cmd/server/root/args"
-	"github.com/xiaotiancaipro/nextunnel/cmd/shared"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli/utils"
 )
 
 var ipFilterFields = []ipFilterField{
@@ -18,7 +17,7 @@ var ipFilterFields = []ipFilterField{
 	{flag: "remote", field: "REMOTE", needsValue: false},
 }
 
-type ipFilter struct{}
+type IpFilter struct{}
 
 type ipFilterField struct {
 	flag       string
@@ -26,7 +25,7 @@ type ipFilterField struct {
 	needsValue bool
 }
 
-func (f *ipFilter) new() *cobra.Command {
+func (f *IpFilter) NewCommand() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "ip-filter",
 		Short: "manage IP filtering rules",
@@ -37,43 +36,43 @@ func (f *ipFilter) new() *cobra.Command {
 	return c
 }
 
-func (f *ipFilter) newIPFilterList() *cobra.Command {
+func (f *IpFilter) newIPFilterList() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "list current IP filtering rules",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			cfg := shared.LoadServerConfig(cmd)
-			shared.ExitOnErr(cmd, args.ListIPFilters(cmd, cfg))
+			cfg := utils.LoadServerConfig(cmd)
+			utils.ExitOnErr(cmd, utils.ListIPFilters(cmd, cfg))
 		},
 	}
 }
 
-func (f *ipFilter) newIPFilterAdd() *cobra.Command {
+func (f *IpFilter) newIPFilterAdd() *cobra.Command {
 	return f.newIPFilterMutate("add", "add IP filtering rules", false)
 }
 
-func (f *ipFilter) newIPFilterDelete() *cobra.Command {
+func (f *IpFilter) newIPFilterDelete() *cobra.Command {
 	return f.newIPFilterMutate("delete", "delete IP filtering rules", true)
 }
 
-func (f *ipFilter) newIPFilterMutate(use, short string, delete bool) *cobra.Command {
+func (f *IpFilter) newIPFilterMutate(use, short string, delete bool) *cobra.Command {
 	c := &cobra.Command{
 		Use:   use + " [--allow | --block] [--ip | --country | --region | --city | --all | --local | --remote] [value]",
 		Short: short,
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, posArgs []string) {
-			cfg := shared.LoadServerConfig(cmd)
+			cfg := utils.LoadServerConfig(cmd)
 			status, field, value, err := f.parseIPFilterFlags(cmd, posArgs)
 			if err != nil {
-				shared.ExitOnErr(cmd, err)
+				utils.ExitOnErr(cmd, err)
 				return
 			}
 			if delete {
-				shared.ExitOnErr(cmd, args.DeleteIPFilter(cmd, cfg, status, field, value))
+				utils.ExitOnErr(cmd, utils.DeleteIPFilter(cmd, cfg, status, field, value))
 				return
 			}
-			shared.ExitOnErr(cmd, args.UpsertIPFilter(cmd, cfg, status, field, value))
+			utils.ExitOnErr(cmd, utils.UpsertIPFilter(cmd, cfg, status, field, value))
 		},
 	}
 	c.Flags().Bool("allow", false, "allow matching traffic")
@@ -88,7 +87,7 @@ func (f *ipFilter) newIPFilterMutate(use, short string, delete bool) *cobra.Comm
 	return c
 }
 
-func (f *ipFilter) parseIPFilterFlags(cmd *cobra.Command, posArgs []string) (status int16, field, value string, err error) {
+func (f *IpFilter) parseIPFilterFlags(cmd *cobra.Command, posArgs []string) (status int16, field, value string, err error) {
 
 	allow, _ := cmd.Flags().GetBool("allow")
 	block, _ := cmd.Flags().GetBool("block")
