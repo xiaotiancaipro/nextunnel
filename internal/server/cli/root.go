@@ -21,7 +21,7 @@ func New(version string) *cobra.Command {
 	}
 	c.PersistentFlags().String("config", utils.ServerDefaultConfigPath, "configuration file path (overrides $"+utils.ServerEnvConfigPath+")")
 	c.AddCommand(client.NewCommand())
-	c.AddCommand(new(ip_filter.IpFilter).NewCommand())
+	c.AddCommand(ip_filter.NewCommand())
 	return c
 }
 
