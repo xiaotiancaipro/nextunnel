@@ -5,21 +5,18 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
+	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
-type Logs = sharedconfigs.Logs
-type Timezone = sharedconfigs.Timezone
-
 type Configs struct {
-	Server     *Server     `toml:"server"`
-	Cert       *Cert       `toml:"cert"`
-	Database   *Database   `toml:"database"`
-	IPLocation *IPLocation `toml:"ip_location"`
-	Logs       *Logs       `toml:"logs"`
-	Timezone   *Timezone   `toml:"timezone"`
-	Web        *Web        `toml:"web"`
+	Server     *Server          `toml:"server"`
+	Cert       *Cert            `toml:"cert"`
+	Database   *Database        `toml:"database"`
+	IPLocation *IPLocation      `toml:"ip_location"`
+	Logs       *shared.Logs     `toml:"logs"`
+	Timezone   *shared.Timezone `toml:"timezone"`
+	Web        *Web             `toml:"web"`
 }
 
 func NewConfigs(file string) (*Configs, error) {
@@ -28,15 +25,15 @@ func NewConfigs(file string) (*Configs, error) {
 		return nil, err
 	}
 
-	var configs Configs
-	if _, err := toml.DecodeFile(file, &configs); err != nil {
+	var cfg Configs
+	if _, err := toml.DecodeFile(file, &cfg); err != nil {
 		return nil, err
 	}
 
-	if err := timezone.Init(configs.Timezone.NameOrDefault()); err != nil {
+	if err := timezone.Init(cfg.Timezone.NameOrDefault()); err != nil {
 		return nil, fmt.Errorf("invalid timezone config: %w", err)
 	}
 
-	return &configs, nil
+	return &cfg, nil
 
 }

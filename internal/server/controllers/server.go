@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -17,9 +17,9 @@ type Server struct {
 	version           string
 	cfg               *configs.Configs
 	logger            *zap.Logger
-	clientService     *services2.ClientRegistry
-	clientCertService *services2.ClientCertRegistry
-	ruleService       *services2.AccessRule
+	clientService     *services.ClientRegistry
+	clientCertService *services.ClientCertRegistry
+	ruleService       *services.AccessRule
 	httpServer        *http.Server
 }
 
@@ -28,9 +28,9 @@ func NewServer(version string, cfg *configs.Configs, db *gorm.DB, logger *zap.Lo
 		version:           version,
 		cfg:               cfg,
 		logger:            logger,
-		clientService:     services2.NewClientRegistry(db),
-		clientCertService: services2.NewClientCertRegistry(db, cfg.Cert.Dir, cfg.Cert.Host),
-		ruleService:       services2.NewAccessRule(db),
+		clientService:     services.NewClientRegistry(db),
+		clientCertService: services.NewClientCertRegistry(db, cfg.Cert.Dir, cfg.Cert.Host),
+		ruleService:       services.NewAccessRule(db),
 	}
 }
 

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
@@ -45,7 +45,7 @@ type clientResponse struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-func toClientResponse(client models2.Client) clientResponse {
+func toClientResponse(client models.Client) clientResponse {
 	return clientResponse{
 		ID:        client.Id.String(),
 		Name:      client.Name,
@@ -112,7 +112,7 @@ type clientCertResponse struct {
 	Serial    string  `json:"serial"`
 }
 
-func toClientCertResponse(info services2.ClientCertView) clientCertResponse {
+func toClientCertResponse(info services.ClientCertView) clientCertResponse {
 	resp := clientCertResponse{
 		ID:        info.ID,
 		CreatedAt: timezone.FormatUTC(info.CreatedAt),
@@ -125,7 +125,7 @@ func toClientCertResponse(info services2.ClientCertView) clientCertResponse {
 	return resp
 }
 
-func (s *Server) requireClientByName(w http.ResponseWriter, name string) (*models2.Client, bool) {
+func (s *Server) requireClientByName(w http.ResponseWriter, name string) (*models.Client, bool) {
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "client name is required")
 		return nil, false
@@ -202,7 +202,7 @@ func (s *Server) handleDeleteClientCert(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	certID, err := services2.ParseCertID(certIDRaw)
+	certID, err := services.ParseCertID(certIDRaw)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -251,7 +251,7 @@ func (s *Server) handleDownloadClientCert(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	certID, err := services2.ParseCertID(certIDRaw)
+	certID, err := services.ParseCertID(certIDRaw)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -301,7 +301,7 @@ type ipFilterResponse struct {
 	CreatedAt string  `json:"createdAt"`
 }
 
-func toIPFilterResponse(rule models2.AccessRule) ipFilterResponse {
+func toIPFilterResponse(rule models.AccessRule) ipFilterResponse {
 	resp := ipFilterResponse{
 		ID:        rule.Id.String(),
 		Status:    rule.Status,
@@ -346,7 +346,7 @@ type ipFilterMutateRequest struct {
 	Value  string `json:"value"`
 }
 
-func (s *Server) buildRuleTarget(field, value string) (services2.RuleTarget, error) {
+func (s *Server) buildRuleTarget(field, value string) (services.RuleTarget, error) {
 	field = strings.TrimSpace(field)
 	switch strings.ToUpper(field) {
 	case "ALL", "LOCAL", "REMOTE":
@@ -354,13 +354,13 @@ func (s *Server) buildRuleTarget(field, value string) (services2.RuleTarget, err
 	case "IP":
 		ip, err := network.NormalizeIP(value)
 		if err != nil {
-			return services2.RuleTarget{}, err
+			return services.RuleTarget{}, err
 		}
 		return s.ruleService.NewRuleTarget("ip", *ip)
 	case "COUNTRY", "REGION", "CITY":
 		return s.ruleService.NewRuleTarget(strings.ToLower(field), value)
 	default:
-		return services2.RuleTarget{}, errUnsupportedField(field)
+		return services.RuleTarget{}, errUnsupportedField(field)
 	}
 }
 

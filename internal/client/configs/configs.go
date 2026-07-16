@@ -5,20 +5,17 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
+	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
-type Logs = sharedconfigs.Logs
-type Timezone = sharedconfigs.Timezone
-
 type Configs struct {
-	Server   *Server   `toml:"server"`
-	Client   *Client   `toml:"client"`
-	Cert     *Cert     `toml:"cert"`
-	Logs     *Logs     `toml:"logs"`
-	Timezone *Timezone `toml:"timezone"`
-	Proxies  []Proxy   `toml:"proxies"`
+	Server   *Server          `toml:"server"`
+	Client   *Client          `toml:"client"`
+	Cert     *Cert            `toml:"cert"`
+	Logs     *shared.Logs     `toml:"logs"`
+	Timezone *shared.Timezone `toml:"timezone"`
+	Proxies  []Proxy          `toml:"proxies"`
 }
 
 func NewConfigs(file string) (*Configs, error) {

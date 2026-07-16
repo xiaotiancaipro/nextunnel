@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
@@ -33,7 +33,7 @@ type Server struct {
 	pendingMu   sync.Mutex
 	pendingWork map[string]*pendingWorkItem
 	ruleCacheMu sync.RWMutex
-	ruleCache   []models2.AccessRule
+	ruleCache   []models.AccessRule
 	ruleCacheAt time.Time
 }
 
@@ -160,7 +160,7 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		return fmt.Errorf("client_id is invalid")
 	}
 
-	var client models2.Client
+	var client models.Client
 	if err := s.db.Where("id = ?", clientUUID).First(&client).Error; err != nil {
 		replyErr("client_id is invalid")
 		return fmt.Errorf("client not found")
@@ -376,7 +376,7 @@ func (s *Server) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 
 }
 
-func (s *Server) cachedRules() ([]models2.AccessRule, error) {
+func (s *Server) cachedRules() ([]models.AccessRule, error) {
 
 	s.ruleCacheMu.RLock()
 	if s.ruleCache != nil && time.Since(s.ruleCacheAt) < ruleCacheTTL {
@@ -386,7 +386,7 @@ func (s *Server) cachedRules() ([]models2.AccessRule, error) {
 	}
 	s.ruleCacheMu.RUnlock()
 
-	var rules []models2.AccessRule
+	var rules []models.AccessRule
 	if err := s.db.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
 		return nil, fmt.Errorf("failed to query access_rules: %w", err)
 	}

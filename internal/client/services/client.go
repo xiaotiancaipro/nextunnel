@@ -7,14 +7,14 @@ import (
 	"strconv"
 	"time"
 
-	configs2 "github.com/xiaotiancaipro/nextunnel/internal/client/configs"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
 
 type Client struct {
-	Config   *configs2.Client
-	Proxies  []configs2.Proxy
+	Config   *configs.Client
+	Proxies  []configs.Proxy
 	Logger   *zap.Logger
 	Conn     net.Conn
 	DialWork func() (net.Conn, error)
@@ -154,7 +154,7 @@ func (c *Client) WorkConn(msg protocol.NewWorkConnMsg) {
 
 }
 
-func (c *Client) FindProxy(name string) *configs2.Proxy {
+func (c *Client) FindProxy(name string) *configs.Proxy {
 	for i := range c.Proxies {
 		if c.Proxies[i].Name == name {
 			return &c.Proxies[i]

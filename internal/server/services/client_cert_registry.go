@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"gorm.io/gorm"
 )
@@ -37,7 +37,7 @@ func NewClientCertRegistry(db *gorm.DB, certDir, listenHost string) *ClientCertR
 }
 
 func (r *ClientCertRegistry) List(clientID uuid.UUID) ([]ClientCertView, error) {
-	var records []models2.ClientCert
+	var records []models.ClientCert
 	if err := r.db.Where("client_id = ? AND is_delete = ?", clientID, false).
 		Order("created_at ASC").
 		Find(&records).Error; err != nil {
@@ -55,7 +55,7 @@ func (r *ClientCertRegistry) List(clientID uuid.UUID) ([]ClientCertView, error) 
 	return items, nil
 }
 
-func (r *ClientCertRegistry) Create(client *models2.Client, expiresAt *time.Time) (ClientCertView, error) {
+func (r *ClientCertRegistry) Create(client *models.Client, expiresAt *time.Time) (ClientCertView, error) {
 	notAfter, err := certs.ResolveNotAfter(expiresAt)
 	if err != nil {
 		return ClientCertView{}, err
@@ -76,7 +76,7 @@ func (r *ClientCertRegistry) Create(client *models2.Client, expiresAt *time.Time
 		return ClientCertView{}, err
 	}
 
-	record := models2.ClientCert{
+	record := models.ClientCert{
 		Id:        certID,
 		ClientId:  client.Id,
 		CertPath:  relPath,
@@ -91,7 +91,7 @@ func (r *ClientCertRegistry) Create(client *models2.Client, expiresAt *time.Time
 }
 
 func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error {
-	var record models2.ClientCert
+	var record models.ClientCert
 	if err := r.db.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -100,7 +100,7 @@ func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error 
 		return fmt.Errorf("failed to query client certificate: %w", err)
 	}
 
-	result := r.db.Model(&models2.ClientCert{}).
+	result := r.db.Model(&models.ClientCert{}).
 		Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		Update("is_delete", true)
 	if result.Error != nil {
@@ -119,7 +119,7 @@ func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error 
 }
 
 func (r *ClientCertRegistry) DeleteAllForClient(clientID uuid.UUID, clientName string) error {
-	if err := r.db.Model(&models2.ClientCert{}).
+	if err := r.db.Model(&models.ClientCert{}).
 		Where("client_id = ? AND is_delete = ?", clientID, false).
 		Update("is_delete", true).Error; err != nil {
 		return fmt.Errorf("failed to delete client certificates: %w", err)
@@ -143,8 +143,8 @@ func (r *ClientCertRegistry) ReadFiles(clientID uuid.UUID, certID uuid.UUID) ([]
 	return certs.ReadCertFiles(absPath)
 }
 
-func (r *ClientCertRegistry) getActive(clientID, certID uuid.UUID) (*models2.ClientCert, error) {
-	var record models2.ClientCert
+func (r *ClientCertRegistry) getActive(clientID, certID uuid.UUID) (*models.ClientCert, error) {
+	var record models.ClientCert
 	if err := r.db.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -155,7 +155,7 @@ func (r *ClientCertRegistry) getActive(clientID, certID uuid.UUID) (*models2.Cli
 	return &record, nil
 }
 
-func (r *ClientCertRegistry) toView(record models2.ClientCert) (ClientCertView, error) {
+func (r *ClientCertRegistry) toView(record models.ClientCert) (ClientCertView, error) {
 	view := ClientCertView{
 		ID:        record.Id.String(),
 		CreatedAt: record.CreatedAt.UTC(),
