@@ -1,5 +1,3 @@
--- Roll back indexes added in 001_optimize_indexes.up.sql
-
 DROP INDEX IF EXISTS idx_access_log_created_at;
 DROP INDEX IF EXISTS idx_access_log_client_created_at;
 DROP INDEX IF EXISTS uk_access_rule_target;

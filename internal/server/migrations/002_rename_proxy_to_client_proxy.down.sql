@@ -1,4 +1,4 @@
--- Roll back table rename from 003_rename_proxy_to_client_proxy.up.sql
+-- Roll back rename of client_proxy to proxy.
 
 DO $$
 BEGIN

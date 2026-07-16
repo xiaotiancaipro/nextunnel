@@ -6,7 +6,6 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/migrations"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
@@ -14,17 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
-var tables = map[string]any{
-	models.ClientTable:      models.Client{},
-	models.ClientCertTable:  models.ClientCert{},
-	models.ClientProxyTable: models.Proxy{},
-	models.AccessLogTable:   models.AccessLog{},
-	models.AccessRuleTable:  models.AccessRule{},
-}
-
 type database struct {
 	config *configs.Database
-	tables map[string]any
 	logger *zap.Logger
 }
 
@@ -32,7 +22,6 @@ func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
 
 	d := &database{
 		config: config,
-		tables: tables,
 		logger: logger,
 	}
 
@@ -62,19 +51,8 @@ func (d *database) migrate() error {
 	if err != nil {
 		return fmt.Errorf("database connection failed: %v", err)
 	}
-	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
-		return fmt.Errorf("failed to enable uuid-ossp extension: %v", err)
-	}
-	if err := migrations.Apply(db, true); err != nil {
-		return fmt.Errorf("pre-migration failed: %w", err)
-	}
-	for name, table := range d.tables {
-		if err_ := db.AutoMigrate(&table); err_ != nil {
-			return fmt.Errorf("table migration failed, TableName=%s: %v", name, err_)
-		}
-	}
-	if err := migrations.Apply(db, false); err != nil {
-		return fmt.Errorf("migration failed: %w", err)
+	if err := migrations.Auto(db); err != nil {
+		return fmt.Errorf("database migration failed: %v", err)
 	}
 	return nil
 }

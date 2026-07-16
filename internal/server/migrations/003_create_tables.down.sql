@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS access_log;
+DROP TABLE IF EXISTS access_rule;
+DROP TABLE IF EXISTS client_cert;
+DROP TABLE IF EXISTS client_proxy;
+DROP TABLE IF EXISTS client;
