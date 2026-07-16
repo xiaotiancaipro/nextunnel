@@ -12,7 +12,6 @@ import (
 	clients2 "github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/web"
 	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
@@ -27,7 +26,7 @@ type App struct {
 	ipLocator     clients2.IPLocator
 	tlsService    *services2.Tls
 	serverService *services2.Server
-	webServer     *web.Server
+	webServer     *controller.Server
 	stopCh        chan struct{}
 	stopOnce      sync.Once
 	listenerMu    sync.Mutex
@@ -70,7 +69,7 @@ func NewApp(config *configs.Configs, version string) (*App, error) {
 	}
 
 	if config.Web.IsEnabled() {
-		app.webServer = web.NewServer(version, config, db, logger)
+		app.webServer = controller.NewServer(version, config, db, logger)
 	}
 
 	return &app, nil

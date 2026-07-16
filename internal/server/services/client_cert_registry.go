@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"gorm.io/gorm"
 )
 

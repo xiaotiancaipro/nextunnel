@@ -1,13 +1,12 @@
 package main
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/cmd/server/client"
 	"github.com/xiaotiancaipro/nextunnel/cmd/server/ip_filter"
 	"github.com/xiaotiancaipro/nextunnel/internal/server"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
+	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
 func New(version string) *cobra.Command {
@@ -27,9 +26,6 @@ func New(version string) *cobra.Command {
 func run(cmd *cobra.Command, _ []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	app, err := server.NewApp(cfg, cmd.Version)
-	if err != nil {
-		cmd.PrintErr(err)
-		os.Exit(1)
-	}
-	cli.Run(cmd, app)
+	shared.ExitOnErr(cmd, err)
+	shared.RunApp(cmd, app)
 }

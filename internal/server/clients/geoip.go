@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/oschwald/geoip2-golang"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+	string2 "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
 )
 
 type GeoIP struct {
@@ -27,7 +27,7 @@ func NewGeoIP(dbPath string, locales []string) (*GeoIP, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open geoip database: %w", err)
 	}
-	return &GeoIP{reader: reader, locales: utils.Normalize(locales)}, nil
+	return &GeoIP{reader: reader, locales: string2.Normalize(locales)}, nil
 }
 
 func (g *GeoIP) Close() error {
@@ -49,11 +49,11 @@ func (g *GeoIP) Lookup(ipStr string) IPLocationResult {
 	var region string
 	if n := len(record.Subdivisions); n > 0 {
 		subdivision := record.Subdivisions[n-1]
-		region = utils.PickName(subdivision.Names, g.locales)
+		region = string2.PickName(subdivision.Names, g.locales)
 	}
 	return IPLocationResult{
-		Country: utils.PickName(record.Country.Names, g.locales),
+		Country: string2.PickName(record.Country.Names, g.locales),
 		Region:  region,
-		City:    utils.PickName(record.City.Names, g.locales),
+		City:    string2.PickName(record.City.Names, g.locales),
 	}
 }

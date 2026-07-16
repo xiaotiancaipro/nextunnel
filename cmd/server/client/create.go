@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	utils "github.com/xiaotiancaipro/nextunnel/internal/server/utils/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
 	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
@@ -26,14 +26,19 @@ func NewCreateCommand() *cobra.Command {
 }
 
 func createRun(cmd *cobra.Command, args []string) {
-	cfg := shared.LoadServerConfig(cmd)
-	registry, err := utils.NewClientRegistryFromConfig(cfg)
+
+	cfg := cli.LoadServerConfig(cmd)
+	registry, err := cli.NewClientRegistryFromConfig(cfg)
 	shared.ExitOnErr(cmd, err)
+
 	client, err := registry.Create(args[0], portStart, portEnd)
 	shared.ExitOnErr(cmd, err)
+
 	if portStart > 0 && portEnd > 0 {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created client %q (id=%s, ports=%d-%d)\n", client.Name, client.Id, portStart, portEnd)
-	} else {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created client %q (id=%s, ports=all)\n", client.Name, client.Id)
+		return
 	}
+
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created client %q (id=%s, ports=all)\n", client.Name, client.Id)
+
 }

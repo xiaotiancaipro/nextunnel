@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	"go.uber.org/zap"
 )
 
@@ -59,7 +59,7 @@ func (a *IPLocationAPI) Lookup(ipStr string) IPLocationResult {
 	if ip == nil {
 		return IPLocationResult{}
 	}
-	if utils.IsLocalIP(ipStr) {
+	if network.IsLocalIP(ipStr) {
 		return IPLocationResult{}
 	}
 

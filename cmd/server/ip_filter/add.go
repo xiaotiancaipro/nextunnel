@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	utils "github.com/xiaotiancaipro/nextunnel/internal/server/utils/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
 	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
@@ -15,20 +15,26 @@ func NewAddCommand() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		Run:   addRun,
 	}
-	utils.SetFlags(c)
+	cli.SetFlags(c)
 	return c
 }
 
 func addRun(cmd *cobra.Command, args []string) {
-	cfg := shared.LoadServerConfig(cmd)
-	status, field, value, err := utils.ParseIPFilterFlags(cmd, args)
+
+	cfg := cli.LoadServerConfig(cmd)
+	status, field, value, err := cli.ParseIPFilterFlags(cmd, args)
 	shared.ExitOnErr(cmd, err)
-	service, err := utils.NewAccessRuleFromConfig(cfg)
+
+	service, err := cli.NewAccessRuleFromConfig(cfg)
 	shared.ExitOnErr(cmd, err)
-	target, format, msgArgs, err := utils.BuildRuleTarget(service, field, value)
+
+	target, format, msgArgs, err := cli.BuildRuleTarget(service, field, value)
 	shared.ExitOnErr(cmd, err)
+
 	if err := service.UpsertRule(target, status); err != nil {
 		shared.ExitOnErr(cmd, err)
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", append([]any{utils.RuleAction(status)}, msgArgs...)...)
+
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", append([]any{cli.RuleAction(status)}, msgArgs...)...)
+
 }

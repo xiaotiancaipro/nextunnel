@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	utils "github.com/xiaotiancaipro/nextunnel/internal/server/utils/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
 	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
@@ -19,16 +19,21 @@ func NewListCommand() *cobra.Command {
 }
 
 func listRun(cmd *cobra.Command, _ []string) {
-	cfg := shared.LoadServerConfig(cmd)
-	service, err := utils.NewAccessRuleFromConfig(cfg)
+
+	cfg := cli.LoadServerConfig(cmd)
+	service, err := cli.NewAccessRuleFromConfig(cfg)
 	shared.ExitOnErr(cmd, err)
+
 	rules, err := service.ListRules()
 	shared.ExitOnErr(cmd, err)
+
 	if len(rules) == 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no ip filter rules")
 		return
 	}
+
 	for i := range rules {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), utils.FormatAccessRule(rules[i]))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), cli.FormatAccessRule(rules[i]))
 	}
+
 }

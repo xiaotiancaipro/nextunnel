@@ -6,17 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	clientconfigs "github.com/xiaotiancaipro/nextunnel/internal/client/configs"
-	serverconfigs "github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-)
-
-const (
-	ServerDefaultConfigPath = "nextunnel-server.toml"
-	ServerEnvConfigPath     = "NEXTUNNEL_SERVER_CONFIG"
-)
-
-const (
-	ClientDefaultConfigPath = "nextunnel-client.toml"
 )
 
 type ConfigSpec struct {
@@ -24,30 +13,8 @@ type ConfigSpec struct {
 	EnvVar      string
 }
 
-type configLoader[T any] func(path string) (*T, error)
+func LoadConfig[T any](cmd *cobra.Command, spec ConfigSpec, loader func(path string) (*T, error), failMsg string) *T {
 
-func LoadClientConfig(cmd *cobra.Command) *clientconfigs.Configs {
-	return loadConfig(
-		cmd,
-		ConfigSpec{DefaultPath: ClientDefaultConfigPath},
-		clientconfigs.NewConfigs,
-		"Failed to load client config",
-	)
-}
-
-func LoadServerConfig(cmd *cobra.Command) *serverconfigs.Configs {
-	return loadConfig(
-		cmd,
-		ConfigSpec{
-			DefaultPath: ServerDefaultConfigPath,
-			EnvVar:      ServerEnvConfigPath,
-		},
-		serverconfigs.NewConfigs,
-		"Failed to load config",
-	)
-}
-
-func loadConfig[T any](cmd *cobra.Command, spec ConfigSpec, loader configLoader[T], failMsg string) *T {
 	path, err := resolveConfigPath(cmd, spec)
 	if err != nil {
 		cmd.PrintErrf("Invalid flags: %v\n", err)
@@ -65,7 +32,9 @@ func loadConfig[T any](cmd *cobra.Command, spec ConfigSpec, loader configLoader[
 		cmd.PrintErrf("%s, %v\n", failMsg, err)
 		os.Exit(1)
 	}
+
 	return c
+
 }
 
 func resolveConfigPath(cmd *cobra.Command, spec ConfigSpec) (string, error) {

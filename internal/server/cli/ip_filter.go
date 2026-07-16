@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 )
 
 const (
@@ -102,7 +102,7 @@ func BuildRuleTarget(service *services.AccessRule, field, value string) (service
 	}
 
 	if field == "ip" {
-		ip, err := utils.NormalizeIP(value)
+		ip, err := network.NormalizeIP(value)
 		if err != nil {
 			return services.RuleTarget{}, "", nil, err
 		}

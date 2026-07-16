@@ -6,7 +6,7 @@ import (
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/migrations"
-	logger_ "github.com/xiaotiancaipro/nextunnel/internal/server/utils/logger"
+	logger_ "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"

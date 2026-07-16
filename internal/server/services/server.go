@@ -15,7 +15,7 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -287,14 +287,14 @@ func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, s
 		host = parsedHost
 	}
 
-	ipP, err := utils.NormalizeIP(host)
+	ipP, err := network.NormalizeIP(host)
 	if err != nil {
 		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
 	}
 
 	geo := s.ipLocator.Lookup(*ipP)
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
-	isLocal := utils.IsLocalIP(*ipP)
+	isLocal := network.IsLocalIP(*ipP)
 
 	rules, err := s.cachedRules()
 	if err != nil {

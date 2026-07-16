@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"go.uber.org/zap"
 )
 

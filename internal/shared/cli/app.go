@@ -13,7 +13,8 @@ type App interface {
 	Stop()
 }
 
-func Run(cmd *cobra.Command, app App) {
+func RunApp(cmd *cobra.Command, app App) {
+
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- app.Start()
@@ -25,16 +26,12 @@ func Run(cmd *cobra.Command, app App) {
 	select {
 	case err := <-errCh:
 		signal.Stop(sigCh)
-		if err != nil {
-			cmd.PrintErr(err)
-			os.Exit(1)
-		}
+		ExitOnErr(cmd, err)
 	case <-sigCh:
 		signal.Stop(sigCh)
 		app.Stop()
-		if err := <-errCh; err != nil {
-			cmd.PrintErr(err)
-			os.Exit(1)
-		}
+		err := <-errCh
+		ExitOnErr(cmd, err)
 	}
+
 }

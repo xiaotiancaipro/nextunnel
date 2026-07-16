@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	utils "github.com/xiaotiancaipro/nextunnel/internal/server/utils/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
 	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
@@ -23,20 +23,32 @@ func NewCreateCommand() *cobra.Command {
 }
 
 func createRun(cmd *cobra.Command, args []string) {
-	cfg := shared.LoadServerConfig(cmd)
+
 	clientName := strings.TrimSpace(args[0])
 	if clientName == "" {
 		shared.ExitOnErr(cmd, fmt.Errorf("client name is required"))
 	}
 
-	registry, certService, err := utils.NewClientRegistryAndCertFromConfig(cfg)
+	cfg := cli.LoadServerConfig(cmd)
+	registry, certService, err := cli.NewClientRegistryAndCertFromConfig(cfg)
 	shared.ExitOnErr(cmd, err)
+
 	client, err := registry.GetByName(clientName)
 	shared.ExitOnErr(cmd, err)
-	expiresAt, err := utils.ParseExpiresAt(expiresAt)
+
+	expiresAt, err := cli.ParseExpiresAt(expiresAt)
 	shared.ExitOnErr(cmd, err)
+
 	info, err := certService.Create(client, expiresAt)
 	shared.ExitOnErr(cmd, err)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created certificate %q for client %q (expires=%s, serial=%s)\n",
-		info.ID, clientName, utils.FormatExpires(info.ExpiresAt), info.Serial)
+
+	_, _ = fmt.Fprintf(
+		cmd.OutOrStdout(),
+		"created certificate %q for client %q (expires=%s, serial=%s)\n",
+		info.ID,
+		clientName,
+		cli.FormatExpires(info.ExpiresAt),
+		info.Serial,
+	)
+
 }

@@ -1,4 +1,4 @@
-package web
+package controllers
 
 import (
 	"archive/zip"
@@ -13,8 +13,8 @@ import (
 
 	models2 "github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	services2 "github.com/xiaotiancaipro/nextunnel/internal/server/services"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/utils"
-	certs2 "github.com/xiaotiancaipro/nextunnel/internal/server/utils/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	"github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 )
 
@@ -222,8 +222,8 @@ func writeClientCertZip(w http.ResponseWriter, clientName, certID string, certPE
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
 	for fileName, content := range map[string][]byte{
-		certs2.FileClientCert: certPEM,
-		certs2.FileClientKey:  keyPEM,
+		certs.FileClientCert: certPEM,
+		certs.FileClientKey:  keyPEM,
 	} {
 		fw, err := zw.Create(fileName)
 		if err != nil {
@@ -272,7 +272,7 @@ func (s *Server) handleDownloadClientCert(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDownloadCA(w http.ResponseWriter, _ *http.Request) {
-	if err := certs2.Ensure(s.cfg.Cert.Dir, s.cfg.Cert.Host); err != nil {
+	if err := certs.Ensure(s.cfg.Cert.Dir, s.cfg.Cert.Host); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -281,7 +281,7 @@ func (s *Server) handleDownloadCA(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	caPEM, err := os.ReadFile(filepath.Join(abs, certs2.FileCACert))
+	caPEM, err := os.ReadFile(filepath.Join(abs, certs.FileCACert))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -352,7 +352,7 @@ func (s *Server) buildRuleTarget(field, value string) (services2.RuleTarget, err
 	case "ALL", "LOCAL", "REMOTE":
 		return s.ruleService.NewCategoryRuleTarget(field)
 	case "IP":
-		ip, err := utils.NormalizeIP(value)
+		ip, err := network.NormalizeIP(value)
 		if err != nil {
 			return services2.RuleTarget{}, err
 		}

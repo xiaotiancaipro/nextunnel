@@ -1,10 +1,9 @@
 package main
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/client"
+	"github.com/xiaotiancaipro/nextunnel/internal/client/cli"
 	shared "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 )
 
@@ -16,16 +15,13 @@ func New(version string) *cobra.Command {
 		Args:    cobra.ExactArgs(0),
 		Run:     run,
 	}
-	c.Flags().StringP("config", "c", shared.ClientDefaultConfigPath, "Configuration File Path")
+	c.Flags().StringP("config", "c", cli.ClientDefaultConfigPath, "Configuration File Path")
 	return c
 }
 
 func run(cmd *cobra.Command, _ []string) {
-	configs := shared.LoadClientConfig(cmd)
+	configs := cli.LoadClientConfig(cmd)
 	app, err := client.NewApp(configs)
-	if err != nil {
-		cmd.PrintErr(err)
-		os.Exit(1)
-	}
-	shared.Run(cmd, app)
+	shared.ExitOnErr(cmd, err)
+	shared.RunApp(cmd, app)
 }
