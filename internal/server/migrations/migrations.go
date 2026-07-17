@@ -36,18 +36,6 @@ func Auto(db *gorm.DB) error {
 
 }
 
-func Rollback(db *gorm.DB) error {
-	m, err := newMigrator(db)
-	if err != nil {
-		return err
-	}
-	defer func() { _, _ = m.Close() }()
-	if err := m.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("rollback failed: %w", err)
-	}
-	return nil
-}
-
 func newMigrator(db *gorm.DB) (*migrate.Migrate, error) {
 
 	sqlDB, err := db.DB()

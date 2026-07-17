@@ -22,8 +22,6 @@ const en: TranslationSchema = {
         connecting: 'Connecting…',
         apiOnline: 'API {{version}}',
         apiOffline: 'API disconnected',
-        footer: 'nextunnel-server console · {{version}}',
-        footerWaiting: 'Waiting for API',
     },
     language: {
         label: 'Language',

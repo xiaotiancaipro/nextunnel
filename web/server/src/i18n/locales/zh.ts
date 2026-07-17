@@ -20,8 +20,6 @@ const zh = {
         connecting: '连接中…',
         apiOnline: 'API {{version}}',
         apiOffline: 'API 未连接',
-        footer: 'nextunnel-server 管理控制台 · {{version}}',
-        footerWaiting: '等待 API 响应',
     },
     language: {
         label: '语言',

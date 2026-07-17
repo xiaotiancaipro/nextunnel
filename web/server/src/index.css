@@ -1,15 +1,12 @@
 :root {
   --brand-blue: #0870e9;
   --brand-blue-hover: #0668d8;
-  --brand-blue-active: #055cbf;
   --brand-blue-rgb: 8, 112, 233;
   --brand-blue-light: rgba(8, 112, 233, 0.1);
   --brand-blue-subtle: rgba(8, 112, 233, 0.06);
-  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --radius-xl: 16px;
   --radius-full: 9999px;
   --console-header-height: 52px;
   --console-content-bg: #f8fafc;

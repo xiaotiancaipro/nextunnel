@@ -221,33 +221,3 @@ func writeClientPEMFiles(outDir string, certPEM, keyPEM []byte) error {
 func WriteClientPEMToDir(outDir string, certPEM, keyPEM []byte) error {
 	return writeClientPEMFiles(outDir, certPEM, keyPEM)
 }
-
-func GenerateClientToDir(tlsDir string, listenHost string, outDir string, expiresAt *time.Time) error {
-	if outDir == "" {
-		return fmt.Errorf("tls: client cert output directory is empty")
-	}
-	outAbs, err := filepath.Abs(outDir)
-	if err != nil {
-		return fmt.Errorf("tls: client output path: %w", err)
-	}
-
-	clientCrt := filepath.Join(outAbs, FileClientCert)
-	clientKey := filepath.Join(outAbs, FileClientKey)
-	if _, err := os.Stat(clientCrt); err == nil {
-		return fmt.Errorf("tls: %s already exists", clientCrt)
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if _, err := os.Stat(clientKey); err == nil {
-		return fmt.Errorf("tls: %s already exists", clientKey)
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	certPEM, keyPEM, err := GenerateClientPEM(tlsDir, listenHost, expiresAt)
-	if err != nil {
-		return err
-	}
-
-	return writeClientPEMFiles(outAbs, certPEM, keyPEM)
-}

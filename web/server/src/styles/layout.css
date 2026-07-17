@@ -98,18 +98,6 @@
   border-top: 1px solid var(--console-border);
 }
 
-.console-sider-footer {
-  flex-shrink: 0;
-  padding: 12px var(--console-sider-inset) 16px;
-  border-top: 1px solid var(--console-border);
-}
-
-.console-sider-footer-text {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--console-text-secondary);
-}
-
 .console-sider-menu.ant-menu-inline .ant-menu-item {
   width: 100%;
   margin-inline: 0;
