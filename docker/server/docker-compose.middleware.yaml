@@ -3,15 +3,14 @@ services:
     image: postgres:18.4
     container_name: nextunnel-server-postgresql
     restart: unless-stopped
-    env_file:
-      - .env
+    networks:
+      - net_nextunnel
     ports:
       - ${DB_PORT:-5432}:5432
     environment:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-nextunnel}
       POSTGRES_DB: ${DB_DATABASE:-nextunnel}
-      PGDATA: /var/lib/postgresql/data
     command:
       - postgres
       - -c
@@ -25,10 +24,13 @@ services:
       - -c
       - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-4096MB}
     volumes:
-      - ./volumes/postgresql:/var/lib/postgresql/data
+      - ./volumes/postgresql:/var/lib/postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-nextunnel}" ]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 10s
+networks:
+  net_nextunnel:
+    driver: bridge
