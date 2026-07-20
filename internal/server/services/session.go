@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -55,7 +56,7 @@ func (s *Session) SetClientProxiesOffline(clientID string) error {
 	return s.ClientProxyService.SetAllOffline(clientUUID)
 }
 
-func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientID string, serverStopCh, clientStopCh chan struct{}) error {
+func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientID string, listeners *ProxyListeners, serverStopCh, clientStopCh chan struct{}) error {
 	replyErr := func(e string) {
 		_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: e})
 		s.Logger.Error(e)
@@ -125,20 +126,10 @@ func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload [
 		return err
 	}
 
-	opened := make(map[string]net.Listener)
-	openedClose := func() {
-		for _, ln := range opened {
-			_ = ln.Close()
-		}
-	}
-	for name, proxy := range desired {
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", proxy.RemotePort))
-		if err != nil {
-			openedClose()
-			replyErr(fmt.Sprintf("Failed to listen on port %d: %v", proxy.RemotePort, err))
-			return fmt.Errorf("failed to listen on port %d", proxy.RemotePort)
-		}
-		opened[name] = ln
+	opened, err := listeners.reconcile(desired)
+	if err != nil {
+		replyErr(fmt.Sprintf("Failed to listen: %v", err))
+		return err
 	}
 
 	for name, listener := range opened {
@@ -154,7 +145,7 @@ func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload [
 	}
 
 	_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: ""})
-	s.Logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", clientID, len(opened)))
+	s.Logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d, newly_opened=%d", clientID, len(desired), len(opened)))
 	return nil
 }
 
@@ -167,6 +158,9 @@ func (s *Session) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			select {
 			case <-serverStopCh:
 				return

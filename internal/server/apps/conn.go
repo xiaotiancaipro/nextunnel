@@ -126,8 +126,10 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 	}
 
 	clientStopCh := make(chan struct{})
+	proxyListeners := new(services.ProxyListeners)
 	defer func() {
 		close(clientStopCh)
+		proxyListeners.CloseAll()
 		if err := a.Services.Session.SetClientProxiesOffline(clientID); err != nil {
 			a.Logger.Warn(fmt.Sprintf("Failed to mark client proxies offline: clientID=%s, err=%v", clientID, err))
 		}
@@ -143,7 +145,7 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 		}
 		switch msgType {
 		case sharedprotocol.MsgProxiesApply:
-			if err := a.Services.Session.ProxiesApply(conn, &ctrlWriteMu, payload, clientID, a.stopCh, clientStopCh); err != nil {
+			if err := a.Services.Session.ProxiesApply(conn, &ctrlWriteMu, payload, clientID, proxyListeners, a.stopCh, clientStopCh); err != nil {
 				a.Logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
 				return
 			}
