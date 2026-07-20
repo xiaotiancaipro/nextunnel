@@ -2,23 +2,26 @@ package services
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
-	"go.uber.org/zap"
 )
 
 type Server struct {
 	Config *configs.Server
-	Logger *zap.Logger
 }
 
-func (s *Server) DialServer(c *tls.Config) (net.Conn, error) {
+func (s *Server) Dial(c *tls.Config) (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	addr := s.AddrStr()
-	return tls.DialWithDialer(dialer, "tcp", addr, c)
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial server %s: %w", addr, err)
+	}
+	return conn, nil
 }
 
 func (s *Server) AddrStr() string {

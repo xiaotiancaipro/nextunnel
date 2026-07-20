@@ -1,267 +1,92 @@
 package client
 
 import (
+	"context"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
+	"github.com/xiaotiancaipro/nextunnel/internal/client/apps"
 	"github.com/xiaotiancaipro/nextunnel/internal/client/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/client/services"
 	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
-	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
 
 type App struct {
-	logger        *zap.Logger
-	stopCh        chan struct{}
-	stopOnce      sync.Once
-	ctrlMu        sync.Mutex
-	ctrlConn      net.Conn
-	tlsService    *services.Tls
-	serverService *services.Server
-	clientService *services.Client
+	Configs  *configs.Configs
+	logger   *zap.Logger
+	services *services.Services
+	apps     *apps.Apps
+	stopOnce sync.Once
 }
 
-type msgChan struct {
-	msgType byte
-	payload []byte
-	err     error
-}
-
-func NewApp(config *configs.Configs) (*App, error) {
-
-	logger, err := sharedlogger.NewLogger(config.Logs)
+func (a *App) Init() error {
+	logger, err := sharedlogger.NewLogger(a.Configs.Logs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logging: %v", err)
+		return fmt.Errorf("failed to initialize logging: %v", err)
 	}
-
-	tls := services.Tls{
-		Config: config.Cert,
-		Logger: logger,
-	}
-	server := services.Server{
-		Config: config.Server,
-		Logger: logger,
-	}
-	client := services.Client{
-		Config:  config.Client,
-		Proxies: config.Proxies,
-		Logger:  logger,
-	}
-
-	app := App{
-		logger:        logger,
-		stopCh:        make(chan struct{}),
-		tlsService:    &tls,
-		serverService: &server,
-		clientService: &client,
-	}
-
-	return &app, nil
-
-}
-
-func (a *App) Start() error {
-
-	tlsCfg, err := a.tlsService.Init()
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("failed to initialize TLS: %v", err))
+	a.logger = logger
+	a.initServices()
+	if err := a.initApps(); err != nil {
 		return err
-	}
-
-	a.clientService.DialWork = func() (net.Conn, error) {
-		return a.serverService.DialServer(tlsCfg)
-	}
-
-	const (
-		reconnectMinDelay = 2 * time.Second
-		reconnectMaxDelay = 30 * time.Second
-	)
-	nextRetryDelay := reconnectMinDelay
-
-	for {
-
-		select {
-		case <-a.stopCh:
-			return nil
-		default:
-		}
-
-		stopped := a.runSession(&nextRetryDelay, reconnectMinDelay)
-		if stopped {
-			return nil
-		}
-
-		select {
-		case <-a.stopCh:
-			return nil
-		case <-time.After(nextRetryDelay):
-		}
-
-		if grow := nextRetryDelay * 2; grow > reconnectMaxDelay {
-			nextRetryDelay = reconnectMaxDelay
-		} else {
-			nextRetryDelay = grow
-		}
-
-	}
-
-}
-
-func (a *App) Stop() {
-	a.stopOnce.Do(func() {
-		close(a.stopCh)
-		a.ctrlMu.Lock()
-		c := a.ctrlConn
-		a.ctrlConn = nil
-		a.ctrlMu.Unlock()
-		if c != nil {
-			_ = c.Close()
-		}
-		a.logger.Info("Shutting down gracefully")
-	})
-}
-
-func (a *App) runSession(nextRetryDelay *time.Duration, reconnectMin time.Duration) (stopped bool) {
-
-	conn, err := a.clientService.DialWork()
-	if err != nil {
-		a.logger.Warn(fmt.Sprintf("connect to server failed: %v", err))
-		return false
-	}
-
-	a.ctrlMu.Lock()
-	a.ctrlConn = conn
-	a.ctrlMu.Unlock()
-	defer func() {
-		a.ctrlMu.Lock()
-		if a.ctrlConn == conn {
-			a.ctrlConn = nil
-		}
-		a.ctrlMu.Unlock()
-		_ = conn.Close()
-	}()
-
-	a.clientService.Conn = conn
-	a.logger.Info("Successfully connected to the server")
-
-	runIdP, err := a.clientLogin()
-	if err != nil {
-		a.logger.Warn(fmt.Sprintf("login failed: %v", err))
-		return false
-	}
-	a.logger.Info(fmt.Sprintf("Running with id: %s", *runIdP))
-
-	if err = a.clientProxiesApply(); err != nil {
-		a.logger.Warn(fmt.Sprintf("proxy registration failed: %v", err))
-		return false
-	}
-	a.logger.Info("Client proxies configuration application successful")
-
-	*nextRetryDelay = reconnectMin
-
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
-
-	msgCh := make(chan msgChan, 1)
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	go a.controlLoop(conn, msgCh, doneCh, a.stopCh)
-
-	for {
-		select {
-		case <-a.stopCh:
-			return true
-		case <-heartbeatTicker.C:
-			if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
-				a.logger.Warn(fmt.Sprintf("heartbeat: set write deadline failed: %v", err))
-				return false
-			}
-			err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgHeartbeat, sharedprotocol.HeartbeatMsg{})
-			_ = conn.SetWriteDeadline(time.Time{})
-			if err != nil {
-				a.logger.Warn(fmt.Sprintf("heartbeat send failed: %v", err))
-				return false
-			}
-		case result := <-msgCh:
-			if result.err != nil {
-				select {
-				case <-a.stopCh:
-					return true
-				default:
-				}
-				a.logger.Warn(fmt.Sprintf("control read failed: %v", result.err))
-				return false
-			}
-			switch result.msgType {
-			case sharedprotocol.MsgNewWorkConn:
-				var msg sharedprotocol.NewWorkConnMsg
-				if err := sharedprotocol.Decode(result.payload, &msg); err != nil {
-					a.logger.Error(fmt.Sprintf("Failed to parse NewWorkConnMsg: %v", err))
-					continue
-				}
-				go a.clientService.WorkConn(msg)
-			case sharedprotocol.MsgHeartbeatResp:
-			default:
-				a.logger.Warn(fmt.Sprintf("Received unknown control message 0x%02x", result.msgType))
-			}
-		}
-	}
-
-}
-
-func (a *App) clientLogin() (*string, error) {
-
-	if err := a.clientService.Login(); err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to login: %s", err))
-		return nil, fmt.Errorf("failed to login")
-	}
-
-	runIdP, err := a.clientService.LoginResponse()
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to login: %s", err))
-		return nil, fmt.Errorf("failed to login")
-	}
-
-	return runIdP, nil
-
-}
-
-func (a *App) clientProxiesApply() error {
-	if err := a.clientService.ProxiesApply(); err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to apply proxies: %s", err))
-		return fmt.Errorf("failed to apply proxies")
-	}
-	if err := a.clientService.ProxiesApplyResponse(); err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to apply proxies: %s", err))
-		return fmt.Errorf("failed to apply proxies")
 	}
 	return nil
 }
 
-func (a *App) controlLoop(conn net.Conn, msgCh chan msgChan, doneCh chan struct{}, stopNotify <-chan struct{}) {
-	for {
-		if err := conn.SetReadDeadline(time.Now().Add(90 * time.Second)); err != nil {
-			select {
-			case msgCh <- msgChan{err: fmt.Errorf("failed to set read deadline: %w", err)}:
-			case <-stopNotify:
-			case <-doneCh:
-			}
-			return
+func (a *App) Start() error {
+	return a.apps.Conn.Start()
+}
+
+func (a *App) Stop() {
+	a.stopOnce.Do(func() {
+		if a.apps != nil {
+			a.stopApps()
 		}
-		msgType, payload, err := sharedprotocol.ReadMsg(conn)
-		select {
-		case msgCh <- msgChan{msgType, payload, err}:
-		case <-stopNotify:
-			return
-		case <-doneCh:
-			return
+		if a.logger != nil {
+			a.logger.Info("Shutting down gracefully")
 		}
-		if err != nil {
-			return
-		}
+	})
+}
+
+func (a *App) initServices() {
+	tls := services.Tls{
+		Config: a.Configs.Cert,
+		Logger: a.logger,
+	}
+	server := services.Server{
+		Config: a.Configs.Server,
+	}
+	client := services.Client{
+		Config:  a.Configs.Client,
+		Proxies: a.Configs.Proxies,
+		Logger:  a.logger,
+	}
+	a.services = &services.Services{
+		Client: &client,
+		Server: &server,
+		Tls:    &tls,
+	}
+}
+
+func (a *App) initApps() error {
+	conn := apps.Conn{
+		Logger:   a.logger,
+		Services: a.services,
+	}
+	if err := conn.Init(); err != nil {
+		return fmt.Errorf("initialize Conn APP error: %w", err)
+	}
+	a.apps = &apps.Apps{
+		Conn: &conn,
+	}
+	return nil
+}
+
+func (a *App) stopApps() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if a.apps.Conn != nil {
+		_ = a.apps.Conn.Stop(ctx)
 	}
 }
