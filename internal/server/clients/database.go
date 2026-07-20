@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients/migrations"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/migrations"
 	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
@@ -14,40 +14,45 @@ import (
 )
 
 type Database struct {
-	config *configs.Database
-	logger *zap.Logger
+	Config *configs.Database
+	Logger *zap.Logger
+	DB     *gorm.DB
 }
 
-func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
+func (c *Database) Init() error {
 
-	d := &Database{
-		config: config,
-		logger: logger,
-	}
-
-	db, err := d.connect()
+	db, err := c.connect()
 	if err != nil {
-		return nil, fmt.Errorf("database connection failed: %v", err)
+		return fmt.Errorf("database connection failed: %v", err)
 	}
 
-	if err := d.migrate(); err != nil {
-		return nil, fmt.Errorf("database migration failed, %v", err)
+	if err := c.migrate(); err != nil {
+		return fmt.Errorf("database migration failed, %v", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get underlying SQL.DB: %v", err)
+		return fmt.Errorf("failed to get underlying SQL.DB: %v", err)
 	}
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	return db, nil
+	c.DB = db
+
+	return nil
 
 }
 
-func (d *Database) migrate() error {
-	db, err := d.connect()
+func (c *Database) Close() error {
+	if c.DB != nil {
+		c.DB = nil
+	}
+	return nil
+}
+
+func (c *Database) migrate() error {
+	db, err := c.connect()
 	if err != nil {
 		return fmt.Errorf("database connection failed: %v", err)
 	}
@@ -57,21 +62,21 @@ func (d *Database) migrate() error {
 	return nil
 }
 
-func (d *Database) connect() (*gorm.DB, error) {
-	if d.logger == nil {
+func (c *Database) connect() (*gorm.DB, error) {
+	if c.Logger == nil {
 		return nil, fmt.Errorf("database logger is required")
 	}
 	dsn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=UTC",
-		d.config.Host,
-		d.config.Port,
-		d.config.Username,
-		d.config.Password,
-		d.config.Database,
-		d.config.SSLModeOrDefault(),
+		c.Config.Host,
+		c.Config.Port,
+		c.Config.Username,
+		c.Config.Password,
+		c.Config.Database,
+		c.Config.SSLModeOrDefault(),
 	)
 	conf := gorm.Config{
-		Logger:  sharedlogger.NewGormLogger(d.logger, 0),
+		Logger:  sharedlogger.NewGormLogger(c.Logger, 0),
 		NowFunc: func() time.Time { return sharedtimezone.NowUTC() },
 	}
 	return gorm.Open(postgres.Open(dsn), &conf)

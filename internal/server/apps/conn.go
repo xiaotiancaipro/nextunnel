@@ -9,24 +9,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 type Conn struct {
-	Config     *configs.Configs
 	Logger     *zap.Logger
-	DB         *gorm.DB
-	IPLocation *clients.IPLocation
 	Services   *services.Services
 	listener   net.Listener
 	listenerMu sync.Mutex
 	stopCh     chan struct{}
 	stopOnce   sync.Once
+}
+
+func (a *Conn) Init() error {
+	a.stopCh = make(chan struct{})
+	return nil
 }
 
 func (a *Conn) Start() error {
@@ -62,44 +61,39 @@ func (a *Conn) Start() error {
 			a.Logger.Error(fmt.Sprintf("Failed to accept connection: %v", err))
 			return err
 		}
-		go a.handleConn(connRaw, tlsConfig)
+		go a.handle(connRaw, tlsConfig)
 	}
 
 }
 
-func (a *Conn) Stop() {
+func (a *Conn) Stop(_ context.Context) error {
+	var closeErr error
 	a.stopOnce.Do(func() {
-		close(a.stopCh)
+		if a.stopCh != nil {
+			close(a.stopCh)
+		}
 		a.listenerMu.Lock()
 		ln := a.listener
 		a.listener = nil
 		a.listenerMu.Unlock()
 		if ln != nil {
-			_ = ln.Close()
+			closeErr = ln.Close()
 		}
-		if a.Services.web != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = a.webServer.Stop(ctx)
-		}
-		if a.ipLocation != nil {
-			_ = a.ipLocation.Close()
-		}
-		a.logger.Info("Shutting down gracefully")
 	})
+	return closeErr
 }
 
-func (a *Conn) handleConn(connRaw net.Conn, tlsConfig *tls.Config) {
+func (a *Conn) handle(connRaw net.Conn, tlsConfig *tls.Config) {
 	conn, err := a.Services.Server.EstablishConn(connRaw, tlsConfig)
 	if err != nil {
 		a.Logger.Error(fmt.Sprintf("Failed to incoming TLS connection: %v", err))
 		_ = connRaw.Close()
 		return
 	}
-	a.acceptedConn(conn)
+	a.accepted(conn)
 }
 
-func (a *Conn) acceptedConn(conn net.Conn) {
+func (a *Conn) accepted(conn net.Conn) {
 
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	msgType, payload, err := sharedprotocol.ReadMsg(conn)

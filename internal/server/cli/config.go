@@ -12,13 +12,9 @@ const (
 )
 
 func LoadServerConfig(cmd *cobra.Command) *configs.Configs {
-	return sharedcli.LoadConfig(
-		cmd,
-		sharedcli.ConfigSpec{
-			DefaultPath: ServerDefaultConfigPath,
-			EnvVar:      ServerEnvConfigPath,
-		},
-		configs.NewConfigs,
-		"Failed to load config",
-	)
+	spec := sharedcli.ConfigSpec{
+		DefaultPath: ServerDefaultConfigPath,
+		EnvVar:      ServerEnvConfigPath,
+	}
+	return sharedcli.LoadConfig(cmd, spec, configs.Configs{})
 }

@@ -9,6 +9,7 @@ import (
 )
 
 type App interface {
+	Init() error
 	Start() error
 	Stop()
 }

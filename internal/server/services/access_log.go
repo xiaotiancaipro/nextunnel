@@ -3,27 +3,27 @@ package services
 import (
 	"fmt"
 
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	sharedstring "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
-	"gorm.io/gorm"
 )
 
 type AccessLog struct {
-	DB                 *gorm.DB
+	Database           *clients.Database
 	ClientService      *Client
 	ClientProxyService *ClientProxy
 }
 
 func (s *AccessLog) Record(clientId, proxyName, ip, country, region, city string, isLocal bool, status int16) error {
-	clientUUID, err := s.ClientService.ResolveClientId(s.DB, clientId)
+	clientUUID, err := s.ClientService.ResolveClientId(s.Database.DB, clientId)
 	if err != nil {
 		return fmt.Errorf("resolve client_id: %w", err)
 	}
-	proxyUUID, err := s.ClientProxyService.ResolveProxyId(s.DB, clientUUID, proxyName)
+	proxyUUID, err := s.ClientProxyService.ResolveProxyId(s.Database.DB, clientUUID, proxyName)
 	if err != nil {
 		return fmt.Errorf("resolve proxy_id: %w", err)
 	}
-	return s.DB.Model(&models.AccessLog{}).Create(map[string]any{
+	return s.Database.DB.Model(&models.AccessLog{}).Create(map[string]any{
 		"ClientId": clientUUID,
 		"ProxyId":  proxyUUID,
 		"Ip":       ip,

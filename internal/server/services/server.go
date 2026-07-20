@@ -17,7 +17,6 @@ import (
 	sharednetwork "github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 const ruleCacheTTL = 10 * time.Second
@@ -25,7 +24,7 @@ const ruleCacheTTL = 10 * time.Second
 type Server struct {
 	Config             *configs.Server
 	Logger             *zap.Logger
-	DB                 *gorm.DB
+	Database           *clients.Database
 	IPLocation         *clients.IPLocation
 	ClientService      *Client
 	ClientProxyService *ClientProxy
@@ -77,7 +76,7 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id cannot be empty"})
 		return nil, nil, fmt.Errorf("client_id is empty")
 	}
-	if _, err := s.ClientService.ResolveClientId(s.DB, loginMsg.Id); err != nil {
+	if _, err := s.ClientService.ResolveClientId(s.Database.DB, loginMsg.Id); err != nil {
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id is invalid"})
 		return nil, nil, fmt.Errorf("client_id is invalid")
 	}
@@ -140,14 +139,14 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		usedPorts[proxy.RemotePort] = proxy.Name
 	}
 
-	clientUUID, err := s.ClientService.ResolveClientId(s.DB, *clientIdP)
+	clientUUID, err := s.ClientService.ResolveClientId(s.Database.DB, *clientIdP)
 	if err != nil {
 		replyErr("client_id is invalid")
 		return fmt.Errorf("client_id is invalid")
 	}
 
 	var client models.Client
-	if err := s.DB.Where("id = ?", clientUUID).First(&client).Error; err != nil {
+	if err := s.Database.DB.Where("id = ?", clientUUID).First(&client).Error; err != nil {
 		replyErr("client_id is invalid")
 		return fmt.Errorf("client not found")
 	}
@@ -198,7 +197,7 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 }
 
 func (s *Server) SetClientProxiesOffline(clientId string) error {
-	clientUUID, err := s.ClientService.ResolveClientId(s.DB, clientId)
+	clientUUID, err := s.ClientService.ResolveClientId(s.Database.DB, clientId)
 	if err != nil {
 		return err
 	}
@@ -372,7 +371,7 @@ func (s *Server) cachedRules() ([]models.AccessRule, error) {
 	s.ruleCacheMu.RUnlock()
 
 	var rules []models.AccessRule
-	if err := s.DB.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
+	if err := s.Database.DB.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
 		return nil, fmt.Errorf("failed to query access_rules: %w", err)
 	}
 

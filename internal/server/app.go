@@ -1,10 +1,10 @@
 package server
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+	"sync"
+	"time"
 
 	"github.com/xiaotiancaipro/nextunnel/internal/server/apps"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
@@ -12,40 +12,28 @@ import (
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 type App struct {
-	apps       *apps.Apps
-	configs    *configs.Configs
-	logger     *zap.Logger
-	db         *gorm.DB
-	ipLocation *clients.IPLocation
-	services   *services.Services
+	Configs  *configs.Configs
+	logger   *zap.Logger
+	clients  *clients.Clients
+	services *services.Services
+	apps     *apps.Apps
+	stopOnce sync.Once
 }
 
-func (a *App) Init(config *configs.Configs) error {
+func (a *App) Init() error {
 
-	a.configs = config
-
-	logger, err := sharedlogger.NewLogger(config.Logs)
+	logger, err := sharedlogger.NewLogger(a.Configs.Logs)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logging: %v", err)
 	}
 	a.logger = logger
 
-	db, err := clients.NewDB(config.Database, logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize database: %v", err)
+	if err := a.initClients(); err != nil {
+		return err
 	}
-	logger.Info("initialize database successfully")
-	a.db = db
-
-	ipLocation, err := clients.NewIPLocation(config.IPLocation.APIKey, logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize ip location: %v", err)
-	}
-	a.ipLocation = ipLocation
 
 	a.initServices()
 
@@ -57,31 +45,80 @@ func (a *App) Init(config *configs.Configs) error {
 
 }
 
-func (a *App) initServices() {
-	client := services.Client{DB: a.db}
-	clientCert := services.ClientCert{
-		DB:     a.db,
-		Config: a.configs.Cert,
+func (a *App) Start() error {
+	if a.apps.API != nil {
+		go func() {
+			if err := a.apps.API.Start(); err != nil {
+				a.logger.Error(fmt.Sprintf("Web management API stopped: %v", err))
+			}
+		}()
 	}
-	clientProxy := services.ClientProxy{DB: a.db}
-	accessRule := services.AccessRule{DB: a.db}
+	return a.apps.Conn.Start()
+}
+
+func (a *App) Stop() {
+	a.stopOnce.Do(func() {
+		if a.apps != nil {
+			a.stopApps()
+		}
+		a.stopClients()
+		if a.logger != nil {
+			a.logger.Info("Shutting down gracefully")
+		}
+	})
+}
+
+func (a *App) initClients() error {
+
+	database := clients.Database{
+		Config: a.Configs.Database,
+		Logger: a.logger,
+	}
+	if err := database.Init(); err != nil {
+		return fmt.Errorf("failed to initialize database: %v", err)
+	}
+
+	ipLocation := clients.IPLocation{
+		Config: a.Configs.IPLocation,
+		Logger: a.logger,
+	}
+	if err := ipLocation.Init(); err != nil {
+		return fmt.Errorf("failed to initialize ip location: %v", err)
+	}
+
+	a.clients = &clients.Clients{
+		Database:   &database,
+		IPLocation: &ipLocation,
+	}
+	return nil
+
+}
+
+func (a *App) initServices() {
+	client := services.Client{Database: a.clients.Database}
+	clientCert := services.ClientCert{
+		Database: a.clients.Database,
+		Config:   a.Configs.Cert,
+	}
+	clientProxy := services.ClientProxy{Database: a.clients.Database}
+	accessRule := services.AccessRule{Database: a.clients.Database}
 	accessLog := services.AccessLog{
-		DB:                 a.db,
+		Database:           a.clients.Database,
 		ClientService:      &client,
 		ClientProxyService: &clientProxy,
 	}
 	server := services.Server{
-		Config:             a.configs.Server,
+		Config:             a.Configs.Server,
 		Logger:             a.logger,
-		DB:                 a.db,
-		IPLocation:         a.ipLocation,
+		Database:           a.clients.Database,
+		IPLocation:         a.clients.IPLocation,
 		ClientService:      &client,
 		ClientProxyService: &clientProxy,
 		AccessRuleService:  &accessRule,
 		AccessLogService:   &accessLog,
 	}
 	tls := services.Tls{
-		Config: a.configs.Cert,
+		Config: a.Configs.Cert,
 		Logger: a.logger,
 	}
 	a.services = &services.Services{
@@ -97,65 +134,49 @@ func (a *App) initServices() {
 
 func (a *App) initApps() error {
 
-	var apiApp apps.API
-	if a.configs.Web.IsEnabled() {
-		apiApp = apps.API{
-			Config:   a.configs,
+	var apiApp *apps.API
+	if a.Configs.Web.IsEnabled() {
+		api := apps.API{
+			Config:   a.Configs,
 			Logger:   a.logger,
 			Services: a.services,
 		}
-		if err := apiApp.Init(); err != nil {
-			return fmt.Errorf("initialize API APP error, " + err.Error())
+		if err := api.Init(); err != nil {
+			return fmt.Errorf("initialize API APP error: %w", err)
 		}
+		apiApp = &api
 	}
 
 	connApp := apps.Conn{
-		Config:     a.configs,
-		Logger:     a.logger,
-		DB:         a.db,
-		IPLocation: a.ipLocation,
-		Services:   a.services,
+		Logger:   a.logger,
+		Services: a.services,
 	}
+	_ = connApp.Init()
 
 	a.apps = &apps.Apps{
-		API:  &apiApp,
+		API:  apiApp,
 		Conn: &connApp,
 	}
 	return nil
 
 }
 
-func (a *App) Start() error {
-
-	start := func() {
-		go func() {
-			if err := a.apps.API.Start(); err != nil {
-				return
-			}
-		}()
-		go func() {
-			if err := a.apps.Conn.Start(); err != nil {
-				return
-			}
-		}()
+func (a *App) stopClients() {
+	if a.clients.IPLocation != nil {
+		func() { _ = a.clients.IPLocation.Close() }()
 	}
+	if a.clients.Database != nil {
+		func() { _ = a.clients.Database.Close() }()
+	}
+}
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- start()
-	}()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case err := <-errCh:
-		signal.Stop(sigCh)
-		ExitOnErr(cmd, err)
-	case <-sigCh:
-		signal.Stop(sigCh)
-		app.Stop()
-		err := <-errCh
-		ExitOnErr(cmd, err)
+func (a *App) stopApps() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if a.apps.Conn != nil {
+		_ = a.apps.Conn.Stop(ctx)
+	}
+	if a.apps.API != nil {
+		_ = a.apps.API.Stop(ctx)
 	}
 }

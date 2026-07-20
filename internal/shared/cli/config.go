@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
 )
 
 type ConfigSpec struct {
@@ -13,7 +14,7 @@ type ConfigSpec struct {
 	EnvVar      string
 }
 
-func LoadConfig[T any](cmd *cobra.Command, spec ConfigSpec, loader func(path string) (*T, error), failMsg string) *T {
+func LoadConfig[T any](cmd *cobra.Command, spec ConfigSpec, configsType T) *T {
 
 	path, err := resolveConfigPath(cmd, spec)
 	if err != nil {
@@ -27,9 +28,9 @@ func LoadConfig[T any](cmd *cobra.Command, spec ConfigSpec, loader func(path str
 		os.Exit(1)
 	}
 
-	c, err := loader(file)
+	c, err := sharedconfigs.Load(configsType, file)
 	if err != nil {
-		cmd.PrintErrf("%s, %v\n", failMsg, err)
+		cmd.PrintErrf("Failed to load config, %v\n", err)
 		os.Exit(1)
 	}
 

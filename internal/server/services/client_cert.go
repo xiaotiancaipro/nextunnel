@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
@@ -15,8 +16,8 @@ import (
 )
 
 type ClientCert struct {
-	Config *configs.Cert
-	DB     *gorm.DB
+	Config   *configs.Cert
+	Database *clients.Database
 }
 
 type ClientCertView struct {
@@ -28,7 +29,7 @@ type ClientCertView struct {
 
 func (s *ClientCert) List(clientID uuid.UUID) ([]ClientCertView, error) {
 	var records []models.ClientCert
-	if err := s.DB.Where("client_id = ? AND is_delete = ?", clientID, false).
+	if err := s.Database.DB.Where("client_id = ? AND is_delete = ?", clientID, false).
 		Order("created_at ASC").
 		Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("failed to query client certificates: %w", err)
@@ -72,7 +73,7 @@ func (s *ClientCert) Create(client *models.Client, expiresAt *time.Time) (Client
 		CertPath:  relPath,
 		ExpiredAt: notAfter.UTC(),
 	}
-	if err := s.DB.Create(&record).Error; err != nil {
+	if err := s.Database.DB.Create(&record).Error; err != nil {
 		_ = sharedcerts.RemoveCertDir(absPath)
 		return ClientCertView{}, fmt.Errorf("failed to create client certificate record: %w", err)
 	}
@@ -82,7 +83,7 @@ func (s *ClientCert) Create(client *models.Client, expiresAt *time.Time) (Client
 
 func (s *ClientCert) Delete(clientID uuid.UUID, certID uuid.UUID) error {
 	var record models.ClientCert
-	if err := s.DB.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
+	if err := s.Database.DB.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("certificate %q not found", certID)
@@ -90,7 +91,7 @@ func (s *ClientCert) Delete(clientID uuid.UUID, certID uuid.UUID) error {
 		return fmt.Errorf("failed to query client certificate: %w", err)
 	}
 
-	result := s.DB.Model(&models.ClientCert{}).
+	result := s.Database.DB.Model(&models.ClientCert{}).
 		Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		Update("is_delete", true)
 	if result.Error != nil {
@@ -109,7 +110,7 @@ func (s *ClientCert) Delete(clientID uuid.UUID, certID uuid.UUID) error {
 }
 
 func (s *ClientCert) DeleteAllForClient(clientID uuid.UUID, clientName string) error {
-	if err := s.DB.Model(&models.ClientCert{}).
+	if err := s.Database.DB.Model(&models.ClientCert{}).
 		Where("client_id = ? AND is_delete = ?", clientID, false).
 		Update("is_delete", true).Error; err != nil {
 		return fmt.Errorf("failed to delete client certificates: %w", err)
@@ -135,7 +136,7 @@ func (s *ClientCert) ReadFiles(clientID uuid.UUID, certID uuid.UUID) ([]byte, []
 
 func (s *ClientCert) getActive(clientID, certID uuid.UUID) (*models.ClientCert, error) {
 	var record models.ClientCert
-	if err := s.DB.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
+	if err := s.Database.DB.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("certificate %q not found", certID)

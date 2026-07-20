@@ -9,10 +9,6 @@ import (
 const ClientDefaultConfigPath = "nextunnel-client.toml"
 
 func LoadClientConfig(cmd *cobra.Command) *configs.Configs {
-	return sharedcli.LoadConfig(
-		cmd,
-		sharedcli.ConfigSpec{DefaultPath: ClientDefaultConfigPath},
-		configs.NewConfigs,
-		"Failed to load client config",
-	)
+	spec := sharedcli.ConfigSpec{DefaultPath: ClientDefaultConfigPath}
+	return sharedcli.LoadConfig(cmd, spec, configs.Configs{})
 }

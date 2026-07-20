@@ -1,6 +1,6 @@
 package clients
 
 type Clients struct {
-	DB         *Database
+	Database   *Database
 	IPLocation *IPLocation
 }

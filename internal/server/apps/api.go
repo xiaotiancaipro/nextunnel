@@ -26,9 +26,9 @@ type API struct {
 func (a *API) Init() error {
 
 	gin.SetMode(gin.ReleaseMode)
-	engine := gin.New()
+	a.engine = gin.New()
 
-	engine.Use(
+	a.engine.Use(
 		gin.Recovery(),
 		middleware.CORS(),
 	)
@@ -53,10 +53,10 @@ func (a *API) Start() error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	a.Logger.Info("Web management listening on " + addr)
 	if err := a.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
-	a.Logger.Info("Web management listening on " + addr)
 
 	return nil
 

@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"gorm.io/gorm"
 )
 
 type Client struct {
-	DB *gorm.DB
+	Database *clients.Database
 }
 
 func (s *Client) Create(name string, portStart, portEnd int) (*models.Client, error) {
@@ -28,7 +29,7 @@ func (s *Client) Create(name string, portStart, portEnd int) (*models.Client, er
 		PortStart: portStart,
 		PortEnd:   portEnd,
 	}
-	if err := s.DB.Create(&client).Error; err != nil {
+	if err := s.Database.DB.Create(&client).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return nil, fmt.Errorf("client %q already exists", name)
 		}
@@ -39,7 +40,7 @@ func (s *Client) Create(name string, portStart, portEnd int) (*models.Client, er
 
 func (s *Client) List() ([]models.Client, error) {
 	var clients []models.Client
-	if err := s.DB.Where("is_delete = ?", false).Order("created_at ASC").Find(&clients).Error; err != nil {
+	if err := s.Database.DB.Where("is_delete = ?", false).Order("created_at ASC").Find(&clients).Error; err != nil {
 		return nil, fmt.Errorf("failed to query clients: %w", err)
 	}
 	return clients, nil
@@ -51,7 +52,7 @@ func (s *Client) GetByName(name string) (*models.Client, error) {
 		return nil, fmt.Errorf("client name cannot be empty")
 	}
 	var client models.Client
-	if err := s.DB.Where("name = ? AND is_delete = ?", name, false).First(&client).Error; err != nil {
+	if err := s.Database.DB.Where("name = ? AND is_delete = ?", name, false).First(&client).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("client %q not found", name)
 		}
@@ -65,7 +66,7 @@ func (s *Client) Delete(name string) error {
 	if name == "" {
 		return fmt.Errorf("client name cannot be empty")
 	}
-	result := s.DB.Model(&models.Client{}).Where("name = ? AND is_delete = ?", name, false).Update("is_delete", true)
+	result := s.Database.DB.Model(&models.Client{}).Where("name = ? AND is_delete = ?", name, false).Update("is_delete", true)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete client: %w", result.Error)
 	}

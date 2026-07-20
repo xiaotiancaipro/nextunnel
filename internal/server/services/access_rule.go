@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"gorm.io/gorm"
 )
 
 type AccessRule struct {
-	DB *gorm.DB
+	Database *clients.Database
 }
 
 type RuleTarget struct {
@@ -54,7 +55,7 @@ func (s *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	if err := s.validateRuleTarget(target); err != nil {
 		return err
 	}
-	return s.DB.Transaction(func(tx *gorm.DB) error {
+	return s.Database.DB.Transaction(func(tx *gorm.DB) error {
 		var record models.AccessRule
 		err := s.targetQuery(tx, target).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -76,7 +77,7 @@ func (s *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 
 func (s *AccessRule) ListRules() ([]models.AccessRule, error) {
 	var rules []models.AccessRule
-	if err := s.DB.Where("is_delete = ?", false).Order("status DESC, created_at ASC").Find(&rules).Error; err != nil {
+	if err := s.Database.DB.Where("is_delete = ?", false).Order("status DESC, created_at ASC").Find(&rules).Error; err != nil {
 		return nil, fmt.Errorf("failed to query access_rules: %w", err)
 	}
 	return rules, nil
@@ -86,7 +87,7 @@ func (s *AccessRule) DeleteRule(target RuleTarget, status int16) error {
 	if err := s.validateRuleTarget(target); err != nil {
 		return err
 	}
-	return s.DB.Transaction(func(tx *gorm.DB) error {
+	return s.Database.DB.Transaction(func(tx *gorm.DB) error {
 		var record models.AccessRule
 		err := s.targetQuery(tx, target).Where("status = ?", status).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
