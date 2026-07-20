@@ -1,214 +1,161 @@
 package server
 
 import (
-	"context"
-	"crypto/tls"
-	"errors"
 	"fmt"
-	"net"
-	"sync"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/xiaotiancaipro/nextunnel/internal/server/apps"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/controllers"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
-	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type App struct {
-	version       string
-	config        *configs.Configs
-	logger        *zap.Logger
-	db            *gorm.DB
-	ipLocation    *clients.IPLocation
-	tlsService    *services.Tls
-	serverService *services.Server
-	webServer     *controllers.Server
-	stopCh        chan struct{}
-	stopOnce      sync.Once
-	listenerMu    sync.Mutex
-	listener      net.Listener
+	apps       *apps.Apps
+	configs    *configs.Configs
+	logger     *zap.Logger
+	db         *gorm.DB
+	ipLocation *clients.IPLocation
+	services   *services.Services
 }
 
-func NewApp(config *configs.Configs, version string) (*App, error) {
+func (a *App) Init(config *configs.Configs) error {
+
+	a.configs = config
 
 	logger, err := sharedlogger.NewLogger(config.Logs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logging: %v", err)
+		return fmt.Errorf("failed to initialize logging: %v", err)
 	}
+	a.logger = logger
 
 	db, err := clients.NewDB(config.Database, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %v", err)
+		return fmt.Errorf("failed to initialize database: %v", err)
 	}
 	logger.Info("initialize database successfully")
+	a.db = db
 
 	ipLocation, err := clients.NewIPLocation(config.IPLocation.APIKey, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize ip location: %v", err)
+		return fmt.Errorf("failed to initialize ip location: %v", err)
+	}
+	a.ipLocation = ipLocation
+
+	a.initServices()
+
+	if err := a.initApps(); err != nil {
+		return err
 	}
 
-	app := App{
-		version:       version,
-		config:        config,
-		logger:        logger,
-		db:            db,
-		tlsService:    services.NewTls(config.Cert, logger),
-		serverService: services.NewServer(config.Server, logger, db, ipLocation),
-		ipLocation:    ipLocation,
-		stopCh:        make(chan struct{}),
+	return nil
+
+}
+
+func (a *App) initServices() {
+	client := services.Client{DB: a.db}
+	clientCert := services.ClientCert{
+		DB:     a.db,
+		Config: a.configs.Cert,
+	}
+	clientProxy := services.ClientProxy{DB: a.db}
+	accessRule := services.AccessRule{DB: a.db}
+	accessLog := services.AccessLog{
+		DB:                 a.db,
+		ClientService:      &client,
+		ClientProxyService: &clientProxy,
+	}
+	server := services.Server{
+		Config:             a.configs.Server,
+		Logger:             a.logger,
+		DB:                 a.db,
+		IPLocation:         a.ipLocation,
+		ClientService:      &client,
+		ClientProxyService: &clientProxy,
+		AccessRuleService:  &accessRule,
+		AccessLogService:   &accessLog,
+	}
+	tls := services.Tls{
+		Config: a.configs.Cert,
+		Logger: a.logger,
+	}
+	a.services = &services.Services{
+		AccessLog:   &accessLog,
+		AccessRule:  &accessRule,
+		Client:      &client,
+		ClientCert:  &clientCert,
+		ClientProxy: &clientProxy,
+		Server:      &server,
+		Tls:         &tls,
+	}
+}
+
+func (a *App) initApps() error {
+
+	var apiApp apps.API
+	if a.configs.Web.IsEnabled() {
+		apiApp = apps.API{
+			Config:   a.configs,
+			Logger:   a.logger,
+			Services: a.services,
+		}
+		if err := apiApp.Init(); err != nil {
+			return fmt.Errorf("initialize API APP error, " + err.Error())
+		}
 	}
 
-	if config.Web.IsEnabled() {
-		app.webServer = controllers.NewServer(version, config, db, logger)
+	connApp := apps.Conn{
+		Config:     a.configs,
+		Logger:     a.logger,
+		DB:         a.db,
+		IPLocation: a.ipLocation,
+		Services:   a.services,
 	}
 
-	return &app, nil
+	a.apps = &apps.Apps{
+		API:  &apiApp,
+		Conn: &connApp,
+	}
+	return nil
 
 }
 
 func (a *App) Start() error {
 
-	if a.webServer != nil {
+	start := func() {
 		go func() {
-			if err := a.webServer.Start(); err != nil {
-				a.logger.Error(fmt.Sprintf("Web management API stopped: %v", err))
-			}
-		}()
-	}
-
-	listener, err := a.serverService.Listen()
-	if err != nil {
-		return err
-	}
-	a.listenerMu.Lock()
-	a.listener = listener
-	a.listenerMu.Unlock()
-
-	a.logger.Info("Listening on " + listener.Addr().String())
-
-	tlsConfig, err := a.tlsService.Init()
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to initialize TLS connection: %v", err))
-		return err
-	}
-	a.logger.Info("TLS connection established")
-
-	for {
-		connRaw, err := listener.Accept()
-		if err != nil {
-			select {
-			case <-a.stopCh:
-				return nil
-			default:
-			}
-			if errors.Is(err, net.ErrClosed) {
-				return nil
-			}
-			a.logger.Error(fmt.Sprintf("Failed to accept connection: %v", err))
-			return err
-		}
-		go a.handleConn(connRaw, tlsConfig)
-	}
-
-}
-
-func (a *App) Stop() {
-	a.stopOnce.Do(func() {
-		close(a.stopCh)
-		a.listenerMu.Lock()
-		ln := a.listener
-		a.listener = nil
-		a.listenerMu.Unlock()
-		if ln != nil {
-			_ = ln.Close()
-		}
-		if a.webServer != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = a.webServer.Stop(ctx)
-		}
-		if a.ipLocation != nil {
-			_ = a.ipLocation.Close()
-		}
-		a.logger.Info("Shutting down gracefully")
-	})
-}
-
-func (a *App) handleConn(connRaw net.Conn, tlsConfig *tls.Config) {
-	conn, err := a.serverService.EstablishConn(connRaw, tlsConfig)
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to incoming TLS connection: %v", err))
-		_ = connRaw.Close()
-		return
-	}
-	a.acceptedConn(conn)
-}
-
-func (a *App) acceptedConn(conn net.Conn) {
-
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
-	msgType, payload, err := sharedprotocol.ReadMsg(conn)
-	if err != nil {
-		a.logger.Error(fmt.Sprintf("Failed to read first message [%s]: %v", conn.RemoteAddr(), err))
-		_ = conn.Close()
-		return
-	}
-	_ = conn.SetDeadline(time.Time{})
-
-	switch msgType {
-	case sharedprotocol.MsgLogin:
-		clientIdP, runIdP, err := a.serverService.Login(conn, payload)
-		if err != nil {
-			a.logger.Error(fmt.Sprintf("Failed to login: %v", err))
-			_ = conn.Close()
-			return
-		}
-		clientID := *clientIdP
-		clientStopCh := make(chan struct{})
-		defer func() {
-			close(clientStopCh)
-			if err := a.serverService.SetClientProxiesOffline(clientID); err != nil {
-				a.logger.Warn(fmt.Sprintf("Failed to mark client proxies offline: clientID=%s, err=%v", clientID, err))
-			}
-			_ = conn.Close()
-		}()
-		var ctrlWriteMu sync.Mutex
-		for {
-			msgType_, payload_, err := sharedprotocol.ReadMsg(conn)
-			if err != nil {
-				a.logger.Error(fmt.Sprintf("Client control connection disconnected, clientID=%s, runID=%s: %v", *clientIdP, *runIdP, err))
+			if err := a.apps.API.Start(); err != nil {
 				return
 			}
-			switch msgType_ {
-			case sharedprotocol.MsgProxiesApply:
-				if err := a.serverService.ProxiesApply(conn, &ctrlWriteMu, payload_, clientIdP, a.stopCh, clientStopCh); err != nil {
-					a.logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
-					return
-				}
-			case sharedprotocol.MsgHeartbeat:
-				if err := services.WriteCtrlMsg(&ctrlWriteMu, conn, sharedprotocol.MsgHeartbeatResp, sharedprotocol.HeartbeatRespMsg{}); err != nil {
-					a.logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
-					return
-				}
-			default:
-				a.logger.Error(fmt.Sprintf("Unknown message received on control connection 0x%02x runID=%s", msgType_, *runIdP))
+		}()
+		go func() {
+			if err := a.apps.Conn.Start(); err != nil {
+				return
 			}
-		}
-	case sharedprotocol.MsgStartWorkConn:
-		if err := a.serverService.StartWorkConn(conn, payload); err != nil {
-			a.logger.Error(fmt.Sprintf("Failed to start work connection: %v", err))
-			_ = conn.Close()
-			return
-		}
-		return
-	default:
-		a.logger.Error(fmt.Sprintf("Unknown first message type 0x%02x [%s]", msgType, conn.RemoteAddr()))
-		_ = conn.Close()
+		}()
 	}
 
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- start()
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		signal.Stop(sigCh)
+		ExitOnErr(cmd, err)
+	case <-sigCh:
+		signal.Stop(sigCh)
+		app.Stop()
+		err := <-errCh
+		ExitOnErr(cmd, err)
+	}
 }

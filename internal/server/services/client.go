@@ -5,24 +5,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	"gorm.io/gorm"
 )
 
-type ClientRegistry struct {
-	db *gorm.DB
+type Client struct {
+	DB *gorm.DB
 }
 
-func NewClientRegistry(db *gorm.DB) *ClientRegistry {
-	return &ClientRegistry{db: db}
-}
-
-func (r *ClientRegistry) Create(name string, portStart, portEnd int) (*models.Client, error) {
-	name = trimName(name)
+func (s *Client) Create(name string, portStart, portEnd int) (*models.Client, error) {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("client name cannot be empty")
 	}
-	if err := validatePortRange(portStart, portEnd); err != nil {
+	if err := s.validatePortRange(portStart, portEnd); err != nil {
 		return nil, err
 	}
 
@@ -31,7 +28,7 @@ func (r *ClientRegistry) Create(name string, portStart, portEnd int) (*models.Cl
 		PortStart: portStart,
 		PortEnd:   portEnd,
 	}
-	if err := r.db.Create(&client).Error; err != nil {
+	if err := s.DB.Create(&client).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return nil, fmt.Errorf("client %q already exists", name)
 		}
@@ -40,21 +37,21 @@ func (r *ClientRegistry) Create(name string, portStart, portEnd int) (*models.Cl
 	return &client, nil
 }
 
-func (r *ClientRegistry) List() ([]models.Client, error) {
+func (s *Client) List() ([]models.Client, error) {
 	var clients []models.Client
-	if err := r.db.Where("is_delete = ?", false).Order("created_at ASC").Find(&clients).Error; err != nil {
+	if err := s.DB.Where("is_delete = ?", false).Order("created_at ASC").Find(&clients).Error; err != nil {
 		return nil, fmt.Errorf("failed to query clients: %w", err)
 	}
 	return clients, nil
 }
 
-func (r *ClientRegistry) GetByName(name string) (*models.Client, error) {
-	name = trimName(name)
+func (s *Client) GetByName(name string) (*models.Client, error) {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("client name cannot be empty")
 	}
 	var client models.Client
-	if err := r.db.Where("name = ? AND is_delete = ?", name, false).First(&client).Error; err != nil {
+	if err := s.DB.Where("name = ? AND is_delete = ?", name, false).First(&client).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("client %q not found", name)
 		}
@@ -63,12 +60,12 @@ func (r *ClientRegistry) GetByName(name string) (*models.Client, error) {
 	return &client, nil
 }
 
-func (r *ClientRegistry) Delete(name string) error {
-	name = trimName(name)
+func (s *Client) Delete(name string) error {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("client name cannot be empty")
 	}
-	result := r.db.Model(&models.Client{}).Where("name = ? AND is_delete = ?", name, false).Update("is_delete", true)
+	result := s.DB.Model(&models.Client{}).Where("name = ? AND is_delete = ?", name, false).Update("is_delete", true)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete client: %w", result.Error)
 	}
@@ -78,18 +75,28 @@ func (r *ClientRegistry) Delete(name string) error {
 	return nil
 }
 
-func ClientPortLimited(client models.Client) bool {
-	return client.PortStart > 0 && client.PortEnd > 0
+func (s *Client) ResolveClientId(db *gorm.DB, id string) (uuid.UUID, error) {
+	var client models.Client
+	if uid, err := uuid.Parse(id); err == nil {
+		if err := db.Where("id = ? AND is_delete = ?", uid, false).First(&client).Error; err != nil {
+			return uuid.Nil, fmt.Errorf("client not found: %w", err)
+		}
+		return client.Id, nil
+	}
+	if err := db.Where("name = ? AND is_delete = ?", id, false).First(&client).Error; err != nil {
+		return uuid.Nil, fmt.Errorf("client not found: %w", err)
+	}
+	return client.Id, nil
 }
 
-func ClientPortAllowed(client models.Client, port int) bool {
-	if !ClientPortLimited(client) {
+func (s *Client) ClientPortAllowed(client models.Client, port int) bool {
+	if !(client.PortStart > 0 && client.PortEnd > 0) {
 		return true
 	}
 	return port >= client.PortStart && port <= client.PortEnd
 }
 
-func validatePortRange(portStart, portEnd int) error {
+func (s *Client) validatePortRange(portStart, portEnd int) error {
 	if portStart == 0 && portEnd == 0 {
 		return nil
 	}
@@ -103,8 +110,4 @@ func validatePortRange(portStart, portEnd int) error {
 		return fmt.Errorf("port range must be between 1 and 65535")
 	}
 	return nil
-}
-
-func trimName(name string) string {
-	return strings.TrimSpace(name)
 }

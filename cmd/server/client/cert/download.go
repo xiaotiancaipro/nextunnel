@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedstring "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
 )
 
 var dir string
@@ -38,7 +38,7 @@ func downloadRun(cmd *cobra.Command, args []string) {
 	client, err := registry.GetByName(clientName)
 	sharedcli.ExitOnErr(cmd, err)
 
-	certID, err := services.ParseCertID(args[1])
+	certID, err := sharedstring.ParseUUID(args[1])
 	sharedcli.ExitOnErr(cmd, err)
 
 	certPEM, keyPEM, err := certService.ReadFiles(client.Id, certID)

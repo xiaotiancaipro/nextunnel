@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 )
 
 const MsgMaxSize = 1 << 20
@@ -63,7 +64,13 @@ type StartWorkConnMsg struct {
 	WorkID string `json:"work_id"`
 }
 
-func WriteMsg(conn net.Conn, msgType byte, payload interface{}) error {
+func WriteMsgWithLock(mu *sync.Mutex, conn net.Conn, msgType byte, payload any) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return WriteMsg(conn, msgType, payload)
+}
+
+func WriteMsg(conn net.Conn, msgType byte, payload any) error {
 
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -105,6 +112,6 @@ func ReadMsg(conn net.Conn) (byte, []byte, error) {
 
 }
 
-func Decode(payload []byte, v interface{}) error {
+func Decode(payload []byte, v any) error {
 	return json.Unmarshal(payload, v)
 }

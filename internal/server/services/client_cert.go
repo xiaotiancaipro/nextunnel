@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
 	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
 	"gorm.io/gorm"
 )
 
-// ClientCertView is the certificate metadata exposed to API/CLI callers.
+type ClientCert struct {
+	Config *configs.Cert
+	DB     *gorm.DB
+}
+
 type ClientCertView struct {
 	ID        string
 	CreatedAt time.Time
@@ -22,23 +26,9 @@ type ClientCertView struct {
 	Serial    string
 }
 
-type ClientCertRegistry struct {
-	db         *gorm.DB
-	certDir    string
-	listenHost string
-}
-
-func NewClientCertRegistry(db *gorm.DB, certDir, listenHost string) *ClientCertRegistry {
-	return &ClientCertRegistry{
-		db:         db,
-		certDir:    certDir,
-		listenHost: listenHost,
-	}
-}
-
-func (r *ClientCertRegistry) List(clientID uuid.UUID) ([]ClientCertView, error) {
+func (s *ClientCert) List(clientID uuid.UUID) ([]ClientCertView, error) {
 	var records []models.ClientCert
-	if err := r.db.Where("client_id = ? AND is_delete = ?", clientID, false).
+	if err := s.DB.Where("client_id = ? AND is_delete = ?", clientID, false).
 		Order("created_at ASC").
 		Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("failed to query client certificates: %w", err)
@@ -46,7 +36,7 @@ func (r *ClientCertRegistry) List(clientID uuid.UUID) ([]ClientCertView, error) 
 
 	items := make([]ClientCertView, 0, len(records))
 	for i := range records {
-		view, err := r.toView(records[i])
+		view, err := s.toView(records[i])
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +45,7 @@ func (r *ClientCertRegistry) List(clientID uuid.UUID) ([]ClientCertView, error) 
 	return items, nil
 }
 
-func (r *ClientCertRegistry) Create(client *models.Client, expiresAt *time.Time) (ClientCertView, error) {
+func (s *ClientCert) Create(client *models.Client, expiresAt *time.Time) (ClientCertView, error) {
 	notAfter, err := sharedcerts.ResolveNotAfter(expiresAt)
 	if err != nil {
 		return ClientCertView{}, err
@@ -63,12 +53,12 @@ func (r *ClientCertRegistry) Create(client *models.Client, expiresAt *time.Time)
 
 	certID := uuid.New()
 	relPath := sharedcerts.RelClientCertPath(client.Name, certID.String())
-	absPath, err := sharedcerts.AbsCertPath(r.certDir, relPath)
+	absPath, err := sharedcerts.AbsCertPath(s.Config.Dir, relPath)
 	if err != nil {
 		return ClientCertView{}, err
 	}
 
-	certPEM, keyPEM, err := sharedcerts.GenerateClientPEM(r.certDir, r.listenHost, expiresAt)
+	certPEM, keyPEM, err := sharedcerts.GenerateClientPEM(s.Config.Dir, s.Config.Host, expiresAt)
 	if err != nil {
 		return ClientCertView{}, err
 	}
@@ -82,17 +72,17 @@ func (r *ClientCertRegistry) Create(client *models.Client, expiresAt *time.Time)
 		CertPath:  relPath,
 		ExpiredAt: notAfter.UTC(),
 	}
-	if err := r.db.Create(&record).Error; err != nil {
+	if err := s.DB.Create(&record).Error; err != nil {
 		_ = sharedcerts.RemoveCertDir(absPath)
 		return ClientCertView{}, fmt.Errorf("failed to create client certificate record: %w", err)
 	}
 
-	return r.toView(record)
+	return s.toView(record)
 }
 
-func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error {
+func (s *ClientCert) Delete(clientID uuid.UUID, certID uuid.UUID) error {
 	var record models.ClientCert
-	if err := r.db.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
+	if err := s.DB.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("certificate %q not found", certID)
@@ -100,7 +90,7 @@ func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error 
 		return fmt.Errorf("failed to query client certificate: %w", err)
 	}
 
-	result := r.db.Model(&models.ClientCert{}).
+	result := s.DB.Model(&models.ClientCert{}).
 		Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		Update("is_delete", true)
 	if result.Error != nil {
@@ -110,7 +100,7 @@ func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error 
 		return fmt.Errorf("certificate %q not found", certID)
 	}
 
-	if absPath, err := sharedcerts.AbsCertPath(r.certDir, record.CertPath); err == nil {
+	if absPath, err := sharedcerts.AbsCertPath(s.Config.Dir, record.CertPath); err == nil {
 		if err := sharedcerts.RemoveCertDir(absPath); err != nil && !os.IsNotExist(err) {
 			return err
 		}
@@ -118,34 +108,34 @@ func (r *ClientCertRegistry) Delete(clientID uuid.UUID, certID uuid.UUID) error 
 	return nil
 }
 
-func (r *ClientCertRegistry) DeleteAllForClient(clientID uuid.UUID, clientName string) error {
-	if err := r.db.Model(&models.ClientCert{}).
+func (s *ClientCert) DeleteAllForClient(clientID uuid.UUID, clientName string) error {
+	if err := s.DB.Model(&models.ClientCert{}).
 		Where("client_id = ? AND is_delete = ?", clientID, false).
 		Update("is_delete", true).Error; err != nil {
 		return fmt.Errorf("failed to delete client certificates: %w", err)
 	}
 
-	if err := sharedcerts.RemoveClientCertDir(r.certDir, clientName); err != nil && !os.IsNotExist(err) {
+	if err := sharedcerts.RemoveClientCertDir(s.Config.Dir, clientName); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
 }
 
-func (r *ClientCertRegistry) ReadFiles(clientID uuid.UUID, certID uuid.UUID) ([]byte, []byte, error) {
-	record, err := r.getActive(clientID, certID)
+func (s *ClientCert) ReadFiles(clientID uuid.UUID, certID uuid.UUID) ([]byte, []byte, error) {
+	record, err := s.getActive(clientID, certID)
 	if err != nil {
 		return nil, nil, err
 	}
-	absPath, err := sharedcerts.AbsCertPath(r.certDir, record.CertPath)
+	absPath, err := sharedcerts.AbsCertPath(s.Config.Dir, record.CertPath)
 	if err != nil {
 		return nil, nil, err
 	}
 	return sharedcerts.ReadCertFiles(absPath)
 }
 
-func (r *ClientCertRegistry) getActive(clientID, certID uuid.UUID) (*models.ClientCert, error) {
+func (s *ClientCert) getActive(clientID, certID uuid.UUID) (*models.ClientCert, error) {
 	var record models.ClientCert
-	if err := r.db.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
+	if err := s.DB.Where("id = ? AND client_id = ? AND is_delete = ?", certID, clientID, false).
 		First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("certificate %q not found", certID)
@@ -155,7 +145,7 @@ func (r *ClientCertRegistry) getActive(clientID, certID uuid.UUID) (*models.Clie
 	return &record, nil
 }
 
-func (r *ClientCertRegistry) toView(record models.ClientCert) (ClientCertView, error) {
+func (s *ClientCert) toView(record models.ClientCert) (ClientCertView, error) {
 	view := ClientCertView{
 		ID:        record.Id.String(),
 		CreatedAt: record.CreatedAt.UTC(),
@@ -165,7 +155,7 @@ func (r *ClientCertRegistry) toView(record models.ClientCert) (ClientCertView, e
 		view.ExpiresAt = &expires
 	}
 
-	absPath, err := sharedcerts.AbsCertPath(r.certDir, record.CertPath)
+	absPath, err := sharedcerts.AbsCertPath(s.Config.Dir, record.CertPath)
 	if err != nil {
 		return ClientCertView{}, err
 	}
@@ -182,16 +172,4 @@ func (r *ClientCertRegistry) toView(record models.ClientCert) (ClientCertView, e
 	}
 	view.Serial = serial
 	return view, nil
-}
-
-func ParseCertID(raw string) (uuid.UUID, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return uuid.Nil, fmt.Errorf("certificate id is required")
-	}
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("invalid certificate id %q", raw)
-	}
-	return id, nil
 }

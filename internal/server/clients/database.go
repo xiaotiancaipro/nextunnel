@@ -13,14 +13,14 @@ import (
 	"gorm.io/gorm"
 )
 
-type database struct {
+type Database struct {
 	config *configs.Database
 	logger *zap.Logger
 }
 
 func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
 
-	d := &database{
+	d := &Database{
 		config: config,
 		logger: logger,
 	}
@@ -46,7 +46,7 @@ func NewDB(config *configs.Database, logger *zap.Logger) (*gorm.DB, error) {
 
 }
 
-func (d *database) migrate() error {
+func (d *Database) migrate() error {
 	db, err := d.connect()
 	if err != nil {
 		return fmt.Errorf("database connection failed: %v", err)
@@ -57,7 +57,7 @@ func (d *database) migrate() error {
 	return nil
 }
 
-func (d *database) connect() (*gorm.DB, error) {
+func (d *Database) connect() (*gorm.DB, error) {
 	if d.logger == nil {
 		return nil, fmt.Errorf("database logger is required")
 	}

@@ -11,24 +11,20 @@ import (
 	"gorm.io/gorm"
 )
 
-type ProxyRegistry struct {
-	db *gorm.DB
+type ClientProxy struct {
+	DB *gorm.DB
 }
 
-func NewProxyRegistry(db *gorm.DB) *ProxyRegistry {
-	return &ProxyRegistry{db: db}
-}
-
-func (r *ProxyRegistry) SyncFromApply(clientId uuid.UUID, desired map[string]sharedprotocol.ProxiesApplyMsgItem) error {
-	var existing []models.Proxy
-	if err := r.db.Where("client_id = ?", clientId).Find(&existing).Error; err != nil {
+func (s *ClientProxy) SyncFromApply(clientId uuid.UUID, desired map[string]sharedprotocol.ProxiesApplyMsgItem) error {
+	var existing []models.ClientProxy
+	if err := s.DB.Where("client_id = ?", clientId).Find(&existing).Error; err != nil {
 		return fmt.Errorf("failed to query proxies: %w", err)
 	}
 
 	desiredNames := make(map[string]struct{}, len(desired))
 	for name, proxy := range desired {
 		desiredNames[name] = struct{}{}
-		if err := r.upsert(clientId, name, proxy); err != nil {
+		if err := s.upsert(clientId, name, proxy); err != nil {
 			return err
 		}
 	}
@@ -37,25 +33,33 @@ func (r *ProxyRegistry) SyncFromApply(clientId uuid.UUID, desired map[string]sha
 		if _, ok := desiredNames[row.Name]; ok {
 			continue
 		}
-		if err := r.db.Model(&row).Update("status", int16(0)).Error; err != nil {
+		if err := s.DB.Model(&row).Update("status", int16(0)).Error; err != nil {
 			return fmt.Errorf("failed to mark proxy %q offline: %w", row.Name, err)
 		}
 	}
 	return nil
 }
 
-func (r *ProxyRegistry) SetAllOffline(clientId uuid.UUID) error {
-	if err := r.db.Model(&models.Proxy{}).Where("client_id = ?", clientId).Update("status", int16(0)).Error; err != nil {
+func (s *ClientProxy) SetAllOffline(clientId uuid.UUID) error {
+	if err := s.DB.Model(&models.ClientProxy{}).Where("client_id = ?", clientId).Update("status", int16(0)).Error; err != nil {
 		return fmt.Errorf("failed to mark client proxies offline: %w", err)
 	}
 	return nil
 }
 
-func (r *ProxyRegistry) upsert(clientId uuid.UUID, name string, proxy sharedprotocol.ProxiesApplyMsgItem) error {
-	var row models.Proxy
-	err := r.db.Where("client_id = ? AND name = ?", clientId, name).First(&row).Error
+func (s *ClientProxy) ResolveProxyId(db *gorm.DB, clientId uuid.UUID, name string) (uuid.UUID, error) {
+	var proxy models.ClientProxy
+	if err := db.Where("client_id = ? AND name = ?", clientId, name).First(&proxy).Error; err != nil {
+		return uuid.Nil, fmt.Errorf("proxy not found: %w", err)
+	}
+	return proxy.Id, nil
+}
+
+func (s *ClientProxy) upsert(clientId uuid.UUID, name string, proxy sharedprotocol.ProxiesApplyMsgItem) error {
+	var row models.ClientProxy
+	err := s.DB.Where("client_id = ? AND name = ?", clientId, name).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		row = models.Proxy{
+		row = models.ClientProxy{
 			ClientId:  clientId,
 			Name:      name,
 			Type:      proxy.Type,
@@ -64,7 +68,7 @@ func (r *ProxyRegistry) upsert(clientId uuid.UUID, name string, proxy sharedprot
 			LocalPort: strconv.Itoa(proxy.LocalPort),
 			Status:    1,
 		}
-		if err := r.db.Create(&row).Error; err != nil {
+		if err := s.DB.Create(&row).Error; err != nil {
 			return fmt.Errorf("failed to create proxy %q: %w", name, err)
 		}
 		return nil
@@ -80,7 +84,7 @@ func (r *ProxyRegistry) upsert(clientId uuid.UUID, name string, proxy sharedprot
 		"local_port": strconv.Itoa(proxy.LocalPort),
 		"status":     int16(1),
 	}
-	if err := r.db.Model(&row).Updates(updates).Error; err != nil {
+	if err := s.DB.Model(&row).Updates(updates).Error; err != nil {
 		return fmt.Errorf("failed to update proxy %q: %w", name, err)
 	}
 	return nil

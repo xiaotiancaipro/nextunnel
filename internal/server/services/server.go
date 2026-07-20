@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"net"
 	"strings"
 	"sync"
@@ -21,20 +20,22 @@ import (
 	"gorm.io/gorm"
 )
 
-const unknownIp = "UNKNOWN_IP"
-
 const ruleCacheTTL = 10 * time.Second
 
 type Server struct {
-	config      *configs.Server
-	logger      *zap.Logger
-	db          *gorm.DB
-	ipLocation  *clients.IPLocation
-	pendingMu   sync.Mutex
-	pendingWork map[string]*pendingWorkItem
-	ruleCacheMu sync.RWMutex
-	ruleCache   []models.AccessRule
-	ruleCacheAt time.Time
+	Config             *configs.Server
+	Logger             *zap.Logger
+	DB                 *gorm.DB
+	IPLocation         *clients.IPLocation
+	ClientService      *Client
+	ClientProxyService *ClientProxy
+	AccessRuleService  *AccessRule
+	AccessLogService   *AccessLog
+	pendingMu          sync.Mutex
+	pendingWork        map[string]*pendingWorkItem
+	ruleCacheMu        sync.RWMutex
+	ruleCache          []models.AccessRule
+	ruleCacheAt        time.Time
 }
 
 type pendingWorkItem struct {
@@ -42,26 +43,11 @@ type pendingWorkItem struct {
 	certFP   [sha256.Size]byte
 }
 
-func NewServer(config *configs.Server, logger *zap.Logger, db *gorm.DB, ipLocator *clients.IPLocation) *Server {
-	return &Server{
-		config:     config,
-		logger:     logger,
-		db:         db,
-		ipLocation: ipLocator,
-	}
-}
-
-func WriteCtrlMsg(mu *sync.Mutex, conn net.Conn, msgType byte, payload interface{}) error {
-	mu.Lock()
-	defer mu.Unlock()
-	return sharedprotocol.WriteMsg(conn, msgType, payload)
-}
-
 func (s *Server) Listen() (net.Listener, error) {
-	addr := fmt.Sprintf(":%d", s.config.Port)
+	addr := fmt.Sprintf(":%d", s.Config.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to listen on %s: %v", addr, err))
+		s.Logger.Error(fmt.Sprintf("Failed to listen on %s: %v", addr, err))
 		return nil, fmt.Errorf("failed to listen")
 	}
 	return listener, nil
@@ -72,7 +58,7 @@ func (s *Server) EstablishConn(connRaw net.Conn, tlsConfig *tls.Config) (net.Con
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err := conn.Handshake(); err != nil {
 		_ = conn.SetDeadline(time.Time{})
-		s.logger.Error(fmt.Sprintf("Failed to handshake with TLS connection: %v", err))
+		s.Logger.Error(fmt.Sprintf("Failed to handshake with TLS connection: %v", err))
 		return nil, fmt.Errorf("tls handshake failed")
 	}
 	_ = conn.SetDeadline(time.Time{})
@@ -83,7 +69,7 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 
 	var loginMsg sharedprotocol.LoginMsg
 	if err := sharedprotocol.Decode(payload, &loginMsg); err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to parse LoginMsg: %v", err))
+		s.Logger.Error(fmt.Sprintf("Failed to parse LoginMsg: %v", err))
 		return nil, nil, fmt.Errorf("failed to parse LoginMsg")
 	}
 
@@ -91,14 +77,14 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id cannot be empty"})
 		return nil, nil, fmt.Errorf("client_id is empty")
 	}
-	if _, err := resolveClientId(s.db, loginMsg.Id); err != nil {
+	if _, err := s.ClientService.ResolveClientId(s.DB, loginMsg.Id); err != nil {
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id is invalid"})
 		return nil, nil, fmt.Errorf("client_id is invalid")
 	}
 
 	runID := uuid.New().String()
 	if err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{RunID: runID}); err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
+		s.Logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
 		return nil, nil, fmt.Errorf("failed to send LoginResp")
 	}
 
@@ -109,8 +95,8 @@ func (s *Server) Login(conn net.Conn, payload []byte) (*string, *string, error) 
 func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientIdP *string, serverStopCh, clientStopCh chan struct{}) error {
 
 	replyErr := func(e string) {
-		_ = WriteCtrlMsg(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: e})
-		s.logger.Error(e)
+		_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: e})
+		s.Logger.Error(e)
 	}
 
 	var msg sharedprotocol.ProxiesApplyMsg
@@ -154,25 +140,25 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		usedPorts[proxy.RemotePort] = proxy.Name
 	}
 
-	clientUUID, err := resolveClientId(s.db, *clientIdP)
+	clientUUID, err := s.ClientService.ResolveClientId(s.DB, *clientIdP)
 	if err != nil {
 		replyErr("client_id is invalid")
 		return fmt.Errorf("client_id is invalid")
 	}
 
 	var client models.Client
-	if err := s.db.Where("id = ?", clientUUID).First(&client).Error; err != nil {
+	if err := s.DB.Where("id = ?", clientUUID).First(&client).Error; err != nil {
 		replyErr("client_id is invalid")
 		return fmt.Errorf("client not found")
 	}
 	for name, proxy := range desired {
-		if !ClientPortAllowed(client, proxy.RemotePort) {
+		if !s.ClientService.ClientPortAllowed(client, proxy.RemotePort) {
 			replyErr(fmt.Sprintf("[%s] remote port %d is outside allocated range %d-%d", name, proxy.RemotePort, client.PortStart, client.PortEnd))
 			return fmt.Errorf("remote port out of range")
 		}
 	}
 
-	if err := NewProxyRegistry(s.db).SyncFromApply(clientUUID, desired); err != nil {
+	if err := s.ClientProxyService.SyncFromApply(clientUUID, desired); err != nil {
 		replyErr(fmt.Sprintf("failed to sync proxies: %v", err))
 		return err
 	}
@@ -205,24 +191,24 @@ func (s *Server) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []
 		go s.proxyAcceptLoop(conn, ctrlWriteMu, *clientIdP, name, ln, serverStopCh, clientStopCh)
 	}
 
-	_ = WriteCtrlMsg(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: ""})
-	s.logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", *clientIdP, len(opened)))
+	_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: ""})
+	s.Logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", *clientIdP, len(opened)))
 	return nil
 
 }
 
 func (s *Server) SetClientProxiesOffline(clientId string) error {
-	clientUUID, err := resolveClientId(s.db, clientId)
+	clientUUID, err := s.ClientService.ResolveClientId(s.DB, clientId)
 	if err != nil {
 		return err
 	}
-	return NewProxyRegistry(s.db).SetAllOffline(clientUUID)
+	return s.ClientProxyService.SetAllOffline(clientUUID)
 }
 
 func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
 	var msg sharedprotocol.StartWorkConnMsg
 	if err := sharedprotocol.Decode(payload, &msg); err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
+		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
 		return fmt.Errorf("failed to parse StartWorkConnMsg")
 	}
 	if msg.WorkID == "" {
@@ -231,11 +217,11 @@ func (s *Server) StartWorkConn(workTLS net.Conn, payload []byte) error {
 	}
 	userConn, ok := s.takePendingIfCertMatches(msg.WorkID, workTLS)
 	if !ok {
-		s.logger.Warn(fmt.Sprintf("No matching pending work or client certificate mismatch for work_id=%s", msg.WorkID))
+		s.Logger.Warn(fmt.Sprintf("No matching pending work or client certificate mismatch for work_id=%s", msg.WorkID))
 		_ = workTLS.Close()
 		return fmt.Errorf("unknown or expired work_id, or certificate mismatch")
 	}
-	go s.pipe(userConn, workTLS)
+	go sharednetwork.Pipe(userConn, workTLS)
 	return nil
 }
 
@@ -243,7 +229,7 @@ func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, 
 
 	defer func() {
 		_ = listener.Close()
-		s.logger.Info(fmt.Sprintf("Proxy stopped: name=%s", proxyName))
+		s.Logger.Info(fmt.Sprintf("Proxy stopped: name=%s", proxyName))
 	}()
 
 	for {
@@ -256,23 +242,23 @@ func (s *Server) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, 
 			case <-clientStopCh:
 				return
 			default:
-				s.logger.Error(fmt.Sprintf("Proxy [%s] accept loop exiting: %v", proxyName, err))
+				s.Logger.Error(fmt.Sprintf("Proxy [%s] accept loop exiting: %v", proxyName, err))
 				return
 			}
 		}
 
 		ipP, region, err := s.ipFilter(conn.RemoteAddr(), clientId, proxyName)
-		ip := unknownIp
+		ip := sharednetwork.UnknownIP
 		if ipP != nil {
 			ip = *ipP
 		}
 		if err != nil {
-			s.logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, region=%s, reason=%s", proxyName, ip, region, err.Error()))
+			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, region=%s, reason=%s", proxyName, ip, region, err.Error()))
 			_ = conn.Close()
 			continue
 		}
 
-		s.logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
+		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
 
 		go s.bridgeClientConn(controlConn, ctrlWriteMu, conn, proxyName, serverStopCh, clientStopCh)
 
@@ -289,10 +275,10 @@ func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, s
 
 	ipP, err := sharednetwork.NormalizeIP(host)
 	if err != nil {
-		return nil, unknownIp, fmt.Errorf("failed to parse remote ip")
+		return nil, sharednetwork.UnknownIP, fmt.Errorf("failed to parse remote ip")
 	}
 
-	geo := s.ipLocation.Lookup(*ipP)
+	geo := s.IPLocation.Lookup(*ipP)
 	region := s.formatRegion(geo.Country, geo.Region, geo.City)
 	isLocal := sharednetwork.IsLocalIP(*ipP)
 
@@ -300,15 +286,14 @@ func (s *Server) ipFilter(addr net.Addr, clientId, proxyName string) (*string, s
 	if err != nil {
 		return nil, region, err
 	}
-	allowed := NewAccessRule(s.db).evaluate(rules, *ipP, geo.Country, geo.Region, geo.City, isLocal)
+	allowed := s.AccessRuleService.evaluate(rules, *ipP, geo.Country, geo.Region, geo.City, isLocal)
 
 	status := int16(0)
 	if allowed {
 		status = 1
 	}
-	logSvc := newAccessLog(s.db)
-	if err := logSvc.record(clientId, proxyName, *ipP, geo.Country, geo.Region, geo.City, isLocal, status); err != nil {
-		s.logger.Warn(fmt.Sprintf("Failed to record access log: ip=%s, err=%v", *ipP, err))
+	if err := s.AccessLogService.Record(clientId, proxyName, *ipP, geo.Country, geo.Region, geo.City, isLocal, status); err != nil {
+		s.Logger.Warn(fmt.Sprintf("Failed to record access log: ip=%s, err=%v", *ipP, err))
 	}
 
 	if !allowed {
@@ -331,7 +316,7 @@ func (s *Server) formatRegion(country, region, city string) string {
 		parts = append(parts, city)
 	}
 	if len(parts) == 0 {
-		return unknownIp
+		return sharednetwork.UnknownIP
 	}
 	return strings.Join(parts, "/")
 }
@@ -340,7 +325,7 @@ func (s *Server) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 
 	certFP, err := s.clientLeafCertSHA256(controlConn)
 	if err != nil {
-		s.logger.Warn(fmt.Sprintf("Cannot bind work channel to control TLS cert: %v", err))
+		s.Logger.Warn(fmt.Sprintf("Cannot bind work channel to control TLS cert: %v", err))
 		_ = conn.Close()
 		return
 	}
@@ -366,8 +351,8 @@ func (s *Server) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 		WorkID:    workID,
 		ProxyName: proxyName,
 	}
-	if err := WriteCtrlMsg(ctrlWriteMu, controlConn, sharedprotocol.MsgNewWorkConn, msg); err != nil {
-		s.logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
+	if err := sharedprotocol.WriteMsgWithLock(ctrlWriteMu, controlConn, sharedprotocol.MsgNewWorkConn, msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
 		if c := s.removePendingWork(workID); c != nil {
 			_ = c.Close()
 		}
@@ -387,7 +372,7 @@ func (s *Server) cachedRules() ([]models.AccessRule, error) {
 	s.ruleCacheMu.RUnlock()
 
 	var rules []models.AccessRule
-	if err := s.db.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
+	if err := s.DB.Where("is_delete = ?", false).Find(&rules).Error; err != nil {
 		return nil, fmt.Errorf("failed to query access_rules: %w", err)
 	}
 
@@ -421,7 +406,7 @@ func (s *Server) registerPendingWork(workID string, userConn net.Conn, certFP [s
 		s.pendingMu.Unlock()
 		if ok {
 			_ = p.userConn.Close()
-			s.logger.Warn(fmt.Sprintf("Timed out waiting for work channel; closed user connection: workID=%s", workID))
+			s.Logger.Warn(fmt.Sprintf("Timed out waiting for work channel; closed user connection: workID=%s", workID))
 		}
 	})
 
@@ -444,7 +429,7 @@ func (s *Server) removePendingWork(workID string) net.Conn {
 func (s *Server) takePendingIfCertMatches(workID string, workTLS net.Conn) (net.Conn, bool) {
 	workFP, err := s.clientLeafCertSHA256(workTLS)
 	if err != nil {
-		s.logger.Warn(fmt.Sprintf("StartWorkConn: read work TLS client cert: %v", err))
+		s.Logger.Warn(fmt.Sprintf("StartWorkConn: read work TLS client cert: %v", err))
 		return nil, false
 	}
 	s.pendingMu.Lock()
@@ -457,7 +442,7 @@ func (s *Server) takePendingIfCertMatches(workID string, workTLS net.Conn) (net.
 		return nil, false
 	}
 	if subtle.ConstantTimeCompare(p.certFP[:], workFP[:]) != 1 {
-		s.logger.Warn(fmt.Sprintf("StartWorkConn rejected: client certificate does not match control channel (work_id=%s)", workID))
+		s.Logger.Warn(fmt.Sprintf("StartWorkConn rejected: client certificate does not match control channel (work_id=%s)", workID))
 		return nil, false
 	}
 	delete(s.pendingWork, workID)
@@ -475,17 +460,4 @@ func (s *Server) clientLeafCertSHA256(conn net.Conn) ([sha256.Size]byte, error) 
 		return z, fmt.Errorf("no peer certificate")
 	}
 	return sha256.Sum256(state.PeerCertificates[0].Raw), nil
-}
-
-func (s *Server) pipe(a, b net.Conn) {
-	defer func() { _ = a.Close() }()
-	defer func() { _ = b.Close() }()
-	done := make(chan struct{}, 2)
-	copyFn := func(dst, src net.Conn) {
-		_, _ = io.Copy(dst, src)
-		done <- struct{}{}
-	}
-	go copyFn(a, b)
-	go copyFn(b, a)
-	<-done
 }

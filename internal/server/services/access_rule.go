@@ -10,7 +10,7 @@ import (
 )
 
 type AccessRule struct {
-	db *gorm.DB
+	DB *gorm.DB
 }
 
 type RuleTarget struct {
@@ -21,11 +21,7 @@ type RuleTarget struct {
 	category *string
 }
 
-func NewAccessRule(db *gorm.DB) *AccessRule {
-	return &AccessRule{db: db}
-}
-
-func (r *AccessRule) NewRuleTarget(field, value string) (RuleTarget, error) {
+func (s *AccessRule) NewRuleTarget(field, value string) (RuleTarget, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return RuleTarget{}, fmt.Errorf("%s cannot be empty", field)
@@ -46,21 +42,21 @@ func (r *AccessRule) NewRuleTarget(field, value string) (RuleTarget, error) {
 	return target, nil
 }
 
-func (r *AccessRule) NewCategoryRuleTarget(category string) (RuleTarget, error) {
-	category, err := r.normalizeCategory(category)
+func (s *AccessRule) NewCategoryRuleTarget(category string) (RuleTarget, error) {
+	category, err := s.normalizeCategory(category)
 	if err != nil {
 		return RuleTarget{}, err
 	}
 	return RuleTarget{category: &category}, nil
 }
 
-func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
-	if err := r.validateRuleTarget(target); err != nil {
+func (s *AccessRule) UpsertRule(target RuleTarget, status int16) error {
+	if err := s.validateRuleTarget(target); err != nil {
 		return err
 	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return s.DB.Transaction(func(tx *gorm.DB) error {
 		var record models.AccessRule
-		err := r.targetQuery(tx, target).First(&record).Error
+		err := s.targetQuery(tx, target).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return tx.Create(&models.AccessRule{
 				Ip:       target.ip,
@@ -78,21 +74,21 @@ func (r *AccessRule) UpsertRule(target RuleTarget, status int16) error {
 	})
 }
 
-func (r *AccessRule) ListRules() ([]models.AccessRule, error) {
+func (s *AccessRule) ListRules() ([]models.AccessRule, error) {
 	var rules []models.AccessRule
-	if err := r.db.Where("is_delete = ?", false).Order("status DESC, created_at ASC").Find(&rules).Error; err != nil {
+	if err := s.DB.Where("is_delete = ?", false).Order("status DESC, created_at ASC").Find(&rules).Error; err != nil {
 		return nil, fmt.Errorf("failed to query access_rules: %w", err)
 	}
 	return rules, nil
 }
 
-func (r *AccessRule) DeleteRule(target RuleTarget, status int16) error {
-	if err := r.validateRuleTarget(target); err != nil {
+func (s *AccessRule) DeleteRule(target RuleTarget, status int16) error {
+	if err := s.validateRuleTarget(target); err != nil {
 		return err
 	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return s.DB.Transaction(func(tx *gorm.DB) error {
 		var record models.AccessRule
-		err := r.targetQuery(tx, target).Where("status = ?", status).First(&record).Error
+		err := s.targetQuery(tx, target).Where("status = ?", status).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("rule not found")
 		}
@@ -103,7 +99,7 @@ func (r *AccessRule) DeleteRule(target RuleTarget, status int16) error {
 	})
 }
 
-func (r *AccessRule) targetQuery(tx *gorm.DB, target RuleTarget) *gorm.DB {
+func (s *AccessRule) targetQuery(tx *gorm.DB, target RuleTarget) *gorm.DB {
 	q := tx.Where("is_delete = ?", false)
 	if target.ip != nil {
 		q = q.Where("ip = ?", *target.ip)
@@ -133,14 +129,14 @@ func (r *AccessRule) targetQuery(tx *gorm.DB, target RuleTarget) *gorm.DB {
 	return q
 }
 
-func (r *AccessRule) evaluate(rules []models.AccessRule, ip, country, region, city string, isLocal bool) bool {
+func (s *AccessRule) evaluate(rules []models.AccessRule, ip, country, region, city string, isLocal bool) bool {
 	var best *models.AccessRule
 	for i := range rules {
 		rule := &rules[i]
-		if !r.ruleMatches(*rule, ip, country, region, city, isLocal) {
+		if !s.ruleMatches(*rule, ip, country, region, city, isLocal) {
 			continue
 		}
-		if best == nil || r.isHigherPriorityRule(*rule, *best) {
+		if best == nil || s.isHigherPriorityRule(*rule, *best) {
 			best = rule
 		}
 	}
@@ -150,9 +146,9 @@ func (r *AccessRule) evaluate(rules []models.AccessRule, ip, country, region, ci
 	return best.Status == 1
 }
 
-func (r *AccessRule) isHigherPriorityRule(candidate, current models.AccessRule) bool {
-	candidateScore := r.ruleSpecificity(candidate)
-	currentScore := r.ruleSpecificity(current)
+func (s *AccessRule) isHigherPriorityRule(candidate, current models.AccessRule) bool {
+	candidateScore := s.ruleSpecificity(candidate)
+	currentScore := s.ruleSpecificity(current)
 	if candidateScore != currentScore {
 		return candidateScore > currentScore
 	}
@@ -163,7 +159,7 @@ func (r *AccessRule) isHigherPriorityRule(candidate, current models.AccessRule) 
 	return false
 }
 
-func (r *AccessRule) validateRuleTarget(target RuleTarget) error {
+func (s *AccessRule) validateRuleTarget(target RuleTarget) error {
 	set := 0
 	if target.ip != nil {
 		set++
@@ -186,8 +182,8 @@ func (r *AccessRule) validateRuleTarget(target RuleTarget) error {
 	return nil
 }
 
-func (r *AccessRule) ruleMatches(rule models.AccessRule, ip, country, region, city string, isLocal bool) bool {
-	if !r.categoryMatches(rule.Category, isLocal) {
+func (s *AccessRule) ruleMatches(rule models.AccessRule, ip, country, region, city string, isLocal bool) bool {
+	if !s.categoryMatches(rule.Category, isLocal) {
 		return false
 	}
 	hasGeo := rule.Ip != nil || rule.Country != nil || rule.Region != nil || rule.City != nil
@@ -209,7 +205,7 @@ func (r *AccessRule) ruleMatches(rule models.AccessRule, ip, country, region, ci
 	return true
 }
 
-func (r *AccessRule) categoryMatches(category *string, isLocal bool) bool {
+func (s *AccessRule) categoryMatches(category *string, isLocal bool) bool {
 	if category == nil {
 		return true
 	}
@@ -225,7 +221,7 @@ func (r *AccessRule) categoryMatches(category *string, isLocal bool) bool {
 	}
 }
 
-func (r *AccessRule) normalizeCategory(category string) (string, error) {
+func (s *AccessRule) normalizeCategory(category string) (string, error) {
 	switch strings.ToUpper(strings.TrimSpace(category)) {
 	case models.AccessRuleCategoryAll:
 		return models.AccessRuleCategoryAll, nil
@@ -238,7 +234,7 @@ func (r *AccessRule) normalizeCategory(category string) (string, error) {
 	}
 }
 
-func (r *AccessRule) ruleSpecificity(rule models.AccessRule) int {
+func (s *AccessRule) ruleSpecificity(rule models.AccessRule) int {
 	if rule.Ip != nil {
 		return 1 << 4
 	}

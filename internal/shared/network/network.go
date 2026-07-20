@@ -2,9 +2,12 @@ package network
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"strings"
 )
+
+const UnknownIP = "UNKNOWN_IP"
 
 func NormalizeIP(raw string) (*string, error) {
 	ipStr := strings.TrimSpace(raw)
@@ -28,4 +31,17 @@ func IsLocalIP(raw string) bool {
 		return false
 	}
 	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
+}
+
+func Pipe(a, b net.Conn) {
+	defer func() { _ = a.Close() }()
+	defer func() { _ = b.Close() }()
+	done := make(chan struct{}, 2)
+	copyFn := func(dst, src net.Conn) {
+		_, _ = io.Copy(dst, src)
+		done <- struct{}{}
+	}
+	go copyFn(a, b)
+	go copyFn(b, a)
+	<-done
 }

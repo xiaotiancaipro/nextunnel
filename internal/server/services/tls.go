@@ -13,24 +13,17 @@ import (
 )
 
 type Tls struct {
-	config *configs.Cert
-	logger *zap.Logger
-}
-
-func NewTls(config *configs.Cert, logger *zap.Logger) *Tls {
-	return &Tls{
-		config: config,
-		logger: logger,
-	}
+	Config *configs.Cert
+	Logger *zap.Logger
 }
 
 func (t *Tls) Init() (*tls.Config, error) {
 
-	if err := sharedcerts.Ensure(t.config.Dir, t.config.Host); err != nil {
+	if err := sharedcerts.Ensure(t.Config.Dir, t.Config.Host); err != nil {
 		return nil, err
 	}
 
-	abs, err := filepath.Abs(t.config.Dir)
+	abs, err := filepath.Abs(t.Config.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("tls: %w", err)
 	}
@@ -40,18 +33,18 @@ func (t *Tls) Init() (*tls.Config, error) {
 
 	caCert, err := os.ReadFile(caPath)
 	if err != nil {
-		t.logger.Error(fmt.Sprintf("Read ca file error: %s", err))
+		t.Logger.Error(fmt.Sprintf("Read ca file error: %s", err))
 		return nil, fmt.Errorf("failed to read tls CA file")
 	}
 	pool := x509.NewCertPool()
 	if ok := pool.AppendCertsFromPEM(caCert); !ok {
-		t.logger.Error("Failed to append tls CA file")
+		t.Logger.Error("Failed to append tls CA file")
 		return nil, fmt.Errorf("failed to append tls CA file to cert pool")
 	}
 
 	cert, err := tls.LoadX509KeyPair(srvCert, srvKey)
 	if err != nil {
-		t.logger.Error(fmt.Sprintf("Load tls cert error: %s", err))
+		t.Logger.Error(fmt.Sprintf("Load tls cert error: %s", err))
 		return nil, fmt.Errorf("failed to load server tls certificate")
 	}
 

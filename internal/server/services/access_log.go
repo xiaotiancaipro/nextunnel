@@ -8,28 +8,26 @@ import (
 	"gorm.io/gorm"
 )
 
-type accessLog struct {
-	db *gorm.DB
+type AccessLog struct {
+	DB                 *gorm.DB
+	ClientService      *Client
+	ClientProxyService *ClientProxy
 }
 
-func newAccessLog(db *gorm.DB) *accessLog {
-	return &accessLog{db: db}
-}
-
-func (l *accessLog) record(clientId, proxyName, ip, country, region, city string, isLocal bool, status int16) error {
-	clientUUID, err := resolveClientId(l.db, clientId)
+func (s *AccessLog) Record(clientId, proxyName, ip, country, region, city string, isLocal bool, status int16) error {
+	clientUUID, err := s.ClientService.ResolveClientId(s.DB, clientId)
 	if err != nil {
 		return fmt.Errorf("resolve client_id: %w", err)
 	}
-	proxyUUID, err := resolveProxyId(l.db, clientUUID, proxyName)
+	proxyUUID, err := s.ClientProxyService.ResolveProxyId(s.DB, clientUUID, proxyName)
 	if err != nil {
 		return fmt.Errorf("resolve proxy_id: %w", err)
 	}
-	return l.db.Model(&models.AccessLog{}).Create(map[string]any{
+	return s.DB.Model(&models.AccessLog{}).Create(map[string]any{
 		"ClientId": clientUUID,
 		"ProxyId":  proxyUUID,
 		"Ip":       ip,
-		"Category": l.categoryFromIP(isLocal),
+		"Category": s.categoryFromIP(isLocal),
 		"Country":  sharedstring.NullIfEmpty(country),
 		"Region":   sharedstring.NullIfEmpty(region),
 		"City":     sharedstring.NullIfEmpty(city),
@@ -37,7 +35,7 @@ func (l *accessLog) record(clientId, proxyName, ip, country, region, city string
 	}).Error
 }
 
-func (l *accessLog) categoryFromIP(isLocal bool) string {
+func (s *AccessLog) categoryFromIP(isLocal bool) string {
 	if isLocal {
 		return models.AccessLogCategoryLocal
 	}

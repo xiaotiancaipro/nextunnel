@@ -10,15 +10,13 @@ import (
 //go:embed dist/*
 var dist embed.FS
 
-func Handler() (http.Handler, error) {
+type WebUI struct{}
+
+func (*WebUI) Handler() (http.Handler, error) {
 	content, err := fs.Sub(dist, "dist")
 	if err != nil {
 		return nil, err
 	}
-	return spaFileServer(content), nil
-}
-
-func spaFileServer(content fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(content))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -30,5 +28,5 @@ func spaFileServer(content fs.FS) http.Handler {
 			r.URL.Path = "/"
 		}
 		fileServer.ServeHTTP(w, r)
-	})
+	}), nil
 }

@@ -8,10 +8,10 @@ import (
 
 const ClientProxyTable = "client_proxy"
 
-type Proxy struct {
+type ClientProxy struct {
 	Id        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey;"`                       // Primary key UUID
 	ClientId  uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:uk_proxy_client_name,priority:1"`         // Owning tunnel client UUID
-	Name      string    `gorm:"type:varchar(255);not null;uniqueIndex:uk_proxy_client_name,priority:2"` // Proxy rule name, unique within the client
+	Name      string    `gorm:"type:varchar(255);not null;uniqueIndex:uk_proxy_client_name,priority:2"` // Proxy name, unique within the client
 	Type      string    `gorm:"type:varchar(255);not null"`                                             // Proxy protocol type, e.g. tcp
 	Port      string    `gorm:"type:varchar(255);not null"`                                             // Remote listening port exposed on the server
 	LocalIp   string    `gorm:"type:varchar(255);not null"`                                             // Backend target IP on the client side
@@ -21,6 +21,6 @@ type Proxy struct {
 	UpdatedAt time.Time `gorm:"type:timestamptz;default:timezone('utc', now());not null;"`              // Record last update timestamp (UTC)
 }
 
-func (Proxy) TableName() string {
+func (ClientProxy) TableName() string {
 	return ClientProxyTable
 }

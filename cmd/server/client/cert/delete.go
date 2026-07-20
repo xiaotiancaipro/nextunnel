@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	sharedstring "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
 )
 
 func NewDeleteCommand() *cobra.Command {
@@ -34,7 +34,7 @@ func deleteRun(cmd *cobra.Command, args []string) {
 	client, err := registry.GetByName(clientName)
 	sharedcli.ExitOnErr(cmd, err)
 
-	certID, err := services.ParseCertID(args[1])
+	certID, err := sharedstring.ParseUUID(args[1])
 	sharedcli.ExitOnErr(cmd, err)
 
 	if err := certService.Delete(client.Id, certID); err != nil {

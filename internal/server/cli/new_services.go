@@ -22,12 +22,12 @@ func NewDBFromConfig(cfg *configs.Configs) (*gorm.DB, error) {
 	return db, nil
 }
 
-func NewClientRegistryFromConfig(cfg *configs.Configs) (*services.ClientRegistry, error) {
+func NewClientRegistryFromConfig(cfg *configs.Configs) (*services.Client, error) {
 	db, err := NewDBFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return services.NewClientRegistry(db), nil
+	return &services.Client{DB: db}, nil
 }
 
 func NewAccessRuleFromConfig(cfg *configs.Configs) (*services.AccessRule, error) {
@@ -35,13 +35,13 @@ func NewAccessRuleFromConfig(cfg *configs.Configs) (*services.AccessRule, error)
 	if err != nil {
 		return nil, err
 	}
-	return services.NewAccessRule(db), nil
+	return &services.AccessRule{DB: db}, nil
 }
 
-func NewClientRegistryAndCertFromConfig(cfg *configs.Configs) (*services.ClientRegistry, *services.ClientCertRegistry, error) {
+func NewClientRegistryAndCertFromConfig(cfg *configs.Configs) (*services.Client, *services.ClientCert, error) {
 	db, err := NewDBFromConfig(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
-	return services.NewClientRegistry(db), services.NewClientCertRegistry(db, cfg.Cert.Dir, cfg.Cert.Host), nil
+	return &services.Client{DB: db}, &services.ClientCert{DB: db, CertDir: cfg.Cert.Dir, ListenHost: cfg.Cert.Host}, nil
 }

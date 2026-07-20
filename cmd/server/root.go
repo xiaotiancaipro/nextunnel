@@ -24,8 +24,13 @@ func New(version string) *cobra.Command {
 }
 
 func run(cmd *cobra.Command, _ []string) {
-	cfg := cli.LoadServerConfig(cmd)
-	app, err := server.NewApp(cfg, cmd.Version)
+	config := cli.LoadServerConfig(cmd)
+	app := new(server.App)
+	if err := app.Init(config); err != nil {
+		sharedcli.ExitOnErr(cmd, err)
+	}
+
+	app, err := server.NewApp(config, cmd.Version)
 	sharedcli.ExitOnErr(cmd, err)
 	sharedcli.RunApp(cmd, app)
 }
