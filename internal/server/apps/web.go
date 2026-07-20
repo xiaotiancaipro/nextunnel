@@ -27,12 +27,7 @@ func (a *Web) Init() error {
 	gin.SetMode(gin.ReleaseMode)
 	a.engine = gin.New()
 	a.engine.Use(gin.Recovery(), middleware.CORS())
-	webui := a.initRouters()
-	uiHandler, err := webui.Handler()
-	if err != nil {
-		return fmt.Errorf("initialize web ui: %w", err)
-	}
-	a.engine.NoRoute(gin.WrapH(uiHandler))
+	a.initRouters()
 	return nil
 }
 
@@ -57,7 +52,10 @@ func (a *Web) Stop(ctx context.Context) error {
 	return a.httpServer.Shutdown(ctx)
 }
 
-func (a *Web) initRouters() controllers.Front {
+func (a *Web) initRouters() {
+
+	front := new(controllers.Front).Init()
+	a.engine.NoRoute(front.Index)
 
 	api := a.engine.Group("/api")
 
@@ -86,8 +84,5 @@ func (a *Web) initRouters() controllers.Front {
 	api.GET("/ip-filters", ipFilter.List)
 	api.POST("/ip-filters", ipFilter.Upsert)
 	api.DELETE("/ip-filters", ipFilter.Delete)
-
-	webUI := controllers.Front{}
-	return webUI
 
 }

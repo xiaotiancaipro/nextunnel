@@ -5,28 +5,35 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 //go:embed dist/*
 var dist embed.FS
 
-type Front struct{}
+type Front struct {
+	content    fs.FS
+	fileServer http.Handler
+}
 
-func (c *Front) Handler() (http.Handler, error) {
-	content, err := fs.Sub(dist, "dist")
-	if err != nil {
-		return nil, err
+func (c *Front) Init() *Front {
+	content, _ := fs.Sub(dist, "dist")
+	return &Front{
+		content:    content,
+		fileServer: http.FileServer(http.FS(content)),
 	}
-	fileServer := http.FileServer(http.FS(content))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
-		}
-		if _, err := fs.Stat(content, path); err != nil {
-			r = r.Clone(r.Context())
-			r.URL.Path = "/"
-		}
-		fileServer.ServeHTTP(w, r)
-	}), nil
+}
+
+func (c *Front) Index(ctx *gin.Context) {
+	path := strings.TrimPrefix(ctx.Request.URL.Path, "/")
+	if path == "" {
+		path = "index.html"
+	}
+	if _, err := fs.Stat(c.content, path); err != nil {
+		req := ctx.Request.Clone(ctx.Request.Context())
+		req.URL.Path = "/"
+		ctx.Request = req
+	}
+	c.fileServer.ServeHTTP(ctx.Writer, ctx.Request)
 }
