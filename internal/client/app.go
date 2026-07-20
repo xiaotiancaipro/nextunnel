@@ -27,10 +27,12 @@ func (a *App) Init() error {
 		return fmt.Errorf("failed to initialize logging: %v", err)
 	}
 	a.logger = logger
+	a.logger.Info("client initializing")
 	a.initServices()
 	if err := a.initApps(); err != nil {
 		return err
 	}
+	a.logger.Info("client initialized")
 	return nil
 }
 
@@ -44,7 +46,7 @@ func (a *App) Stop() {
 			a.stopApps()
 		}
 		if a.logger != nil {
-			a.logger.Info("Shutting down gracefully")
+			a.logger.Info("shutting down gracefully")
 		}
 	})
 }

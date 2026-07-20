@@ -24,7 +24,7 @@ func (s *Client) Login(conn net.Conn) error {
 		Id: s.Config.Id,
 	}
 	if err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLogin, payload); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to write LoginMsg: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to write login msg: %v", err))
 		return fmt.Errorf("failed to send LoginMsg")
 	}
 	return nil
@@ -35,21 +35,21 @@ func (s *Client) LoginResponse(conn net.Conn) (string, error) {
 	msgType, payload, err := sharedprotocol.ReadMsg(conn)
 	_ = conn.SetDeadline(time.Time{})
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to read LoginResp: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to read login response: %v", err))
 		return "", fmt.Errorf("failed to read LoginResp")
 	}
 	if msgType != sharedprotocol.MsgLoginResp {
-		s.Logger.Error(fmt.Sprintf("Invalid LoginResp msg type: %v", msgType))
+		s.Logger.Error(fmt.Sprintf("invalid login response msg type: 0x%02x", msgType))
 		return "", fmt.Errorf("expected LoginResp")
 	}
 
 	var loginResp sharedprotocol.LoginRespMsg
 	if err := sharedprotocol.Decode(payload, &loginResp); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to parse LoginResp: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to parse login response: %v", err))
 		return "", fmt.Errorf("failed to parse LoginResp")
 	}
 	if loginResp.Error != "" {
-		s.Logger.Error(fmt.Sprintf("Login rejected by server: %v", loginResp.Error))
+		s.Logger.Error(fmt.Sprintf("login rejected by server: %v", loginResp.Error))
 		return "", fmt.Errorf("login rejected by server")
 	}
 
@@ -72,7 +72,7 @@ func (s *Client) ProxiesApply(conn net.Conn) error {
 		Proxies: proxies,
 	}
 	if err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgProxiesApply, payload); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to write ProxiesApplyMsg: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to write proxies apply msg: %v", err))
 		return fmt.Errorf("failed to send ProxiesApplyMsg")
 	}
 	return nil
@@ -83,26 +83,26 @@ func (s *Client) ProxiesApplyResponse(conn net.Conn) error {
 	msgType, payload, err := sharedprotocol.ReadMsg(conn)
 	_ = conn.SetDeadline(time.Time{})
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to read ProxiesApplyResp: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to read proxies apply response: %v", err))
 		return fmt.Errorf("failed to read ProxiesApplyResp")
 	}
 	if msgType != sharedprotocol.MsgProxiesApplyResp {
-		s.Logger.Error(fmt.Sprintf("Invalid ProxiesApplyResp msg type: %v", msgType))
+		s.Logger.Error(fmt.Sprintf("invalid proxies apply response msg type: 0x%02x", msgType))
 		return fmt.Errorf("expected ProxiesApplyResp")
 	}
 
 	var resp sharedprotocol.ProxiesApplyRespMsg
 	if err := sharedprotocol.Decode(payload, &resp); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to parse ProxiesApplyResp: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to parse proxies apply response: %v", err))
 		return fmt.Errorf("failed to parse ProxiesApplyResp")
 	}
 	if resp.Error != "" {
-		s.Logger.Error(fmt.Sprintf("ProxiesApply rejected by server: %v", resp.Error))
+		s.Logger.Error(fmt.Sprintf("proxies apply rejected by server: %v", resp.Error))
 		return fmt.Errorf("proxies apply rejected by server")
 	}
 
 	for _, proxy := range s.Proxies {
-		s.Logger.Info(fmt.Sprintf("Proxy applied successfully: name=%s", proxy.Name))
+		s.Logger.Info(fmt.Sprintf("proxy applied: name=%s, remote_port=%d, local=%s:%d", proxy.Name, proxy.RemotePort, proxy.LocalIP, proxy.LocalPort))
 	}
 	return nil
 }
@@ -110,24 +110,24 @@ func (s *Client) ProxiesApplyResponse(conn net.Conn) error {
 func (s *Client) WorkConn(msg sharedprotocol.NewWorkConnMsg) {
 	proxy := s.FindProxy(msg.ProxyName)
 	if proxy == nil {
-		s.Logger.Error(fmt.Sprintf("Received work connection request for unknown proxy: %s", msg.ProxyName))
+		s.Logger.Error(fmt.Sprintf("received work connection for unknown proxy: name=%s, work_id=%s", msg.ProxyName, msg.WorkID))
 		return
 	}
 
 	if s.DialWork == nil {
-		s.Logger.Error("DialWork is not configured; cannot open work channel")
+		s.Logger.Error("dial work is not configured; cannot open work channel")
 		return
 	}
 
 	workTLS, err := s.DialWork()
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to dial work TLS connection: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to dial work tls connection: proxy=%s, work_id=%s, err=%v", msg.ProxyName, msg.WorkID, err))
 		return
 	}
 
 	payload := sharedprotocol.StartWorkConnMsg{WorkID: msg.WorkID}
 	if err := sharedprotocol.WriteMsg(workTLS, sharedprotocol.MsgStartWorkConn, payload); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to send StartWorkConn: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to send start work conn: proxy=%s, work_id=%s, err=%v", msg.ProxyName, msg.WorkID, err))
 		_ = workTLS.Close()
 		return
 	}
@@ -135,11 +135,11 @@ func (s *Client) WorkConn(msg sharedprotocol.NewWorkConnMsg) {
 	localAddr := net.JoinHostPort(proxy.LocalIP, strconv.Itoa(proxy.LocalPort))
 	localConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to connect to local service [%s -> %s]: %v", msg.ProxyName, localAddr, err))
+		s.Logger.Error(fmt.Sprintf("failed to connect to local service: proxy=%s, local=%s, err=%v", msg.ProxyName, localAddr, err))
 		_ = workTLS.Close()
 		return
 	}
-	s.Logger.Info(fmt.Sprintf("Work connection bridged: proxy=%s, workID=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
+	s.Logger.Info(fmt.Sprintf("work connection bridged: proxy=%s, work_id=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
 
 	network.Pipe(workTLS, localConn)
 }

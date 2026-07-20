@@ -22,7 +22,7 @@ api_key = ""
 
 [logs]
 file = "logs/nextunnel-server.log" # If using Docker to start, this parameter must be in /var/log/nextunnel/nextunnel-server.log
-level = "info"
+level = "info" # allowed: info, warn, error
 maxSize = "100MB"
 maxBackups = 30
 maxAge = 7

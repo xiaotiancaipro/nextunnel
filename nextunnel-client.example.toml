@@ -12,7 +12,7 @@ key_file = "certs/client.key" # If using Docker to start, this parameter must be
 
 [logs]
 file = "logs/nextunnel-client.log" # If using Docker to start, this parameter must be in /var/log/nextunnel/nextunnel-client.log
-level = "info"
+level = "info" # allowed: info, warn, error
 maxSize = "100MB"
 maxBackups = 30
 maxAge = 7

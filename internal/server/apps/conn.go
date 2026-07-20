@@ -41,10 +41,10 @@ func (a *Conn) Start() error {
 
 	tlsConfig, err := a.Services.Tls.Init()
 	if err != nil {
-		a.Logger.Error(fmt.Sprintf("Failed to initialize TLS connection: %v", err))
+		a.Logger.Error(fmt.Sprintf("failed to initialize tls: %v", err))
 		return err
 	}
-	a.Logger.Info("TLS connection established")
+	a.Logger.Info("tls config loaded")
 
 	for {
 		connRaw, err := listener.Accept()
@@ -57,7 +57,7 @@ func (a *Conn) Start() error {
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			a.Logger.Error(fmt.Sprintf("Failed to accept connection: %v", err))
+			a.Logger.Error(fmt.Sprintf("failed to accept connection: %v", err))
 			return err
 		}
 		go a.handle(connRaw, tlsConfig)
@@ -68,6 +68,7 @@ func (a *Conn) Start() error {
 func (a *Conn) Stop(_ context.Context) error {
 	var closeErr error
 	a.stopOnce.Do(func() {
+		a.Logger.Info("conn server stopping")
 		if a.stopCh != nil {
 			close(a.stopCh)
 		}
@@ -85,7 +86,7 @@ func (a *Conn) Stop(_ context.Context) error {
 func (a *Conn) handle(connRaw net.Conn, tlsConfig *tls.Config) {
 	conn, err := a.Services.Listener.Establish(connRaw, tlsConfig)
 	if err != nil {
-		a.Logger.Error(fmt.Sprintf("Failed to incoming TLS connection: %v", err))
+		a.Logger.Warn(fmt.Sprintf("failed to establish tls connection from %s: %v", connRaw.RemoteAddr(), err))
 		_ = connRaw.Close()
 		return
 	}
@@ -96,7 +97,7 @@ func (a *Conn) dispatch(conn net.Conn) {
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	msgType, payload, err := sharedprotocol.ReadMsg(conn)
 	if err != nil {
-		a.Logger.Error(fmt.Sprintf("Failed to read first message [%s]: %v", conn.RemoteAddr(), err))
+		a.Logger.Warn(fmt.Sprintf("failed to read first message from %s: %v", conn.RemoteAddr(), err))
 		_ = conn.Close()
 		return
 	}
@@ -106,12 +107,12 @@ func (a *Conn) dispatch(conn net.Conn) {
 		a.serveControl(conn, payload)
 	case sharedprotocol.MsgStartWorkConn:
 		if err := a.Services.ProxyBroker.StartWorkConn(conn, payload); err != nil {
-			a.Logger.Error(fmt.Sprintf("Failed to start work connection: %v", err))
+			a.Logger.Warn(fmt.Sprintf("failed to start work connection: %v", err))
 			_ = conn.Close()
 			return
 		}
 	default:
-		a.Logger.Error(fmt.Sprintf("Unknown first message type 0x%02x [%s]", msgType, conn.RemoteAddr()))
+		a.Logger.Warn(fmt.Sprintf("unknown first message type 0x%02x from %s", msgType, conn.RemoteAddr()))
 		_ = conn.Close()
 	}
 }
@@ -120,7 +121,7 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 
 	clientID, runID, err := a.Services.Session.Login(conn, loginPayload)
 	if err != nil {
-		a.Logger.Error(fmt.Sprintf("Failed to login: %v", err))
+		a.Logger.Warn(fmt.Sprintf("client login failed from %s: %v", conn.RemoteAddr(), err))
 		_ = conn.Close()
 		return
 	}
@@ -131,7 +132,9 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 		close(clientStopCh)
 		proxyListeners.CloseAll()
 		if err := a.Services.Session.SetClientProxiesOffline(clientID); err != nil {
-			a.Logger.Warn(fmt.Sprintf("Failed to mark client proxies offline: clientID=%s, err=%v", clientID, err))
+			a.Logger.Warn(fmt.Sprintf("failed to mark client proxies offline: client_id=%s, err=%v", clientID, err))
+		} else {
+			a.Logger.Info(fmt.Sprintf("client proxies marked offline: client_id=%s", clientID))
 		}
 		_ = conn.Close()
 	}()
@@ -140,22 +143,22 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 	for {
 		msgType, payload, err := sharedprotocol.ReadMsg(conn)
 		if err != nil {
-			a.Logger.Error(fmt.Sprintf("Client control connection disconnected, clientID=%s, runID=%s: %v", clientID, runID, err))
+			a.Logger.Info(fmt.Sprintf("client control disconnected: client_id=%s, run_id=%s, err=%v", clientID, runID, err))
 			return
 		}
 		switch msgType {
 		case sharedprotocol.MsgProxiesApply:
 			if err := a.Services.Session.ProxiesApply(conn, &ctrlWriteMu, payload, clientID, proxyListeners, a.stopCh, clientStopCh); err != nil {
-				a.Logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
+				a.Logger.Error(fmt.Sprintf("failed to apply proxies: client_id=%s, err=%v", clientID, err))
 				return
 			}
 		case sharedprotocol.MsgHeartbeat:
 			if err := sharedprotocol.WriteMsgWithLock(&ctrlWriteMu, conn, sharedprotocol.MsgHeartbeatResp, sharedprotocol.HeartbeatRespMsg{}); err != nil {
-				a.Logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
+				a.Logger.Warn(fmt.Sprintf("failed to send heartbeat response: client_id=%s, err=%v", clientID, err))
 				return
 			}
 		default:
-			a.Logger.Error(fmt.Sprintf("Unknown message received on control connection 0x%02x runID=%s", msgType, runID))
+			a.Logger.Warn(fmt.Sprintf("unknown control message 0x%02x: client_id=%s, run_id=%s", msgType, clientID, runID))
 		}
 	}
 

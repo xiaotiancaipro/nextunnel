@@ -33,18 +33,18 @@ func (s *Tls) Init() (*tls.Config, error) {
 
 	caCert, err := os.ReadFile(caPath)
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Read ca file error: %s", err))
+		s.Logger.Error(fmt.Sprintf("failed to read tls ca file: %v", err))
 		return nil, fmt.Errorf("failed to read tls CA file")
 	}
 	pool := x509.NewCertPool()
 	if ok := pool.AppendCertsFromPEM(caCert); !ok {
-		s.Logger.Error("Failed to append tls CA file")
+		s.Logger.Error("failed to append tls ca file to cert pool")
 		return nil, fmt.Errorf("failed to append tls CA file to cert pool")
 	}
 
 	cert, err := tls.LoadX509KeyPair(srvCert, srvKey)
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Load tls cert error: %s", err))
+		s.Logger.Error(fmt.Sprintf("failed to load server tls certificate: %v", err))
 		return nil, fmt.Errorf("failed to load server tls certificate")
 	}
 

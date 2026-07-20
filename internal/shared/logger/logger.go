@@ -32,7 +32,7 @@ func NewLogger(config *sharedconfigs.Logs) (*zap.Logger, error) {
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(sharedtimezone.Format(t))
 		},
-		EncodeLevel:    zapcore.CapitalLevelEncoder,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,
 		EncodeCaller:   repoRelativeCallerEncoder,
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeName:     zapcore.FullNameEncoder,
@@ -53,9 +53,9 @@ func NewLogger(config *sharedconfigs.Logs) (*zap.Logger, error) {
 		zapcore.AddSync(os.Stdout),
 	)
 
-	level, err := zapcore.ParseLevel(config.Level)
+	level, err := parseAllowedLevel(config.Level)
 	if err != nil {
-		return nil, fmt.Errorf("invalid log level '%s', error: %v", config.Level, err)
+		return nil, err
 	}
 
 	go scheduleDailyLogRotation(dailyRotate)
@@ -63,6 +63,19 @@ func NewLogger(config *sharedconfigs.Logs) (*zap.Logger, error) {
 	core := zapcore.NewCore(encoder, writeSyncer, level)
 	return zap.New(core, zap.AddCaller()), nil
 
+}
+
+func parseAllowedLevel(raw string) (zapcore.Level, error) {
+	level, err := zapcore.ParseLevel(strings.TrimSpace(raw))
+	if err != nil {
+		return zapcore.InfoLevel, fmt.Errorf("invalid log level %q, must be one of: info, warn, error", raw)
+	}
+	switch level {
+	case zapcore.InfoLevel, zapcore.WarnLevel, zapcore.ErrorLevel:
+		return level, nil
+	default:
+		return zapcore.InfoLevel, fmt.Errorf("invalid log level %q, must be one of: info, warn, error", raw)
+	}
 }
 
 func init() {

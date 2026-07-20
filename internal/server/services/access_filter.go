@@ -52,7 +52,7 @@ func (s *AccessFilter) Check(addr net.Addr, clientID, proxyName string) (ip, reg
 		status = 1
 	}
 	if err := s.AccessLogService.Record(clientID, proxyName, *ipP, geo.Country, geo.Region, geo.City, isLocal, status); err != nil {
-		s.Logger.Warn(fmt.Sprintf("Failed to record access log: ip=%s, err=%v", *ipP, err))
+		s.Logger.Warn(fmt.Sprintf("failed to record access log: ip=%s, err=%v", *ipP, err))
 	}
 
 	if !allowed {

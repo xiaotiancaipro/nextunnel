@@ -26,25 +26,28 @@ type Session struct {
 func (s *Session) Login(conn net.Conn, payload []byte) (clientID, runID string, err error) {
 	var loginMsg sharedprotocol.LoginMsg
 	if err := sharedprotocol.Decode(payload, &loginMsg); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to parse LoginMsg: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to parse login msg: %v", err))
 		return "", "", fmt.Errorf("failed to parse LoginMsg")
 	}
 
 	if loginMsg.Id == "" {
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id cannot be empty"})
+		s.Logger.Warn("client login rejected: client_id is empty")
 		return "", "", fmt.Errorf("client_id is empty")
 	}
 	if _, err := s.ClientService.ResolveClientId(s.Database.DB, loginMsg.Id); err != nil {
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id is invalid"})
+		s.Logger.Warn(fmt.Sprintf("client login rejected: client_id=%s is invalid", loginMsg.Id))
 		return "", "", fmt.Errorf("client_id is invalid")
 	}
 
 	runID = uuid.New().String()
 	if err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{RunID: runID}); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to send login response: client_id=%s, err=%v", loginMsg.Id, err))
 		return "", "", fmt.Errorf("failed to send LoginResp")
 	}
 
+	s.Logger.Info(fmt.Sprintf("client logged in: client_id=%s, run_id=%s, remote=%s", loginMsg.Id, runID, conn.RemoteAddr()))
 	return loginMsg.Id, runID, nil
 }
 
@@ -59,7 +62,7 @@ func (s *Session) SetClientProxiesOffline(clientID string) error {
 func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientID string, listeners *ProxyListeners, serverStopCh, clientStopCh chan struct{}) error {
 	replyErr := func(e string) {
 		_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: e})
-		s.Logger.Error(e)
+		s.Logger.Error(fmt.Sprintf("proxies apply rejected: client_id=%s, reason=%s", clientID, e))
 	}
 
 	var msg sharedprotocol.ProxiesApplyMsg
@@ -134,6 +137,8 @@ func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload [
 
 	for name, listener := range opened {
 		ln := listener
+		proxy := desired[name]
+		s.Logger.Info(fmt.Sprintf("proxy listener opened: client_id=%s, name=%s, remote_port=%d", clientID, name, proxy.RemotePort))
 		go func() {
 			select {
 			case <-serverStopCh:
@@ -145,14 +150,14 @@ func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload [
 	}
 
 	_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: ""})
-	s.Logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d, newly_opened=%d", clientID, len(desired), len(opened)))
+	s.Logger.Info(fmt.Sprintf("client config applied: client_id=%s, proxies=%d, newly_opened=%d", clientID, len(desired), len(opened)))
 	return nil
 }
 
 func (s *Session) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, clientID, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
 	defer func() {
 		_ = listener.Close()
-		s.Logger.Info(fmt.Sprintf("Proxy stopped: name=%s", proxyName))
+		s.Logger.Info(fmt.Sprintf("proxy stopped: client_id=%s, name=%s", clientID, proxyName))
 	}()
 
 	for {
@@ -167,19 +172,19 @@ func (s *Session) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 			case <-clientStopCh:
 				return
 			default:
-				s.Logger.Error(fmt.Sprintf("Proxy [%s] accept loop exiting: %v", proxyName, err))
+				s.Logger.Error(fmt.Sprintf("proxy accept loop exiting: name=%s, err=%v", proxyName, err))
 				return
 			}
 		}
 
 		ip, region, err := s.AccessFilterService.Check(conn.RemoteAddr(), clientID, proxyName)
 		if err != nil {
-			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, region=%s, reason=%s", proxyName, ip, region, err.Error()))
+			s.Logger.Warn(fmt.Sprintf("user connection rejected: proxy=%s, ip=%s, region=%s, reason=%s", proxyName, ip, region, err.Error()))
 			_ = conn.Close()
 			continue
 		}
 
-		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
+		s.Logger.Info(fmt.Sprintf("user connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
 		go s.bridgeClientConn(controlConn, ctrlWriteMu, conn, proxyName, serverStopCh, clientStopCh)
 	}
 }
@@ -187,7 +192,7 @@ func (s *Session) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex,
 func (s *Session) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
 	certFP, err := sharedcerts.ClientLeafCertSHA256(controlConn)
 	if err != nil {
-		s.Logger.Warn(fmt.Sprintf("Cannot bind work channel to control TLS cert: %v", err))
+		s.Logger.Warn(fmt.Sprintf("cannot bind work channel to control tls cert: %v", err))
 		_ = conn.Close()
 		return
 	}
@@ -214,10 +219,11 @@ func (s *Session) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex
 		ProxyName: proxyName,
 	}
 	if err := sharedprotocol.WriteMsgWithLock(ctrlWriteMu, controlConn, sharedprotocol.MsgNewWorkConn, msg); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to notify client new work conn: proxy=%s, work_id=%s, err=%v", proxyName, workID, err))
 		if c := s.ProxyBrokerService.Remove(workID); c != nil {
 			_ = c.Close()
 		}
 		return
 	}
+	s.Logger.Info(fmt.Sprintf("work conn requested: proxy=%s, work_id=%s", proxyName, workID))
 }

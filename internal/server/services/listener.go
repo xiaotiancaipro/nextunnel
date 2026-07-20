@@ -19,7 +19,7 @@ func (s *Listener) Listen() (net.Listener, error) {
 	addr := fmt.Sprintf(":%d", s.Config.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to listen on %s: %v", addr, err))
+		s.Logger.Error(fmt.Sprintf("failed to listen on %s: %v", addr, err))
 		return nil, fmt.Errorf("failed to listen")
 	}
 	return listener, nil
@@ -30,7 +30,7 @@ func (s *Listener) Establish(connRaw net.Conn, tlsConfig *tls.Config) (net.Conn,
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err := conn.Handshake(); err != nil {
 		_ = conn.SetDeadline(time.Time{})
-		s.Logger.Error(fmt.Sprintf("Failed to handshake with TLS connection: %v", err))
+		s.Logger.Warn(fmt.Sprintf("tls handshake failed from %s: %v", connRaw.RemoteAddr(), err))
 		return nil, fmt.Errorf("tls handshake failed")
 	}
 	_ = conn.SetDeadline(time.Time{})

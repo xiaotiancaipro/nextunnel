@@ -35,10 +35,10 @@ func (a *Conn) Init() error {
 func (a *Conn) Start() error {
 	tlsCfg, err := a.Services.Tls.Init()
 	if err != nil {
-		a.Logger.Error(fmt.Sprintf("Failed to initialize TLS: %v", err))
+		a.Logger.Error(fmt.Sprintf("failed to initialize tls: %v", err))
 		return err
 	}
-	a.Logger.Info("TLS connection established")
+	a.Logger.Info("tls config loaded")
 
 	a.Services.Client.DialWork = func() (net.Conn, error) {
 		return a.Services.Server.Dial(tlsCfg)
@@ -62,6 +62,7 @@ func (a *Conn) Start() error {
 			return nil
 		}
 
+		a.Logger.Warn(fmt.Sprintf("session ended, reconnecting in %s", nextRetryDelay))
 		select {
 		case <-a.stopCh:
 			return nil
@@ -78,6 +79,7 @@ func (a *Conn) Start() error {
 
 func (a *Conn) Stop(_ context.Context) error {
 	a.stopOnce.Do(func() {
+		a.Logger.Info("client connection stopping")
 		if a.stopCh != nil {
 			close(a.stopCh)
 		}
@@ -93,9 +95,10 @@ func (a *Conn) Stop(_ context.Context) error {
 }
 
 func (a *Conn) runSession(nextRetryDelay *time.Duration, reconnectMin time.Duration) (stopped bool) {
+	addr := a.Services.Server.AddrStr()
 	conn, err := a.Services.Client.DialWork()
 	if err != nil {
-		a.Logger.Warn(fmt.Sprintf("Failed to connect to server: %v", err))
+		a.Logger.Warn(fmt.Sprintf("failed to connect to server %s: %v", addr, err))
 		return false
 	}
 
@@ -111,28 +114,28 @@ func (a *Conn) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durat
 		_ = conn.Close()
 	}()
 
-	a.Logger.Info("Successfully connected to the server")
+	a.Logger.Info(fmt.Sprintf("connected to server %s", addr))
 
 	if err := a.Services.Client.Login(conn); err != nil {
-		a.Logger.Warn(fmt.Sprintf("Failed to login: %v", err))
+		a.Logger.Warn(fmt.Sprintf("failed to login: %v", err))
 		return false
 	}
 	runID, err := a.Services.Client.LoginResponse(conn)
 	if err != nil {
-		a.Logger.Warn(fmt.Sprintf("Failed to login: %v", err))
+		a.Logger.Warn(fmt.Sprintf("failed to login: %v", err))
 		return false
 	}
-	a.Logger.Info(fmt.Sprintf("Running with id: %s", runID))
+	a.Logger.Info(fmt.Sprintf("login success: run_id=%s", runID))
 
 	if err := a.Services.Client.ProxiesApply(conn); err != nil {
-		a.Logger.Warn(fmt.Sprintf("Failed to apply proxies: %v", err))
+		a.Logger.Warn(fmt.Sprintf("failed to apply proxies: %v", err))
 		return false
 	}
 	if err := a.Services.Client.ProxiesApplyResponse(conn); err != nil {
-		a.Logger.Warn(fmt.Sprintf("Failed to apply proxies: %v", err))
+		a.Logger.Warn(fmt.Sprintf("failed to apply proxies: %v", err))
 		return false
 	}
-	a.Logger.Info("Client proxies configuration application successful")
+	a.Logger.Info(fmt.Sprintf("proxies applied: count=%d", len(a.Services.Client.Proxies)))
 
 	*nextRetryDelay = reconnectMin
 
@@ -151,13 +154,13 @@ func (a *Conn) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durat
 			return true
 		case <-heartbeatTicker.C:
 			if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
-				a.Logger.Warn(fmt.Sprintf("Failed to set heartbeat write deadline: %v", err))
+				a.Logger.Warn(fmt.Sprintf("failed to set heartbeat write deadline: %v", err))
 				return false
 			}
 			err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgHeartbeat, sharedprotocol.HeartbeatMsg{})
 			_ = conn.SetWriteDeadline(time.Time{})
 			if err != nil {
-				a.Logger.Warn(fmt.Sprintf("Failed to send heartbeat: %v", err))
+				a.Logger.Warn(fmt.Sprintf("failed to send heartbeat: %v", err))
 				return false
 			}
 		case result := <-msgCh:
@@ -167,20 +170,20 @@ func (a *Conn) runSession(nextRetryDelay *time.Duration, reconnectMin time.Durat
 					return true
 				default:
 				}
-				a.Logger.Warn(fmt.Sprintf("Failed to read control message: %v", result.err))
+				a.Logger.Warn(fmt.Sprintf("failed to read control message: %v", result.err))
 				return false
 			}
 			switch result.msgType {
 			case sharedprotocol.MsgNewWorkConn:
 				var msg sharedprotocol.NewWorkConnMsg
 				if err := sharedprotocol.Decode(result.payload, &msg); err != nil {
-					a.Logger.Error(fmt.Sprintf("Failed to parse NewWorkConnMsg: %v", err))
+					a.Logger.Error(fmt.Sprintf("failed to parse new work conn msg: %v", err))
 					continue
 				}
 				go a.Services.Client.WorkConn(msg)
 			case sharedprotocol.MsgHeartbeatResp:
 			default:
-				a.Logger.Warn(fmt.Sprintf("Received unknown control message 0x%02x", result.msgType))
+				a.Logger.Warn(fmt.Sprintf("received unknown control message 0x%02x", result.msgType))
 			}
 		}
 	}

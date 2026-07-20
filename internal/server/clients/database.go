@@ -36,6 +36,7 @@ func (c *Database) Init() error {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 	c.DB = db
+	c.Logger.Info(fmt.Sprintf("database connected: host=%s, port=%d, db=%s", c.Config.Host, c.Config.Port, c.Config.Database))
 	return nil
 }
 

@@ -30,19 +30,21 @@ type pendingWorkItem struct {
 func (s *ProxyBroker) StartWorkConn(workTLS net.Conn, payload []byte) error {
 	var msg sharedprotocol.StartWorkConnMsg
 	if err := sharedprotocol.Decode(payload, &msg); err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to parse StartWorkConnMsg: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to parse start work conn msg: %v", err))
 		return fmt.Errorf("failed to parse StartWorkConnMsg")
 	}
 	if msg.WorkID == "" {
 		_ = workTLS.Close()
+		s.Logger.Warn("start work conn rejected: work_id is empty")
 		return fmt.Errorf("work_id is empty")
 	}
 	userConn, ok := s.takePendingIfCertMatches(msg.WorkID, workTLS)
 	if !ok {
-		s.Logger.Warn(fmt.Sprintf("No matching pending work or client certificate mismatch for work_id=%s", msg.WorkID))
+		s.Logger.Warn(fmt.Sprintf("no matching pending work or certificate mismatch: work_id=%s", msg.WorkID))
 		_ = workTLS.Close()
 		return fmt.Errorf("unknown or expired work_id, or certificate mismatch")
 	}
+	s.Logger.Info(fmt.Sprintf("work connection bridged: work_id=%s", msg.WorkID))
 	go network.Pipe(userConn, workTLS)
 	return nil
 }
@@ -67,7 +69,7 @@ func (s *ProxyBroker) Register(workID string, userConn net.Conn, certFP [sha256.
 		s.pendingMu.Unlock()
 		if ok {
 			_ = p.userConn.Close()
-			s.Logger.Warn(fmt.Sprintf("Timed out waiting for work channel; closed user connection: workID=%s", workID))
+			s.Logger.Warn(fmt.Sprintf("timed out waiting for work channel: work_id=%s", workID))
 		}
 	})
 }
@@ -89,7 +91,7 @@ func (s *ProxyBroker) Remove(workID string) net.Conn {
 func (s *ProxyBroker) takePendingIfCertMatches(workID string, workTLS net.Conn) (net.Conn, bool) {
 	workFP, err := sharedcerts.ClientLeafCertSHA256(workTLS)
 	if err != nil {
-		s.Logger.Warn(fmt.Sprintf("StartWorkConn: read work TLS client cert: %v", err))
+		s.Logger.Warn(fmt.Sprintf("failed to read work tls client cert: work_id=%s, err=%v", workID, err))
 		return nil, false
 	}
 	s.pendingMu.Lock()
@@ -102,7 +104,7 @@ func (s *ProxyBroker) takePendingIfCertMatches(workID string, workTLS net.Conn) 
 		return nil, false
 	}
 	if subtle.ConstantTimeCompare(p.certFP[:], workFP[:]) != 1 {
-		s.Logger.Warn(fmt.Sprintf("StartWorkConn rejected: client certificate does not match control channel (work_id=%s)", workID))
+		s.Logger.Warn(fmt.Sprintf("start work conn rejected: certificate mismatch, work_id=%s", workID))
 		return nil, false
 	}
 	delete(s.pendingWork, workID)

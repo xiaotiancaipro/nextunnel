@@ -49,6 +49,7 @@ func (a *Web) Stop(ctx context.Context) error {
 	if a.httpServer == nil {
 		return nil
 	}
+	a.Logger.Info("web server stopping")
 	return a.httpServer.Shutdown(ctx)
 }
 

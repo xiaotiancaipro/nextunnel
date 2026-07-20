@@ -18,7 +18,7 @@ type Tls struct {
 func (s *Tls) Init() (*tls.Config, error) {
 	caCert, err := os.ReadFile(s.Config.CaFile)
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to read tls ca_file: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to read tls ca_file: %v", err))
 		return nil, fmt.Errorf("failed to read tls ca_file")
 	}
 	pool, err := x509.SystemCertPool()
@@ -26,7 +26,7 @@ func (s *Tls) Init() (*tls.Config, error) {
 		pool = x509.NewCertPool()
 	}
 	if ok := pool.AppendCertsFromPEM(caCert); !ok {
-		s.Logger.Error("Failed to append tls ca_file to cert pool")
+		s.Logger.Error("failed to append tls ca_file to cert pool")
 		return nil, fmt.Errorf("failed to append tls ca_file to cert pool")
 	}
 	config := &tls.Config{
@@ -47,7 +47,7 @@ func (s *Tls) LoadCertificate(config *tls.Config) error {
 	}
 	cert, err := tls.LoadX509KeyPair(s.Config.CertFile, s.Config.KeyFile)
 	if err != nil {
-		s.Logger.Error(fmt.Sprintf("Failed to load client tls certificate: %v", err))
+		s.Logger.Error(fmt.Sprintf("failed to load client tls certificate: %v", err))
 		return fmt.Errorf("failed to load client tls certificate")
 	}
 	config.Certificates = []tls.Certificate{cert}
