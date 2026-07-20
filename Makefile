@@ -28,8 +28,8 @@ build-multi-server: build-server-web
 		for arch in amd64 arm64; do \
 			ext=""; \
 			[ "$$os" = "windows" ] && ext=".exe"; \
-			echo "Building client/server for $$os/$$arch"; \
-			GOOS=$$os GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-client-$(VERSION)-$$os-$$arch$$ext ./cmd/server; \
+			echo "Building server for $$os/$$arch"; \
+			GOOS=$$os GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-server-$(VERSION)-$$os-$$arch$$ext ./cmd/server; \
 		done; \
 	done
 
@@ -39,7 +39,7 @@ build-multi-client:
 		for arch in amd64 arm64; do \
 			ext=""; \
 			[ "$$os" = "windows" ] && ext=".exe"; \
-			echo "Building client/server for $$os/$$arch"; \
+			echo "Building client for $$os/$$arch"; \
 			GOOS=$$os GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-client-$(VERSION)-$$os-$$arch$$ext ./cmd/client; \
 		done; \
 	done
