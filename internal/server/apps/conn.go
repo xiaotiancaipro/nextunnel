@@ -15,12 +15,12 @@ import (
 )
 
 type Conn struct {
-	Logger     *zap.Logger
-	Services   *services.Services
-	listener   net.Listener
-	listenerMu sync.Mutex
-	stopCh     chan struct{}
-	stopOnce   sync.Once
+	Logger   *zap.Logger
+	Services *services.Services
+	listener net.Listener
+	mu       sync.Mutex
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 func (a *Conn) Init() error {
@@ -29,14 +29,13 @@ func (a *Conn) Init() error {
 }
 
 func (a *Conn) Start() error {
-
-	listener, err := a.Services.Server.Listen()
+	listener, err := a.Services.Listener.Listen()
 	if err != nil {
 		return err
 	}
-	a.listenerMu.Lock()
+	a.mu.Lock()
 	a.listener = listener
-	a.listenerMu.Unlock()
+	a.mu.Unlock()
 
 	a.Logger.Info("conn server listening on " + listener.Addr().String())
 
@@ -72,10 +71,10 @@ func (a *Conn) Stop(_ context.Context) error {
 		if a.stopCh != nil {
 			close(a.stopCh)
 		}
-		a.listenerMu.Lock()
+		a.mu.Lock()
 		ln := a.listener
 		a.listener = nil
-		a.listenerMu.Unlock()
+		a.mu.Unlock()
 		if ln != nil {
 			closeErr = ln.Close()
 		}
@@ -84,17 +83,16 @@ func (a *Conn) Stop(_ context.Context) error {
 }
 
 func (a *Conn) handle(connRaw net.Conn, tlsConfig *tls.Config) {
-	conn, err := a.Services.Server.EstablishConn(connRaw, tlsConfig)
+	conn, err := a.Services.Listener.Establish(connRaw, tlsConfig)
 	if err != nil {
 		a.Logger.Error(fmt.Sprintf("Failed to incoming TLS connection: %v", err))
 		_ = connRaw.Close()
 		return
 	}
-	a.accepted(conn)
+	a.dispatch(conn)
 }
 
-func (a *Conn) accepted(conn net.Conn) {
-
+func (a *Conn) dispatch(conn net.Conn) {
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	msgType, payload, err := sharedprotocol.ReadMsg(conn)
 	if err != nil {
@@ -103,56 +101,60 @@ func (a *Conn) accepted(conn net.Conn) {
 		return
 	}
 	_ = conn.SetDeadline(time.Time{})
-
 	switch msgType {
 	case sharedprotocol.MsgLogin:
-		clientIdP, runIdP, err := a.Services.Server.Login(conn, payload)
-		if err != nil {
-			a.Logger.Error(fmt.Sprintf("Failed to login: %v", err))
-			_ = conn.Close()
-			return
-		}
-		clientID := *clientIdP
-		clientStopCh := make(chan struct{})
-		defer func() {
-			close(clientStopCh)
-			if err := a.Services.Server.SetClientProxiesOffline(clientID); err != nil {
-				a.Logger.Warn(fmt.Sprintf("Failed to mark client proxies offline: clientID=%s, err=%v", clientID, err))
-			}
-			_ = conn.Close()
-		}()
-		var ctrlWriteMu sync.Mutex
-		for {
-			msgType_, payload_, err := sharedprotocol.ReadMsg(conn)
-			if err != nil {
-				a.Logger.Error(fmt.Sprintf("Client control connection disconnected, clientID=%s, runID=%s: %v", *clientIdP, *runIdP, err))
-				return
-			}
-			switch msgType_ {
-			case sharedprotocol.MsgProxiesApply:
-				if err := a.Services.Server.ProxiesApply(conn, &ctrlWriteMu, payload_, clientIdP, a.stopCh, clientStopCh); err != nil {
-					a.Logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
-					return
-				}
-			case sharedprotocol.MsgHeartbeat:
-				if err := sharedprotocol.WriteMsgWithLock(&ctrlWriteMu, conn, sharedprotocol.MsgHeartbeatResp, sharedprotocol.HeartbeatRespMsg{}); err != nil {
-					a.Logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
-					return
-				}
-			default:
-				a.Logger.Error(fmt.Sprintf("Unknown message received on control connection 0x%02x runID=%s", msgType_, *runIdP))
-			}
-		}
+		a.serveControl(conn, payload)
 	case sharedprotocol.MsgStartWorkConn:
-		if err := a.Services.Server.StartWorkConn(conn, payload); err != nil {
+		if err := a.Services.ProxyBroker.StartWorkConn(conn, payload); err != nil {
 			a.Logger.Error(fmt.Sprintf("Failed to start work connection: %v", err))
 			_ = conn.Close()
 			return
 		}
-		return
 	default:
 		a.Logger.Error(fmt.Sprintf("Unknown first message type 0x%02x [%s]", msgType, conn.RemoteAddr()))
 		_ = conn.Close()
+	}
+}
+
+func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
+
+	clientID, runID, err := a.Services.Session.Login(conn, loginPayload)
+	if err != nil {
+		a.Logger.Error(fmt.Sprintf("Failed to login: %v", err))
+		_ = conn.Close()
+		return
+	}
+
+	clientStopCh := make(chan struct{})
+	defer func() {
+		close(clientStopCh)
+		if err := a.Services.Session.SetClientProxiesOffline(clientID); err != nil {
+			a.Logger.Warn(fmt.Sprintf("Failed to mark client proxies offline: clientID=%s, err=%v", clientID, err))
+		}
+		_ = conn.Close()
+	}()
+
+	var ctrlWriteMu sync.Mutex
+	for {
+		msgType, payload, err := sharedprotocol.ReadMsg(conn)
+		if err != nil {
+			a.Logger.Error(fmt.Sprintf("Client control connection disconnected, clientID=%s, runID=%s: %v", clientID, runID, err))
+			return
+		}
+		switch msgType {
+		case sharedprotocol.MsgProxiesApply:
+			if err := a.Services.Session.ProxiesApply(conn, &ctrlWriteMu, payload, clientID, a.stopCh, clientStopCh); err != nil {
+				a.Logger.Error(fmt.Sprintf("Failed to apply proxies: %v", err))
+				return
+			}
+		case sharedprotocol.MsgHeartbeat:
+			if err := sharedprotocol.WriteMsgWithLock(&ctrlWriteMu, conn, sharedprotocol.MsgHeartbeatResp, sharedprotocol.HeartbeatRespMsg{}); err != nil {
+				a.Logger.Error(fmt.Sprintf("Failed to send HeartbeatRespMsg: %v", err))
+				return
+			}
+		default:
+			a.Logger.Error(fmt.Sprintf("Unknown message received on control connection 0x%02x runID=%s", msgType, runID))
+		}
 	}
 
 }

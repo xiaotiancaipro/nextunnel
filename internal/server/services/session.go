@@ -1,0 +1,229 @@
+package services
+
+import (
+	"fmt"
+	"net"
+	"sync"
+
+	"github.com/google/uuid"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/models"
+	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
+	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
+	"go.uber.org/zap"
+)
+
+type Session struct {
+	Logger              *zap.Logger
+	Database            *clients.Database
+	ClientService       *Client
+	ClientProxyService  *ClientProxy
+	ProxyBrokerService  *ProxyBroker
+	AccessFilterService *AccessFilter
+}
+
+func (s *Session) Login(conn net.Conn, payload []byte) (clientID, runID string, err error) {
+	var loginMsg sharedprotocol.LoginMsg
+	if err := sharedprotocol.Decode(payload, &loginMsg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to parse LoginMsg: %v", err))
+		return "", "", fmt.Errorf("failed to parse LoginMsg")
+	}
+
+	if loginMsg.Id == "" {
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id cannot be empty"})
+		return "", "", fmt.Errorf("client_id is empty")
+	}
+	if _, err := s.ClientService.ResolveClientId(s.Database.DB, loginMsg.Id); err != nil {
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id is invalid"})
+		return "", "", fmt.Errorf("client_id is invalid")
+	}
+
+	runID = uuid.New().String()
+	if err := sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{RunID: runID}); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to send LoginResp: %v", err))
+		return "", "", fmt.Errorf("failed to send LoginResp")
+	}
+
+	return loginMsg.Id, runID, nil
+}
+
+func (s *Session) SetClientProxiesOffline(clientID string) error {
+	clientUUID, err := s.ClientService.ResolveClientId(s.Database.DB, clientID)
+	if err != nil {
+		return err
+	}
+	return s.ClientProxyService.SetAllOffline(clientUUID)
+}
+
+func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload []byte, clientID string, serverStopCh, clientStopCh chan struct{}) error {
+	replyErr := func(e string) {
+		_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: e})
+		s.Logger.Error(e)
+	}
+
+	var msg sharedprotocol.ProxiesApplyMsg
+	if err := sharedprotocol.Decode(payload, &msg); err != nil {
+		replyErr(fmt.Sprintf("failed to parse ApplyConfigMsg: %v", err))
+		return fmt.Errorf("failed to parse ApplyConfigMsg")
+	}
+
+	desired := make(map[string]sharedprotocol.ProxiesApplyMsgItem, len(msg.Proxies))
+	usedPorts := make(map[int]string, len(msg.Proxies))
+	for _, proxy := range msg.Proxies {
+		if proxy.Name == "" {
+			replyErr("Proxy name is empty")
+			return fmt.Errorf("proxy name is empty")
+		}
+		if proxy.Type != "tcp" {
+			replyErr(fmt.Sprintf("[%s]Proxy type is invalid", proxy.Name))
+			return fmt.Errorf("proxy type is invalid")
+		}
+		if proxy.LocalIP == "" {
+			replyErr(fmt.Sprintf("[%s] local_ip is empty", proxy.Name))
+			return fmt.Errorf("local_ip is empty")
+		}
+		if proxy.LocalPort < 1 || proxy.LocalPort > 65535 {
+			replyErr(fmt.Sprintf("[%s] local_port is invalid", proxy.Name))
+			return fmt.Errorf("local_port is invalid")
+		}
+		if proxy.RemotePort < 1 || proxy.RemotePort > 65535 {
+			replyErr(fmt.Sprintf("[%s] remote_port is invalid", proxy.Name))
+			return fmt.Errorf("remote_port is invalid")
+		}
+		if _, exists := desired[proxy.Name]; exists {
+			replyErr(fmt.Sprintf("[%s]Proxy name is duplicated", proxy.Name))
+			return fmt.Errorf("proxy name is duplicated")
+		}
+		if other, exists := usedPorts[proxy.RemotePort]; exists {
+			replyErr(fmt.Sprintf("[%s]Proxy remote port %d is already requested by [%s]", proxy.Name, proxy.RemotePort, other))
+			return fmt.Errorf("proxy remote port is duplicated")
+		}
+		desired[proxy.Name] = proxy
+		usedPorts[proxy.RemotePort] = proxy.Name
+	}
+
+	clientUUID, err := s.ClientService.ResolveClientId(s.Database.DB, clientID)
+	if err != nil {
+		replyErr("client_id is invalid")
+		return fmt.Errorf("client_id is invalid")
+	}
+
+	var client models.Client
+	if err := s.Database.DB.Where("id = ?", clientUUID).First(&client).Error; err != nil {
+		replyErr("client_id is invalid")
+		return fmt.Errorf("client not found")
+	}
+	for name, proxy := range desired {
+		if !s.ClientService.ClientPortAllowed(client, proxy.RemotePort) {
+			replyErr(fmt.Sprintf("[%s] remote port %d is outside allocated range %d-%d", name, proxy.RemotePort, client.PortStart, client.PortEnd))
+			return fmt.Errorf("remote port out of range")
+		}
+	}
+
+	if err := s.ClientProxyService.SyncFromApply(clientUUID, desired); err != nil {
+		replyErr(fmt.Sprintf("failed to sync proxies: %v", err))
+		return err
+	}
+
+	opened := make(map[string]net.Listener)
+	openedClose := func() {
+		for _, ln := range opened {
+			_ = ln.Close()
+		}
+	}
+	for name, proxy := range desired {
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", proxy.RemotePort))
+		if err != nil {
+			openedClose()
+			replyErr(fmt.Sprintf("Failed to listen on port %d: %v", proxy.RemotePort, err))
+			return fmt.Errorf("failed to listen on port %d", proxy.RemotePort)
+		}
+		opened[name] = ln
+	}
+
+	for name, listener := range opened {
+		ln := listener
+		go func() {
+			select {
+			case <-serverStopCh:
+			case <-clientStopCh:
+			}
+			_ = ln.Close()
+		}()
+		go s.proxyAcceptLoop(conn, ctrlWriteMu, clientID, name, ln, serverStopCh, clientStopCh)
+	}
+
+	_ = sharedprotocol.WriteMsgWithLock(ctrlWriteMu, conn, sharedprotocol.MsgProxiesApplyResp, sharedprotocol.ProxiesApplyRespMsg{Error: ""})
+	s.Logger.Info(fmt.Sprintf("Client config applied: clientID=%s, proxies=%d", clientID, len(opened)))
+	return nil
+}
+
+func (s *Session) proxyAcceptLoop(controlConn net.Conn, ctrlWriteMu *sync.Mutex, clientID, proxyName string, listener net.Listener, serverStopCh, clientStopCh chan struct{}) {
+	defer func() {
+		_ = listener.Close()
+		s.Logger.Info(fmt.Sprintf("Proxy stopped: name=%s", proxyName))
+	}()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			select {
+			case <-serverStopCh:
+				return
+			case <-clientStopCh:
+				return
+			default:
+				s.Logger.Error(fmt.Sprintf("Proxy [%s] accept loop exiting: %v", proxyName, err))
+				return
+			}
+		}
+
+		ip, region, err := s.AccessFilterService.Check(conn.RemoteAddr(), clientID, proxyName)
+		if err != nil {
+			s.Logger.Warn(fmt.Sprintf("User connection rejected by ip filter: proxy=%s, ip=%s, region=%s, reason=%s", proxyName, ip, region, err.Error()))
+			_ = conn.Close()
+			continue
+		}
+
+		s.Logger.Info(fmt.Sprintf("User connection arrived: proxy=%s, ip=%s, region=%s", proxyName, ip, region))
+		go s.bridgeClientConn(controlConn, ctrlWriteMu, conn, proxyName, serverStopCh, clientStopCh)
+	}
+}
+
+func (s *Session) bridgeClientConn(controlConn net.Conn, ctrlWriteMu *sync.Mutex, conn net.Conn, proxyName string, serverStopCh, clientStopCh chan struct{}) {
+	certFP, err := sharedcerts.ClientLeafCertSHA256(controlConn)
+	if err != nil {
+		s.Logger.Warn(fmt.Sprintf("Cannot bind work channel to control TLS cert: %v", err))
+		_ = conn.Close()
+		return
+	}
+
+	workID := uuid.New().String()
+	s.ProxyBrokerService.Register(workID, conn, certFP)
+
+	select {
+	case <-serverStopCh:
+		if c := s.ProxyBrokerService.Remove(workID); c != nil {
+			_ = c.Close()
+		}
+		return
+	case <-clientStopCh:
+		if c := s.ProxyBrokerService.Remove(workID); c != nil {
+			_ = c.Close()
+		}
+		return
+	default:
+	}
+
+	msg := sharedprotocol.NewWorkConnMsg{
+		WorkID:    workID,
+		ProxyName: proxyName,
+	}
+	if err := sharedprotocol.WriteMsgWithLock(ctrlWriteMu, controlConn, sharedprotocol.MsgNewWorkConn, msg); err != nil {
+		s.Logger.Error(fmt.Sprintf("Failed to notify client (NewWorkConn): %v", err))
+		if c := s.ProxyBrokerService.Remove(workID); c != nil {
+			_ = c.Close()
+		}
+		return
+	}
+}

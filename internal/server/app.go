@@ -97,34 +97,47 @@ func (a *App) initServices() {
 		Config:   a.Configs.Cert,
 	}
 	clientProxy := services.ClientProxy{Database: a.clients.Database}
+	listener := services.Listener{
+		Config: a.Configs.Server,
+		Logger: a.logger,
+	}
+	proxyBroker := services.ProxyBroker{Logger: a.logger}
 	accessRule := services.AccessRule{Database: a.clients.Database}
 	accessLog := services.AccessLog{
 		Database:           a.clients.Database,
 		ClientService:      &client,
 		ClientProxyService: &clientProxy,
 	}
-	server := services.Server{
-		Config:             a.Configs.Server,
-		Logger:             a.logger,
-		Database:           a.clients.Database,
-		IPLocation:         a.clients.IPLocation,
-		ClientService:      &client,
-		ClientProxyService: &clientProxy,
-		AccessRuleService:  &accessRule,
-		AccessLogService:   &accessLog,
+	accessFilter := services.AccessFilter{
+		Logger:            a.logger,
+		Database:          a.clients.Database,
+		IPLocation:        a.clients.IPLocation,
+		AccessRuleService: &accessRule,
+		AccessLogService:  &accessLog,
+	}
+	session := services.Session{
+		Logger:              a.logger,
+		Database:            a.clients.Database,
+		ClientService:       &client,
+		ClientProxyService:  &clientProxy,
+		ProxyBrokerService:  &proxyBroker,
+		AccessFilterService: &accessFilter,
 	}
 	tls := services.Tls{
 		Config: a.Configs.Cert,
 		Logger: a.logger,
 	}
 	a.services = &services.Services{
-		AccessLog:   &accessLog,
-		AccessRule:  &accessRule,
-		Client:      &client,
-		ClientCert:  &clientCert,
-		ClientProxy: &clientProxy,
-		Server:      &server,
-		Tls:         &tls,
+		AccessFilter: &accessFilter,
+		AccessLog:    &accessLog,
+		AccessRule:   &accessRule,
+		Client:       &client,
+		ClientCert:   &clientCert,
+		ClientProxy:  &clientProxy,
+		Listener:     &listener,
+		ProxyBroker:  &proxyBroker,
+		Session:      &session,
+		Tls:          &tls,
 	}
 }
 

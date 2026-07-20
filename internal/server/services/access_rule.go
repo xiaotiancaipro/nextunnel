@@ -130,7 +130,7 @@ func (s *AccessRule) targetQuery(tx *gorm.DB, target RuleTarget) *gorm.DB {
 	return q
 }
 
-func (s *AccessRule) evaluate(rules []models.AccessRule, ip, country, region, city string, isLocal bool) bool {
+func (s *AccessRule) Evaluate(rules []models.AccessRule, ip, country, region, city string, isLocal bool) bool {
 	var best *models.AccessRule
 	for i := range rules {
 		rule := &rules[i]
