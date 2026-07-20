@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type API struct {
+type Web struct {
 	Config     *configs.Configs
 	Logger     *zap.Logger
 	Services   *services.Services
@@ -23,53 +23,41 @@ type API struct {
 	engine     *gin.Engine
 }
 
-func (a *API) Init() error {
-
+func (a *Web) Init() error {
 	gin.SetMode(gin.ReleaseMode)
 	a.engine = gin.New()
-
-	a.engine.Use(
-		gin.Recovery(),
-		middleware.CORS(),
-	)
-
+	a.engine.Use(gin.Recovery(), middleware.CORS())
 	webui := a.initRouters()
 	uiHandler, err := webui.Handler()
 	if err != nil {
 		return fmt.Errorf("initialize web ui: %w", err)
 	}
 	a.engine.NoRoute(gin.WrapH(uiHandler))
-
 	return nil
-
 }
 
-func (a *API) Start() error {
-
-	addr := fmt.Sprintf("0.0.0.0:%d", a.Config.Web.PortOrDefault())
+func (a *Web) Start() error {
+	addr := fmt.Sprintf("%s:%d", a.Config.ServerWeb.Host, a.Config.ServerWeb.PortOrDefault())
 	a.httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           a.engine,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	a.Logger.Info("Web management listening on " + addr)
+	a.Logger.Info("web server listening on " + addr)
 	if err := a.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
-
 	return nil
-
 }
 
-func (a *API) Stop(ctx context.Context) error {
+func (a *Web) Stop(ctx context.Context) error {
 	if a.httpServer == nil {
 		return nil
 	}
 	return a.httpServer.Shutdown(ctx)
 }
 
-func (a *API) initRouters() controllers.WebUI {
+func (a *Web) initRouters() controllers.WebUI {
 
 	api := a.engine.Group("/api")
 

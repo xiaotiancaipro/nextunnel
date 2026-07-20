@@ -1,6 +1,10 @@
 [server]
 port = 25930
 
+[server_web]
+host = "127.0.0.1"
+port = 25001
+
 [cert]
 host = "127.0.0.1"
 dir = "certs" # If using Docker to start, this parameter must be in /etc/nextunnel/certs
@@ -25,7 +29,3 @@ maxAge = 7
 
 [timezone]
 location = "Asia/Shanghai"
-
-[web]
-enabled = true
-port = 25001

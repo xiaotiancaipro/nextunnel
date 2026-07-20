@@ -24,36 +24,36 @@ type App struct {
 }
 
 func (a *App) Init() error {
-
 	logger, err := sharedlogger.NewLogger(a.Configs.Logs)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logging: %v", err)
 	}
 	a.logger = logger
-
 	if err := a.initClients(); err != nil {
 		return err
 	}
-
 	a.initServices()
-
 	if err := a.initApps(); err != nil {
 		return err
 	}
-
 	return nil
-
 }
 
 func (a *App) Start() error {
-	if a.apps.API != nil {
-		go func() {
-			if err := a.apps.API.Start(); err != nil {
-				a.logger.Error(fmt.Sprintf("Web management API stopped: %v", err))
-			}
-		}()
-	}
-	return a.apps.Conn.Start()
+	errors := make(chan error, 2)
+	go func() {
+		if err := a.apps.Web.Start(); err != nil {
+			a.logger.Error(fmt.Sprintf("web server stopped: %v", err))
+			errors <- err
+		}
+	}()
+	go func() {
+		if err := a.apps.Conn.Start(); err != nil {
+			a.logger.Error(fmt.Sprintf("conn server stopped: %v", err))
+			errors <- err
+		}
+	}()
+	return <-errors
 }
 
 func (a *App) Stop() {
@@ -69,7 +69,6 @@ func (a *App) Stop() {
 }
 
 func (a *App) initClients() error {
-
 	database := clients.Database{
 		Config: a.Configs.Database,
 		Logger: a.logger,
@@ -77,7 +76,6 @@ func (a *App) initClients() error {
 	if err := database.Init(); err != nil {
 		return fmt.Errorf("failed to initialize database: %v", err)
 	}
-
 	ipLocation := clients.IPLocation{
 		Config: a.Configs.IPLocation,
 		Logger: a.logger,
@@ -85,13 +83,11 @@ func (a *App) initClients() error {
 	if err := ipLocation.Init(); err != nil {
 		return fmt.Errorf("failed to initialize ip location: %v", err)
 	}
-
 	a.clients = &clients.Clients{
 		Database:   &database,
 		IPLocation: &ipLocation,
 	}
 	return nil
-
 }
 
 func (a *App) initServices() {
@@ -133,32 +129,24 @@ func (a *App) initServices() {
 }
 
 func (a *App) initApps() error {
-
-	var apiApp *apps.API
-	if a.Configs.Web.IsEnabled() {
-		api := apps.API{
-			Config:   a.Configs,
-			Logger:   a.logger,
-			Services: a.services,
-		}
-		if err := api.Init(); err != nil {
-			return fmt.Errorf("initialize API APP error: %w", err)
-		}
-		apiApp = &api
-	}
-
-	connApp := apps.Conn{
+	web := apps.Web{
+		Config:   a.Configs,
 		Logger:   a.logger,
 		Services: a.services,
 	}
-	_ = connApp.Init()
-
+	if err := web.Init(); err != nil {
+		return fmt.Errorf("initialize API APP error: %w", err)
+	}
+	conn := apps.Conn{
+		Logger:   a.logger,
+		Services: a.services,
+	}
+	_ = conn.Init()
 	a.apps = &apps.Apps{
-		API:  apiApp,
-		Conn: &connApp,
+		Web:  &web,
+		Conn: &conn,
 	}
 	return nil
-
 }
 
 func (a *App) stopClients() {
@@ -176,7 +164,7 @@ func (a *App) stopApps() {
 	if a.apps.Conn != nil {
 		_ = a.apps.Conn.Stop(ctx)
 	}
-	if a.apps.API != nil {
-		_ = a.apps.API.Stop(ctx)
+	if a.apps.Web != nil {
+		_ = a.apps.Web.Stop(ctx)
 	}
 }

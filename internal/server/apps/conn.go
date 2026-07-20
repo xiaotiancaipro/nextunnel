@@ -38,7 +38,7 @@ func (a *Conn) Start() error {
 	a.listener = listener
 	a.listenerMu.Unlock()
 
-	a.Logger.Info("Listening on " + listener.Addr().String())
+	a.Logger.Info("conn server listening on " + listener.Addr().String())
 
 	tlsConfig, err := a.Services.Tls.Init()
 	if err != nil {

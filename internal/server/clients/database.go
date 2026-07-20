@@ -59,6 +59,7 @@ func (c *Database) migrate() error {
 	if err := migrations.Auto(db); err != nil {
 		return fmt.Errorf("database migration failed: %v", err)
 	}
+	c.Logger.Info("database migration completed")
 	return nil
 }
 
