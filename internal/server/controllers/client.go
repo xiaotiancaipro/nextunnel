@@ -31,56 +31,56 @@ type createClientRequest struct {
 	PortEnd   int    `json:"portEnd"`
 }
 
-func (c_ *Client) List(c *gin.Context) {
-	clients, err := c_.ClientService.List()
+func (c *Client) List(ctx *gin.Context) {
+	clients, err := c.ClientService.List()
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 	items := make([]clientResponse, 0, len(clients))
 	for i := range clients {
-		items = append(items, c_.toClientResponse(clients[i]))
+		items = append(items, c.toClientResponse(clients[i]))
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"items": items})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"items": items})
 }
 
-func (c_ *Client) Create(c *gin.Context) {
+func (c *Client) Create(ctx *gin.Context) {
 	var req createClientRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "invalid request body")
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	client, err := c_.ClientService.Create(req.Name, req.PortStart, req.PortEnd)
+	client, err := c.ClientService.Create(req.Name, req.PortStart, req.PortEnd)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	sharedhttp.Response(c, http.StatusCreated, c_.toClientResponse(*client))
+	sharedhttp.Response(ctx, http.StatusCreated, c.toClientResponse(*client))
 }
 
-func (c_ *Client) Delete(c *gin.Context) {
-	name := strings.TrimSpace(c.Param("name"))
+func (c *Client) Delete(ctx *gin.Context) {
+	name := strings.TrimSpace(ctx.Param("name"))
 	if name == "" {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "client name is required")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "client name is required")
 		return
 	}
-	client, err := c_.ClientService.GetByName(name)
+	client, err := c.ClientService.GetByName(name)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 		return
 	}
-	if err := c_.ClientService.Delete(name); err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+	if err := c.ClientService.Delete(name); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := c_.ClientCertService.DeleteAllForClient(client.Id, name); err != nil && !os.IsNotExist(err) {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+	if err := c.ClientCertService.DeleteAllForClient(client.Id, name); err != nil && !os.IsNotExist(err) {
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"message": "ok"})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"message": "ok"})
 }
 
-func (c_ *Client) toClientResponse(client models.Client) clientResponse {
+func (c *Client) toClientResponse(client models.Client) clientResponse {
 	return clientResponse{
 		ID:        client.Id.String(),
 		Name:      client.Name,

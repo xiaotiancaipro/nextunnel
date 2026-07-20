@@ -35,46 +35,46 @@ type createClientCertRequest struct {
 	ExpiresAt *string `json:"expiresAt"`
 }
 
-func (c_ *ClientCert) List(c *gin.Context) {
-	name := strings.TrimSpace(c.Param("name"))
+func (c *ClientCert) List(ctx *gin.Context) {
+	name := strings.TrimSpace(ctx.Param("name"))
 	if name == "" {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "client name is required")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "client name is required")
 		return
 	}
-	client, err := c_.ClientService.GetByName(name)
+	client, err := c.ClientService.GetByName(name)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 		return
 	}
-	items, err := c_.ClientCertService.List(client.Id)
+	items, err := c.ClientCertService.List(client.Id)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp := make([]clientCertResponse, 0, len(items))
 	for i := range items {
-		resp = append(resp, c_.toClientCertResponse(items[i]))
+		resp = append(resp, c.toClientCertResponse(items[i]))
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"items": resp})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"items": resp})
 }
 
-func (c_ *ClientCert) Create(c *gin.Context) {
+func (c *ClientCert) Create(ctx *gin.Context) {
 
-	name := strings.TrimSpace(c.Param("name"))
+	name := strings.TrimSpace(ctx.Param("name"))
 	if name == "" {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "client name is required")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "client name is required")
 		return
 	}
-	client, err := c_.ClientService.GetByName(name)
+	client, err := c.ClientService.GetByName(name)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 		return
 	}
 
 	var req createClientCertRequest
-	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			sharedhttp.ResponseError(c, http.StatusBadRequest, "invalid request body")
+	if ctx.Request.ContentLength > 0 {
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			sharedhttp.ResponseError(ctx, http.StatusBadRequest, "invalid request body")
 			return
 		}
 	}
@@ -85,106 +85,106 @@ func (c_ *ClientCert) Create(c *gin.Context) {
 		if raw != "" {
 			parsed, err := sharedtimezone.ParseRFC3339(raw)
 			if err != nil {
-				sharedhttp.ResponseError(c, http.StatusBadRequest, "expiresAt must be RFC3339 timestamp")
+				sharedhttp.ResponseError(ctx, http.StatusBadRequest, "expiresAt must be RFC3339 timestamp")
 				return
 			}
 			expiresAt = &parsed
 		}
 	}
 
-	info, err := c_.ClientCertService.Create(client, expiresAt)
+	info, err := c.ClientCertService.Create(client, expiresAt)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	sharedhttp.Response(c, http.StatusCreated, c_.toClientCertResponse(info))
+	sharedhttp.Response(ctx, http.StatusCreated, c.toClientCertResponse(info))
 }
 
-func (c_ *ClientCert) Delete(c *gin.Context) {
+func (c *ClientCert) Delete(ctx *gin.Context) {
 
-	name := strings.TrimSpace(c.Param("name"))
+	name := strings.TrimSpace(ctx.Param("name"))
 	if name == "" {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "client name is required")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "client name is required")
 		return
 	}
-	client, err := c_.ClientService.GetByName(name)
+	client, err := c.ClientService.GetByName(name)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 		return
 	}
 
-	certIDRaw := strings.TrimSpace(c.Param("id"))
+	certIDRaw := strings.TrimSpace(ctx.Param("id"))
 	certID, err := sharedstring.ParseUUID(certIDRaw)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := c_.ClientCertService.Delete(client.Id, certID); err != nil {
+	if err := c.ClientCertService.Delete(client.Id, certID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+			sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 			return
 		}
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"message": "ok"})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"message": "ok"})
 }
 
-func (c_ *ClientCert) Download(c *gin.Context) {
+func (c *ClientCert) Download(ctx *gin.Context) {
 
-	name := strings.TrimSpace(c.Param("name"))
+	name := strings.TrimSpace(ctx.Param("name"))
 	if name == "" {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "client name is required")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "client name is required")
 		return
 	}
-	client, err := c_.ClientService.GetByName(name)
+	client, err := c.ClientService.GetByName(name)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 		return
 	}
 
-	certIDRaw := strings.TrimSpace(c.Param("id"))
+	certIDRaw := strings.TrimSpace(ctx.Param("id"))
 	certID, err := sharedstring.ParseUUID(certIDRaw)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	certPEM, keyPEM, err := c_.ClientCertService.ReadFiles(client.Id, certID)
+	certPEM, keyPEM, err := c.ClientCertService.ReadFiles(client.Id, certID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			sharedhttp.ResponseError(c, http.StatusNotFound, err.Error())
+			sharedhttp.ResponseError(ctx, http.StatusNotFound, err.Error())
 			return
 		}
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := c_.writeClientCertZip(c, name, certIDRaw, certPEM, keyPEM); err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+	if err := c.writeClientCertZip(ctx, name, certIDRaw, certPEM, keyPEM); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 	}
 }
 
-func (c_ *ClientCert) DownloadCA(c *gin.Context) {
-	if err := sharedcerts.Ensure(c_.Config.Cert.Dir, c_.Config.Cert.Host); err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+func (c *ClientCert) DownloadCA(ctx *gin.Context) {
+	if err := sharedcerts.Ensure(c.Config.Cert.Dir, c.Config.Cert.Host); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	abs, err := filepath.Abs(c_.Config.Cert.Dir)
+	abs, err := filepath.Abs(c.Config.Cert.Dir)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 	caPEM, err := os.ReadFile(filepath.Join(abs, sharedcerts.FileCACert))
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.Header("Content-Disposition", `attachment; filename="ca.crt"`)
-	c.Data(http.StatusOK, "application/x-pem-file", caPEM)
+	ctx.Header("Content-Disposition", `attachment; filename="ca.crt"`)
+	ctx.Data(http.StatusOK, "application/x-pem-file", caPEM)
 }
 
-func (c_ *ClientCert) toClientCertResponse(info services.ClientCertView) clientCertResponse {
+func (c *ClientCert) toClientCertResponse(info services.ClientCertView) clientCertResponse {
 	resp := clientCertResponse{
 		ID:        info.ID,
 		CreatedAt: sharedtimezone.FormatUTC(info.CreatedAt),
@@ -197,7 +197,7 @@ func (c_ *ClientCert) toClientCertResponse(info services.ClientCertView) clientC
 	return resp
 }
 
-func (c_ *ClientCert) writeClientCertZip(c *gin.Context, clientName, certID string, certPEM, keyPEM []byte) error {
+func (c *ClientCert) writeClientCertZip(ctx *gin.Context, clientName, certID string, certPEM, keyPEM []byte) error {
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
 	for fileName, content := range map[string][]byte{
@@ -216,7 +216,7 @@ func (c_ *ClientCert) writeClientCertZip(c *gin.Context, clientName, certID stri
 		return err
 	}
 
-	c.Header("Content-Disposition", `attachment; filename="`+clientName+`-`+certID+`-sharedcerts.zip"`)
-	c.Data(http.StatusOK, "application/zip", buf.Bytes())
+	ctx.Header("Content-Disposition", `attachment; filename="`+clientName+`-`+certID+`-sharedcerts.zip"`)
+	ctx.Data(http.StatusOK, "application/zip", buf.Bytes())
 	return nil
 }

@@ -57,7 +57,7 @@ func (a *Web) Stop(ctx context.Context) error {
 	return a.httpServer.Shutdown(ctx)
 }
 
-func (a *Web) initRouters() controllers.WebUI {
+func (a *Web) initRouters() controllers.Front {
 
 	api := a.engine.Group("/api")
 
@@ -87,7 +87,7 @@ func (a *Web) initRouters() controllers.WebUI {
 	api.POST("/ip-filters", ipFilter.Upsert)
 	api.DELETE("/ip-filters", ipFilter.Delete)
 
-	webUI := controllers.WebUI{}
+	webUI := controllers.Front{}
 	return webUI
 
 }

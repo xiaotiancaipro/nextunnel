@@ -31,82 +31,82 @@ type ipFilterMutateRequest struct {
 	Value  string `json:"value"`
 }
 
-func (c_ *IPFilter) List(c *gin.Context) {
-	rules, err := c_.AccessRuleService.ListRules()
+func (c *IPFilter) List(ctx *gin.Context) {
+	rules, err := c.AccessRuleService.ListRules()
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusInternalServerError, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 	items := make([]ipFilterResponse, 0, len(rules))
 	for i := range rules {
-		items = append(items, c_.toIPFilterResponse(rules[i]))
+		items = append(items, c.toIPFilterResponse(rules[i]))
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"items": items})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"items": items})
 }
 
-func (c_ *IPFilter) Upsert(c *gin.Context) {
+func (c *IPFilter) Upsert(ctx *gin.Context) {
 	var req ipFilterMutateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "invalid request body")
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Status != 0 && req.Status != 1 {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "status must be 0 (block) or 1 (allow)")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "status must be 0 (block) or 1 (allow)")
 		return
 	}
-	target, err := c_.buildRuleTarget(req.Field, req.Value)
+	target, err := c.buildRuleTarget(req.Field, req.Value)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := c_.AccessRuleService.UpsertRule(target, req.Status); err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+	if err := c.AccessRuleService.UpsertRule(target, req.Status); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"message": "ok"})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"message": "ok"})
 }
 
-func (c_ *IPFilter) Delete(c *gin.Context) {
+func (c *IPFilter) Delete(ctx *gin.Context) {
 	var req ipFilterMutateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "invalid request body")
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Status != 0 && req.Status != 1 {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, "status must be 0 (block) or 1 (allow)")
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, "status must be 0 (block) or 1 (allow)")
 		return
 	}
-	target, err := c_.buildRuleTarget(req.Field, req.Value)
+	target, err := c.buildRuleTarget(req.Field, req.Value)
 	if err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := c_.AccessRuleService.DeleteRule(target, req.Status); err != nil {
-		sharedhttp.ResponseError(c, http.StatusBadRequest, err.Error())
+	if err := c.AccessRuleService.DeleteRule(target, req.Status); err != nil {
+		sharedhttp.ResponseError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	sharedhttp.Response(c, http.StatusOK, gin.H{"message": "ok"})
+	sharedhttp.Response(ctx, http.StatusOK, gin.H{"message": "ok"})
 }
 
-func (c_ *IPFilter) buildRuleTarget(field, value string) (services.RuleTarget, error) {
+func (c *IPFilter) buildRuleTarget(field, value string) (services.RuleTarget, error) {
 	field = strings.TrimSpace(field)
 	switch strings.ToUpper(field) {
 	case "ALL", "LOCAL", "REMOTE":
-		return c_.AccessRuleService.NewCategoryRuleTarget(field)
+		return c.AccessRuleService.NewCategoryRuleTarget(field)
 	case "IP":
 		ip, err := sharednetwork.NormalizeIP(value)
 		if err != nil {
 			return services.RuleTarget{}, err
 		}
-		return c_.AccessRuleService.NewRuleTarget("ip", *ip)
+		return c.AccessRuleService.NewRuleTarget("ip", *ip)
 	case "COUNTRY", "REGION", "CITY":
-		return c_.AccessRuleService.NewRuleTarget(strings.ToLower(field), value)
+		return c.AccessRuleService.NewRuleTarget(strings.ToLower(field), value)
 	default:
 		return services.RuleTarget{}, fmt.Errorf("unsupported field: " + field)
 	}
 }
 
-func (c_ *IPFilter) toIPFilterResponse(rule models.AccessRule) ipFilterResponse {
+func (c *IPFilter) toIPFilterResponse(rule models.AccessRule) ipFilterResponse {
 	resp := ipFilterResponse{
 		ID:        rule.Id.String(),
 		Status:    rule.Status,

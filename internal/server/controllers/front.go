@@ -10,9 +10,9 @@ import (
 //go:embed dist/*
 var dist embed.FS
 
-type WebUI struct{}
+type Front struct{}
 
-func (*WebUI) Handler() (http.Handler, error) {
+func (c *Front) Handler() (http.Handler, error) {
 	content, err := fs.Sub(dist, "dist")
 	if err != nil {
 		return nil, err
