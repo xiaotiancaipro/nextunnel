@@ -150,11 +150,14 @@ func (a *App) initApps() error {
 }
 
 func (a *App) stopClients() {
+	if a.clients == nil {
+		return
+	}
 	if a.clients.IPLocation != nil {
-		func() { _ = a.clients.IPLocation.Close() }()
+		_ = a.clients.IPLocation.Close()
 	}
 	if a.clients.Database != nil {
-		func() { _ = a.clients.Database.Close() }()
+		_ = a.clients.Database.Close()
 	}
 }
 

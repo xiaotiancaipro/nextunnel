@@ -23,9 +23,10 @@ func listRun(cmd *cobra.Command, _ []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	service, err := cli.NewAccessRuleFromConfig(cfg)
 	sharedcli.ExitOnErr(cmd, err)
+	defer cli.CloseDatabase(service.Database)
 
 	rules, err := service.ListRules()
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, service.Database)
 
 	if len(rules) == 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no ip filter rules")

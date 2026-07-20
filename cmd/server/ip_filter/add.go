@@ -27,12 +27,13 @@ func addRun(cmd *cobra.Command, args []string) {
 
 	service, err := cli.NewAccessRuleFromConfig(cfg)
 	sharedcli.ExitOnErr(cmd, err)
+	defer cli.CloseDatabase(service.Database)
 
 	target, format, msgArgs, err := cli.BuildRuleTarget(service, field, value)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, service.Database)
 
 	if err := service.UpsertRule(target, status); err != nil {
-		sharedcli.ExitOnErr(cmd, err)
+		cli.ExitOnDBErr(cmd, err, service.Database)
 	}
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format+"\n", append([]any{cli.RuleAction(status)}, msgArgs...)...)

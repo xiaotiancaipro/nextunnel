@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ func Auto(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+	// WithConnection: Close only releases the reserved conn, not the whole pool.
 	defer func() { _, _ = m.Close() }()
 
 	versionBefore, _, err := versionOrZero(m)
@@ -48,15 +50,23 @@ func newMigrator(db *gorm.DB) (*migrate.Migrate, error) {
 		return nil, fmt.Errorf("create migration source: %w", err)
 	}
 
-	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{
+	ctx := context.Background()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get sql conn: %w", err)
+	}
+
+	driver, err := postgres.WithConnection(ctx, conn, &postgres.Config{
 		MigrationsTable: migrationsTable,
 	})
 	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("create migration driver: %w", err)
 	}
 
 	m, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
 	if err != nil {
+		_ = driver.Close()
 		return nil, fmt.Errorf("create migrator: %w", err)
 	}
 

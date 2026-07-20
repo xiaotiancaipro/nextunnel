@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/clients"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
+	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 )
 
@@ -38,6 +40,22 @@ func NewClientRegistryAndCertFromConfig(cfg *configs.Configs) (*services.Client,
 	return &client, &clientCert, nil
 }
 
+// CloseDatabase closes the database connection. Safe for nil and repeated calls.
+func CloseDatabase(db *clients.Database) {
+	if db != nil {
+		_ = db.Close()
+	}
+}
+
+// ExitOnDBErr closes db before exiting, because sharedcli.ExitOnErr uses os.Exit
+// and skips deferred Close.
+func ExitOnDBErr(cmd *cobra.Command, err error, db *clients.Database) {
+	if err != nil {
+		CloseDatabase(db)
+		sharedcli.ExitOnErr(cmd, err)
+	}
+}
+
 func newDatabaseFromConfig(configs *configs.Configs) (*clients.Database, error) {
 
 	logger, err := sharedlogger.NewLogger(configs.Logs)
@@ -50,7 +68,7 @@ func newDatabaseFromConfig(configs *configs.Configs) (*clients.Database, error) 
 		Logger: logger,
 	}
 	if err := database.Init(); err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %v", err)
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	return &database, nil

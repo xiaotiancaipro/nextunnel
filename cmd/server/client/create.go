@@ -30,9 +30,10 @@ func createRun(cmd *cobra.Command, args []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	registry, err := cli.NewClientRegistryFromConfig(cfg)
 	sharedcli.ExitOnErr(cmd, err)
+	defer cli.CloseDatabase(registry.Database)
 
 	client, err := registry.Create(args[0], portStart, portEnd)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	if portStart > 0 && portEnd > 0 {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created client %q (id=%s, ports=%d-%d)\n", client.Name, client.Id, portStart, portEnd)

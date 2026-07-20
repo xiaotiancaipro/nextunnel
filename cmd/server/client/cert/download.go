@@ -34,27 +34,28 @@ func downloadRun(cmd *cobra.Command, args []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	registry, certService, err := cli.NewClientRegistryAndCertFromConfig(cfg)
 	sharedcli.ExitOnErr(cmd, err)
+	defer cli.CloseDatabase(registry.Database)
 
 	client, err := registry.GetByName(clientName)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	certID, err := sharedstring.ParseUUID(args[1])
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	certPEM, keyPEM, err := certService.ReadFiles(client.Id, certID)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	outDir := strings.TrimSpace(dir)
 	if outDir == "" {
 		outDir, err = cli.CertOutputDir(cfg, clientName, certID.String())
-		sharedcli.ExitOnErr(cmd, err)
+		cli.ExitOnDBErr(cmd, err, registry.Database)
 	} else {
 		outDir, err = cli.EnsureOutputDir(outDir)
-		sharedcli.ExitOnErr(cmd, err)
+		cli.ExitOnDBErr(cmd, err, registry.Database)
 	}
 
 	if err := sharedcerts.WriteClientPEMToDir(outDir, certPEM, keyPEM); err != nil {
-		sharedcli.ExitOnErr(cmd, err)
+		cli.ExitOnDBErr(cmd, err, registry.Database)
 	}
 
 	_, _ = fmt.Fprintf(

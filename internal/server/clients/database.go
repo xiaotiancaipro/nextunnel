@@ -20,47 +20,35 @@ type Database struct {
 }
 
 func (c *Database) Init() error {
-
 	db, err := c.connect()
 	if err != nil {
-		return fmt.Errorf("database connection failed: %v", err)
+		return fmt.Errorf("database connection failed: %w", err)
 	}
-
-	if err := c.migrate(); err != nil {
-		return fmt.Errorf("database migration failed, %v", err)
-	}
-
 	sqlDB, err := db.DB()
 	if err != nil {
-		return fmt.Errorf("failed to get underlying SQL.DB: %v", err)
+		return fmt.Errorf("failed to get underlying SQL.DB: %w", err)
+	}
+	if err := migrations.Auto(db); err != nil {
+		_ = sqlDB.Close()
+		return fmt.Errorf("database migration failed: %w", err)
 	}
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
-
 	c.DB = db
-
 	return nil
-
 }
 
 func (c *Database) Close() error {
-	if c.DB != nil {
-		c.DB = nil
+	if c == nil || c.DB == nil {
+		return nil
 	}
-	return nil
-}
-
-func (c *Database) migrate() error {
-	db, err := c.connect()
+	sqlDB, err := c.DB.DB()
+	c.DB = nil
 	if err != nil {
-		return fmt.Errorf("database connection failed: %v", err)
+		return err
 	}
-	if err := migrations.Auto(db); err != nil {
-		return fmt.Errorf("database migration failed: %v", err)
-	}
-	c.Logger.Info("database migration completed")
-	return nil
+	return sqlDB.Close()
 }
 
 func (c *Database) connect() (*gorm.DB, error) {

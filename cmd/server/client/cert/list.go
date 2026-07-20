@@ -30,12 +30,13 @@ func listRun(cmd *cobra.Command, args []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	registry, certService, err := cli.NewClientRegistryAndCertFromConfig(cfg)
 	sharedcli.ExitOnErr(cmd, err)
+	defer cli.CloseDatabase(registry.Database)
 
 	client, err := registry.GetByName(clientName)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	items, err := certService.List(client.Id)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	if len(items) == 0 {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "no certificates for client %q\n", clientName)

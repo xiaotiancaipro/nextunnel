@@ -32,15 +32,16 @@ func createRun(cmd *cobra.Command, args []string) {
 	cfg := cli.LoadServerConfig(cmd)
 	registry, certService, err := cli.NewClientRegistryAndCertFromConfig(cfg)
 	sharedcli.ExitOnErr(cmd, err)
+	defer cli.CloseDatabase(registry.Database)
 
 	client, err := registry.GetByName(clientName)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	expiresAt, err := cli.ParseExpiresAt(expiresAt)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	info, err := certService.Create(client, expiresAt)
-	sharedcli.ExitOnErr(cmd, err)
+	cli.ExitOnDBErr(cmd, err, registry.Database)
 
 	_, _ = fmt.Fprintf(
 		cmd.OutOrStdout(),
