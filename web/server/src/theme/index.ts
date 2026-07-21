@@ -53,6 +53,11 @@ export const consoleTheme: ThemeConfig = {
       titleFontSize: 16,
       titleColor: '#171717',
     },
+    Drawer: {
+      paddingLG: 24,
+      footerPaddingBlock: 12,
+      footerPaddingInline: 24,
+    },
     Table: {
       borderRadius: 12,
       borderRadiusLG: 12,

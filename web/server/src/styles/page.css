@@ -81,8 +81,30 @@
     background: #fafafa;
 }
 
+.console-page-actions {
+    margin-top: -4px;
+}
+
+.console-drawer-toolbar {
+    margin-bottom: 16px;
+}
+
+.console-drawer .ant-drawer-content,
+.console-drawer .ant-drawer-body {
+    overflow-x: hidden;
+}
+
+.console-drawer-table .ant-table {
+    overflow-x: hidden;
+}
+
+.console-drawer-table .ant-table-cell {
+    white-space: nowrap;
+}
+
 .console-card .ant-pagination {
     margin: 16px 18px 18px !important;
+    justify-content: flex-start;
 }
 
 .console-empty-hint {
@@ -144,6 +166,41 @@
 .console-modal .ant-modal-footer {
     border-top: 1px solid rgba(15, 23, 42, 0.06);
     padding: 12px 24px;
+}
+
+.console-drawer .ant-drawer-header {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    padding: 16px 24px;
+}
+
+.console-drawer .ant-drawer-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--console-primary);
+}
+
+.console-drawer .ant-drawer-body {
+    padding: 16px 24px 20px;
+}
+
+.console-drawer .ant-drawer-footer {
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+    padding: 12px 24px;
+}
+
+.console-id-text.ant-typography {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--console-text-secondary);
+}
+
+.console-id-text .ant-typography-copy {
+    color: var(--console-text-secondary);
+    margin-inline-start: 6px;
+}
+
+.console-id-text .ant-typography-copy:hover {
+    color: var(--brand-blue);
 }
 
 .console-shell .ant-btn-sm,

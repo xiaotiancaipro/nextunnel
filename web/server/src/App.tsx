@@ -1,15 +1,32 @@
 import {useEffect, useMemo, useState} from 'react'
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
-import {CloudServerOutlined, SafetyOutlined} from '@ant-design/icons'
+import {CloudServerOutlined, SafetyCertificateOutlined, SafetyOutlined} from '@ant-design/icons'
 import {Flex, Layout, Menu, theme, Typography} from 'antd'
 import {fetchVersion} from './api'
 import LanguageSwitcher from './components/LanguageSwitcher'
 import {useI18n} from './i18n'
 import ClientsPage from './pages/ClientsPage'
+import CertsPage from './pages/CertsPage'
 import IpFilterPage from './pages/IpFilterPage'
 import './styles/layout.css'
 
 const SIDER_WIDTH = 220
+
+const ROUTE_BY_KEY: Record<string, string> = {
+    clients: '/clients',
+    certs: '/certs',
+    'ip-filters': '/ip-filters',
+}
+
+function resolvePageMeta(pathname: string, t: ReturnType<typeof useI18n>['t']) {
+    if (pathname.startsWith('/ip-filters')) {
+        return {selectedKey: 'ip-filters', pageTitle: t('ipFilters.title')}
+    }
+    if (pathname.startsWith('/certs')) {
+        return {selectedKey: 'certs', pageTitle: t('certs.title')}
+    }
+    return {selectedKey: 'clients', pageTitle: t('clients.title')}
+}
 
 function AppLayout() {
     const location = useLocation()
@@ -28,8 +45,7 @@ function AppLayout() {
             .finally(() => setVersionLoading(false))
     }, [])
 
-    const selectedKey = location.pathname.startsWith('/ip-filters') ? 'ip-filters' : 'clients'
-    const pageTitle = selectedKey === 'ip-filters' ? t('ipFilters.title') : t('clients.title')
+    const {selectedKey, pageTitle} = resolvePageMeta(location.pathname, t)
     const apiOnline = Boolean(version)
 
     const menuItems = useMemo(
@@ -38,6 +54,11 @@ function AppLayout() {
                 key: 'clients',
                 icon: <CloudServerOutlined/>,
                 label: t('nav.clients'),
+            },
+            {
+                key: 'certs',
+                icon: <SafetyCertificateOutlined/>,
+                label: t('nav.certs'),
             },
             {
                 key: 'ip-filters',
@@ -75,7 +96,7 @@ function AppLayout() {
                             inlineIndent={12}
                             selectedKeys={[selectedKey]}
                             items={menuItems}
-                            onClick={({key}) => navigate(key === 'ip-filters' ? '/ip-filters' : '/clients')}
+                            onClick={({key}) => navigate(ROUTE_BY_KEY[key] ?? '/clients')}
                             className="console-sider-menu"
                         />
                         <Flex align="center" justify="center" className="console-sider-status">
@@ -105,6 +126,7 @@ function AppLayout() {
                             <Routes>
                                 <Route path="/" element={<Navigate to="/clients" replace/>}/>
                                 <Route path="/clients" element={<ClientsPage/>}/>
+                                <Route path="/certs" element={<CertsPage/>}/>
                                 <Route path="/ip-filters" element={<IpFilterPage/>}/>
                             </Routes>
                         </div>
