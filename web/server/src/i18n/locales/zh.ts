@@ -20,7 +20,7 @@ const zh = {
     nav: {
         clients: '客户端管理',
         certs: '证书管理',
-        ipFilters: '访问控制',
+        accessControl: '访问控制',
     },
     language: {
         label: '语言',
@@ -41,7 +41,7 @@ const zh = {
         certDeleteSuccess: '证书 {{id}} 已删除',
         certDeleteFailed: '删除证书失败',
         columnClient: '客户端',
-        columnUserId: '用户ID',
+        columnClientId: '客户端 ID',
         columnPorts: '远程端口',
         manageCerts: '证书管理',
         certEmpty: '暂无证书，点击上方新增',
@@ -74,17 +74,17 @@ const zh = {
     },
     certs: {
         title: '证书管理',
-        description: '汇总全部客户端的 mTLS 证书，可按用户 ID 筛选，并支持新增、下载或删除。',
+        description: '汇总全部客户端的 mTLS 证书，可按客户端 ID 筛选，并支持新增、下载或删除。',
         loadFailed: '加载证书失败',
         empty: '暂无证书，点击上方新增',
-        filterUserId: '按用户 ID 筛选',
+        filterClientId: '按客户端 ID 筛选',
         selectClient: '请选择客户端',
         clientRequired: '请选择客户端',
         columnClient: '客户端',
-        columnUserId: '用户ID',
+        columnClientId: '客户端 ID',
         columnCertId: '证书 ID',
     },
-    ipFilters: {
+    accessControl: {
         title: '访问控制',
         description: '按 IP、地域或网络类型配置允许/拒绝规则，写入后立即生效。',
         loadFailed: '加载规则失败',

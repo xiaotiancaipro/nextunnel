@@ -1,30 +1,40 @@
 import {useMemo} from 'react'
-import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
+import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams,} from 'react-router-dom'
 import {CloudServerOutlined, SafetyCertificateOutlined, SafetyOutlined} from '@ant-design/icons'
 import {Flex, Layout, Menu, theme, Typography} from 'antd'
 import {LanguageSwitcher} from '@nextunnel/web-shared'
 import {useI18n} from './i18n'
-import ClientsPage from './pages/ClientsPage'
-import CertsPage from './pages/CertsPage'
+import {index} from './routers'
+import Clients from './pages/Clients.tsx'
+import ClientCerts from './pages/ClientCerts.tsx'
 import AccessControl from './pages/AccessControl.tsx'
 import '@nextunnel/web-shared/styles/layout.css'
 
 const SIDER_WIDTH = 220
 
 const ROUTE_BY_KEY: Record<string, string> = {
-    clients: '/clients',
-    certs: '/certs',
-    'ip-filters': '/ip-filters',
+    clients: index.clients,
+    'client-certs': index.clientCerts,
+    'access-control': index.accessControl,
 }
 
 function resolvePageMeta(pathname: string, t: ReturnType<typeof useI18n>['t']) {
-    if (pathname.startsWith('/ip-filters')) {
-        return {selectedKey: 'ip-filters', pageTitle: t('ipFilters.title')}
+    if (pathname.startsWith(index.accessControl)) {
+        return {selectedKey: 'access-control', pageTitle: t('accessControl.title')}
     }
-    if (pathname.startsWith('/certs')) {
-        return {selectedKey: 'certs', pageTitle: t('certs.title')}
+    if (pathname.startsWith(index.clientCerts)) {
+        return {selectedKey: 'client-certs', pageTitle: t('certs.title')}
     }
     return {selectedKey: 'clients', pageTitle: t('clients.title')}
+}
+
+function LegacyCertsRedirect() {
+    const [searchParams] = useSearchParams()
+    const userId = searchParams.get('userId')
+    const to = userId
+        ? `${index.clientCerts}?clientId=${encodeURIComponent(userId)}`
+        : index.clientCerts
+    return <Navigate to={to} replace/>
 }
 
 function AppLayout() {
@@ -45,14 +55,14 @@ function AppLayout() {
                 label: t('nav.clients'),
             },
             {
-                key: 'certs',
+                key: 'client-certs',
                 icon: <SafetyCertificateOutlined/>,
                 label: t('nav.certs'),
             },
             {
-                key: 'ip-filters',
+                key: 'access-control',
                 icon: <SafetyOutlined/>,
-                label: t('nav.ipFilters'),
+                label: t('nav.accessControl'),
             },
         ],
         [t],
@@ -85,7 +95,7 @@ function AppLayout() {
                             inlineIndent={12}
                             selectedKeys={[selectedKey]}
                             items={menuItems}
-                            onClick={({key}) => navigate(ROUTE_BY_KEY[key] ?? '/clients')}
+                            onClick={({key}) => navigate(ROUTE_BY_KEY[key] ?? index.clients)}
                             className="console-sider-menu"
                         />
                     </div>
@@ -100,10 +110,15 @@ function AppLayout() {
                         </header>
                         <div className="console-page-body">
                             <Routes>
-                                <Route path="/" element={<Navigate to="/clients" replace/>}/>
-                                <Route path="/clients" element={<ClientsPage/>}/>
-                                <Route path="/certs" element={<CertsPage/>}/>
-                                <Route path="/ip-filters" element={<AccessControl/>}/>
+                                <Route path="/" element={<Navigate to={index.clients} replace/>}/>
+                                <Route path={index.clients} element={<Clients/>}/>
+                                <Route path={index.clientCerts} element={<ClientCerts/>}/>
+                                <Route path={index.accessControl} element={<AccessControl/>}/>
+                                <Route path="/certs" element={<LegacyCertsRedirect/>}/>
+                                <Route
+                                    path="/ip-filters"
+                                    element={<Navigate to={index.accessControl} replace/>}
+                                />
                             </Routes>
                         </div>
                     </div>

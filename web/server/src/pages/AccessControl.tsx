@@ -7,14 +7,14 @@ import {addIPFilter, deleteIPFilter, fromRuleToMutate, listIPFilters, toMutatePa
 import {ruleDisplayText, useI18n} from '../i18n'
 import type {IPFilterField, IPFilterRule} from '../types'
 
+const categoryFields = new Set<IPFilterField>(['all', 'local', 'remote'])
+const DRAWER_WIDTH = 480
+
 interface AddFormValues {
     status: 0 | 1
     field: IPFilterField
     value?: string
 }
-
-const categoryFields = new Set<IPFilterField>(['all', 'local', 'remote'])
-const DRAWER_WIDTH = 480
 
 export default function AccessControl() {
     const {t} = useI18n()
@@ -29,13 +29,13 @@ export default function AccessControl() {
 
     const fieldOptions = useMemo(
         () => [
-            {label: t('ipFilters.field.ip'), value: 'ip' as const},
-            {label: t('ipFilters.field.country'), value: 'country' as const},
-            {label: t('ipFilters.field.region'), value: 'region' as const},
-            {label: t('ipFilters.field.city'), value: 'city' as const},
-            {label: t('ipFilters.field.all'), value: 'all' as const},
-            {label: t('ipFilters.field.local'), value: 'local' as const},
-            {label: t('ipFilters.field.remote'), value: 'remote' as const},
+            {label: t('accessControl.field.ip'), value: 'ip' as const},
+            {label: t('accessControl.field.country'), value: 'country' as const},
+            {label: t('accessControl.field.region'), value: 'region' as const},
+            {label: t('accessControl.field.city'), value: 'city' as const},
+            {label: t('accessControl.field.all'), value: 'all' as const},
+            {label: t('accessControl.field.local'), value: 'local' as const},
+            {label: t('accessControl.field.remote'), value: 'remote' as const},
         ],
         [t],
     )
@@ -45,7 +45,7 @@ export default function AccessControl() {
         try {
             setRules(await listIPFilters())
         } catch (err) {
-            message.error(err instanceof Error ? err.message : t('ipFilters.loadFailed'))
+            message.error(err instanceof Error ? err.message : t('accessControl.loadFailed'))
         } finally {
             setLoading(false)
         }
@@ -64,11 +64,11 @@ export default function AccessControl() {
         setSubmitting(true)
         try {
             await addIPFilter(toMutatePayload(values.status, values.field, values.value?.trim()))
-            message.success(t('ipFilters.addSuccess'))
+            message.success(t('accessControl.addSuccess'))
             closeDrawer()
             await loadRules()
         } catch (err) {
-            message.error(err instanceof Error ? err.message : t('ipFilters.addFailed'))
+            message.error(err instanceof Error ? err.message : t('accessControl.addFailed'))
         } finally {
             setSubmitting(false)
         }
@@ -78,10 +78,10 @@ export default function AccessControl() {
         setDeletingId(rule.id)
         try {
             await deleteIPFilter(fromRuleToMutate(rule))
-            message.success(t('ipFilters.deleteSuccess'))
+            message.success(t('accessControl.deleteSuccess'))
             await loadRules()
         } catch (err) {
-            message.error(err instanceof Error ? err.message : t('ipFilters.deleteFailed'))
+            message.error(err instanceof Error ? err.message : t('accessControl.deleteFailed'))
         } finally {
             setDeletingId(null)
         }
@@ -101,7 +101,7 @@ export default function AccessControl() {
                 render: (_value, _record, index) => (page - 1) * pageSize + index + 1,
             },
             {
-                title: t('ipFilters.columnAction'),
+                title: t('accessControl.columnAction'),
                 dataIndex: 'status',
                 key: 'status',
                 width: 80,
@@ -112,7 +112,7 @@ export default function AccessControl() {
                 ),
             },
             {
-                title: t('ipFilters.columnRule'),
+                title: t('accessControl.columnRule'),
                 key: 'rule',
                 ellipsis: true,
                 render: (_, record) => <span className="console-rule-text">{ruleDisplayText(t, record)}</span>,
@@ -133,8 +133,8 @@ export default function AccessControl() {
                 fixed: 'right',
                 render: (_, record) => (
                     <Popconfirm
-                        title={t('ipFilters.deleteConfirmTitle')}
-                        description={t('ipFilters.deleteConfirmDesc')}
+                        title={t('accessControl.deleteConfirmTitle')}
+                        description={t('accessControl.deleteConfirmDesc')}
                         onConfirm={() => void handleDelete(record)}
                         okText={t('common.delete')}
                         cancelText={t('common.cancel')}
@@ -157,12 +157,12 @@ export default function AccessControl() {
 
     return (
         <div className="console-page">
-            <PageHeader description={t('ipFilters.description')}/>
+            <PageHeader description={t('accessControl.description')}/>
 
             <Flex className="console-page-actions" justify="flex-start">
                 <Space wrap>
                     <Button type="primary" icon={<PlusOutlined/>} onClick={() => setDrawerOpen(true)}>
-                        {t('ipFilters.addRule')}
+                        {t('accessControl.addRule')}
                     </Button>
                     <Button icon={<ReloadOutlined/>} onClick={() => void loadRules()}>
                         {t('common.refresh')}
@@ -190,7 +190,7 @@ export default function AccessControl() {
                     locale={{
                         emptyText: (
                             <div className="console-empty-hint">
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('ipFilters.empty')}/>
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('accessControl.empty')}/>
                             </div>
                         ),
                     }}
@@ -199,7 +199,7 @@ export default function AccessControl() {
 
             <Drawer
                 className="console-drawer"
-                title={t('ipFilters.modalTitle')}
+                title={t('accessControl.modalTitle')}
                 open={drawerOpen}
                 onClose={closeDrawer}
                 width={DRAWER_WIDTH}
@@ -219,15 +219,15 @@ export default function AccessControl() {
                     initialValues={{status: 0, field: 'ip'}}
                     onFinish={(values) => void handleAdd(values)}
                 >
-                    <Form.Item name="status" label={t('ipFilters.actionLabel')} rules={[{required: true}]}>
+                    <Form.Item name="status" label={t('accessControl.actionLabel')} rules={[{required: true}]}>
                         <Select
                             options={[
-                                {label: t('ipFilters.allowOption'), value: 1},
-                                {label: t('ipFilters.blockOption'), value: 0},
+                                {label: t('accessControl.allowOption'), value: 1},
+                                {label: t('accessControl.blockOption'), value: 0},
                             ]}
                         />
                     </Form.Item>
-                    <Form.Item name="field" label={t('ipFilters.fieldLabel')} rules={[{required: true}]}>
+                    <Form.Item name="field" label={t('accessControl.fieldLabel')} rules={[{required: true}]}>
                         <Select options={fieldOptions}/>
                     </Form.Item>
                     <Form.Item noStyle shouldUpdate={(prev, next) => prev.field !== next.field}>
@@ -239,10 +239,10 @@ export default function AccessControl() {
                             return (
                                 <Form.Item
                                     name="value"
-                                    label={t('ipFilters.valueLabel')}
-                                    rules={[{required: true, message: t('ipFilters.valueRequired')}]}
+                                    label={t('accessControl.valueLabel')}
+                                    rules={[{required: true, message: t('accessControl.valueRequired')}]}
                                 >
-                                    <Input placeholder={t('ipFilters.valuePlaceholder')}/>
+                                    <Input placeholder={t('accessControl.valuePlaceholder')}/>
                                 </Form.Item>
                             )
                         }}

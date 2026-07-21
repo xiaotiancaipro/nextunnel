@@ -1,3 +1,12 @@
+export type IPFilterField =
+    | 'ip'
+    | 'country'
+    | 'region'
+    | 'city'
+    | 'all'
+    | 'local'
+    | 'remote'
+
 export interface Client {
     id: string
     name: string
@@ -13,15 +22,6 @@ export interface IPFilterRule {
     value?: string
     createdAt: string
 }
-
-export type IPFilterField =
-    | 'ip'
-    | 'country'
-    | 'region'
-    | 'city'
-    | 'all'
-    | 'local'
-    | 'remote'
 
 export interface ClientCert {
     id: string

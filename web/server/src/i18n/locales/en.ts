@@ -22,7 +22,7 @@ const en: TranslationSchema = {
     nav: {
         clients: 'Clients Manager',
         certs: 'Certificates',
-        ipFilters: 'Access Control',
+        accessControl: 'Access Control',
     },
     language: {
         label: 'Language',
@@ -43,7 +43,7 @@ const en: TranslationSchema = {
         certDeleteSuccess: 'Certificate {{id}} deleted',
         certDeleteFailed: 'Failed to delete certificate',
         columnClient: 'Client',
-        columnUserId: 'User ID',
+        columnClientId: 'Client ID',
         columnPorts: 'Remote ports',
         manageCerts: 'Certificates',
         certEmpty: 'No certificates yet. Click Add above.',
@@ -76,17 +76,17 @@ const en: TranslationSchema = {
     },
     certs: {
         title: 'Certificates',
-        description: 'Aggregate mTLS certificates across all clients. Filter by user ID, then add, download, or delete.',
+        description: 'Aggregate mTLS certificates across all clients. Filter by client ID, then add, download, or delete.',
         loadFailed: 'Failed to load certificates',
         empty: 'No certificates yet. Click Add above.',
-        filterUserId: 'Filter by user ID',
+        filterClientId: 'Filter by client ID',
         selectClient: 'Select a client',
         clientRequired: 'Select a client',
         columnClient: 'Client',
-        columnUserId: 'User ID',
+        columnClientId: 'Client ID',
         columnCertId: 'Certificate ID',
     },
-    ipFilters: {
+    accessControl: {
         title: 'Access Control',
         description: 'Configure allow/deny rules by IP, region, or network type. Changes take effect immediately.',
         loadFailed: 'Failed to load rules',

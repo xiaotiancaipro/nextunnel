@@ -30,6 +30,8 @@ import {
 import {useI18n} from '../i18n'
 import type {Client, ClientCert} from '../types'
 
+const DRAWER_WIDTH = 480
+
 interface AddCertFormValues {
     clientId: string
     neverExpires: boolean
@@ -41,13 +43,11 @@ interface CertRow extends ClientCert {
     clientName: string
 }
 
-const DRAWER_WIDTH = 480
-
-export default function CertsPage() {
+export default function ClientCerts() {
 
     const {t} = useI18n()
     const [searchParams, setSearchParams] = useSearchParams()
-    const userIdFilter = searchParams.get('userId')?.trim() || undefined
+    const clientIdFilter = searchParams.get('clientId')?.trim() || undefined
 
     const [clients, setClients] = useState<Client[]>([])
     const [certItems, setCertItems] = useState<CertRow[]>([])
@@ -95,14 +95,14 @@ export default function CertsPage() {
 
     useEffect(() => {
         setPage(1)
-    }, [userIdFilter])
+    }, [clientIdFilter])
 
     const filteredItems = useMemo(() => {
-        if (!userIdFilter) {
+        if (!clientIdFilter) {
             return certItems
         }
-        return certItems.filter((item) => item.clientId === userIdFilter)
-    }, [certItems, userIdFilter])
+        return certItems.filter((item) => item.clientId === clientIdFilter)
+    }, [certItems, clientIdFilter])
 
     const clientOptions = useMemo(
         () =>
@@ -113,9 +113,9 @@ export default function CertsPage() {
         [clients],
     )
 
-    const setUserIdFilter = (userId?: string) => {
-        if (userId) {
-            setSearchParams({userId})
+    const setClientIdFilter = (clientId?: string) => {
+        if (clientId) {
+            setSearchParams({clientId})
         } else {
             setSearchParams({})
         }
@@ -130,7 +130,7 @@ export default function CertsPage() {
         form.resetFields()
         form.setFieldsValue({
             neverExpires: true,
-            clientId: userIdFilter,
+            clientId: clientIdFilter,
         })
         setAddDrawerOpen(true)
     }
@@ -321,11 +321,11 @@ export default function CertsPage() {
                         allowClear
                         showSearch
                         optionFilterProp="label"
-                        placeholder={t('certs.filterUserId')}
+                        placeholder={t('certs.filterClientId')}
                         style={{minWidth: 280}}
-                        value={userIdFilter}
+                        value={clientIdFilter}
                         options={clientOptions}
-                        onChange={(value) => setUserIdFilter(value)}
+                        onChange={(value) => setClientIdFilter(value)}
                     />
                     <Button icon={<ReloadOutlined/>} onClick={() => void loadData()}>
                         {t('common.refresh')}

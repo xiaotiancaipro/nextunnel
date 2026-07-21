@@ -16,17 +16,15 @@ import {
     Tag,
     Typography,
 } from 'antd'
-import {
-    DeleteOutlined,
-    PlusOutlined,
-    ReloadOutlined,
-    SafetyCertificateOutlined,
-} from '@ant-design/icons'
+import {DeleteOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined,} from '@ant-design/icons'
 import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
 import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
 import {createClient, deleteClient, listClients} from '../api'
 import {formatPortRange, useI18n} from '../i18n'
+import {index} from '../routers'
 import type {Client} from '../types'
+
+const DRAWER_WIDTH = 480
 
 interface CreateFormValues {
     name: string
@@ -35,9 +33,7 @@ interface CreateFormValues {
     portEnd?: number
 }
 
-const DRAWER_WIDTH = 480
-
-export default function ClientsPage() {
+export default function Clients() {
 
     const {t} = useI18n()
     const navigate = useNavigate()
@@ -118,7 +114,7 @@ export default function ClientsPage() {
                 ellipsis: true,
             },
             {
-                title: t('clients.columnUserId'),
+                title: t('clients.columnClientId'),
                 dataIndex: 'id',
                 key: 'id',
                 width: 300,
@@ -168,7 +164,9 @@ export default function ClientsPage() {
                         <Button
                             size="small"
                             icon={<SafetyCertificateOutlined/>}
-                            onClick={() => navigate(`/certs?userId=${encodeURIComponent(record.id)}`)}
+                            onClick={() =>
+                                navigate(`${index.clientCerts}?clientId=${encodeURIComponent(record.id)}`)
+                            }
                         >
                             {t('clients.manageCerts')}
                         </Button>
