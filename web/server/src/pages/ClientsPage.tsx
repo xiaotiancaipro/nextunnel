@@ -18,14 +18,13 @@ import {
 } from 'antd'
 import {
     DeleteOutlined,
-    DownloadOutlined,
     PlusOutlined,
     ReloadOutlined,
     SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
 import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
-import {createClient, deleteClient, downloadCACert, listClients} from '../api'
+import {createClient, deleteClient, listClients} from '../api'
 import {formatPortRange, useI18n} from '../i18n'
 import type {Client} from '../types'
 
@@ -46,7 +45,6 @@ export default function ClientsPage() {
     const [loading, setLoading] = useState(false)
     const [createDrawerOpen, setCreateDrawerOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
-    const [downloadingCA, setDownloadingCA] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
@@ -83,24 +81,6 @@ export default function ClientsPage() {
             message.error(err instanceof Error ? err.message : t('clients.createFailed'))
         } finally {
             setSubmitting(false)
-        }
-    }
-
-    const handleDownloadCA = async () => {
-        setDownloadingCA(true)
-        try {
-            const blob = await downloadCACert()
-            const url = URL.createObjectURL(blob)
-            const anchor = document.createElement('a')
-            anchor.href = url
-            anchor.download = 'ca.crt'
-            anchor.click()
-            URL.revokeObjectURL(url)
-            message.success(t('clients.downloadCASuccess'))
-        } catch (err) {
-            message.error(err instanceof Error ? err.message : t('clients.downloadCAFailed'))
-        } finally {
-            setDownloadingCA(false)
         }
     }
 
@@ -225,18 +205,6 @@ export default function ClientsPage() {
                     <Button type="primary" icon={<PlusOutlined/>} onClick={() => setCreateDrawerOpen(true)}>
                         {t('clients.createClient')}
                     </Button>
-                    <Popconfirm
-                        title={t('clients.downloadCAConfirmTitle')}
-                        description={t('clients.downloadCAConfirmDesc')}
-                        onConfirm={() => void handleDownloadCA()}
-                        okText={t('common.confirm')}
-                        cancelText={t('common.cancel')}
-                        placement="bottom"
-                    >
-                        <Button icon={<DownloadOutlined/>} loading={downloadingCA}>
-                            {t('clients.downloadCA')}
-                        </Button>
-                    </Popconfirm>
                     <Button icon={<ReloadOutlined/>} onClick={() => void loadClients()}>
                         {t('common.refresh')}
                     </Button>

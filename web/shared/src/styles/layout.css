@@ -38,35 +38,6 @@
   white-space: nowrap;
 }
 
-.console-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  border-radius: var(--radius-md);
-  background: var(--console-surface);
-  border: 1px solid var(--console-border);
-}
-
-.console-status__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #94a3b8;
-  flex-shrink: 0;
-}
-
-.console-status__dot--online {
-  background: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
-}
-
-.console-status__text {
-  font-size: 13px;
-  color: var(--console-text-secondary);
-  white-space: nowrap;
-}
-
 .console-body {
   min-height: 0;
   flex: 1;
@@ -89,13 +60,6 @@
   padding: 8px var(--console-sider-inset);
   border-inline-end: none !important;
   background: transparent;
-}
-
-.console-sider-status {
-  width: 100%;
-  flex-shrink: 0;
-  padding: 12px var(--console-sider-inset) 16px;
-  border-top: 1px solid var(--console-border);
 }
 
 .console-sider-menu.ant-menu-inline .ant-menu-item {

@@ -45,11 +45,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return (await response.json()) as T
 }
 
-export async function fetchVersion(): Promise<string> {
-    const data = await request<{ version: string }>('/version')
-    return data.version
-}
-
 export async function listClients(): Promise<Client[]> {
     const data = await request<{ items: Client[] }>('/clients')
     return data.items

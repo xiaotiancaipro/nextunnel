@@ -24,11 +24,6 @@ const en: TranslationSchema = {
         certs: 'Certificates',
         ipFilters: 'Access Control',
     },
-    status: {
-        connecting: 'Connecting…',
-        apiOnline: 'API {{version}}',
-        apiOffline: 'API disconnected',
-    },
     language: {
         label: 'Language',
         zh: '中文',
@@ -36,7 +31,7 @@ const en: TranslationSchema = {
     },
     clients: {
         title: 'Clients Manager',
-        description: 'Register tunnel clients. Maps to CLI client create.',
+        description: 'Add, modify, or delete tunnel clients.',
         loadFailed: 'Failed to load clients',
         createSuccess: 'Client {{name}} created',
         createFailed: 'Failed to create client',

@@ -19,7 +19,14 @@ import {DeleteOutlined, DownloadOutlined, PlusOutlined, ReloadOutlined} from '@a
 import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
 import dayjs, {type Dayjs} from 'dayjs'
 import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
-import {createClientCert, deleteClientCert, downloadClientCert, listClientCerts, listClients,} from '../api'
+import {
+    createClientCert,
+    deleteClientCert,
+    downloadCACert,
+    downloadClientCert,
+    listClientCerts,
+    listClients,
+} from '../api'
 import {useI18n} from '../i18n'
 import type {Client, ClientCert} from '../types'
 
@@ -49,6 +56,7 @@ export default function CertsPage() {
     const [submitting, setSubmitting] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [downloading, setDownloading] = useState<string | null>(null)
+    const [downloadingCA, setDownloadingCA] = useState(false)
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
     const [form] = Form.useForm<AddCertFormValues>()
@@ -148,6 +156,24 @@ export default function CertsPage() {
             message.error(err instanceof Error ? err.message : t('clients.certCreateFailed'))
         } finally {
             setSubmitting(false)
+        }
+    }
+
+    const handleDownloadCA = async () => {
+        setDownloadingCA(true)
+        try {
+            const blob = await downloadCACert()
+            const url = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = url
+            anchor.download = 'ca.crt'
+            anchor.click()
+            URL.revokeObjectURL(url)
+            message.success(t('clients.downloadCASuccess'))
+        } catch (err) {
+            message.error(err instanceof Error ? err.message : t('clients.downloadCAFailed'))
+        } finally {
+            setDownloadingCA(false)
         }
     }
 
@@ -274,16 +300,23 @@ export default function CertsPage() {
         <div className="console-page">
             <PageHeader description={t('certs.description')}/>
 
-            <Flex className="console-page-actions" justify="space-between" align="center" wrap="wrap" gap={12}>
+            <Flex className="console-page-actions" justify="flex-start">
                 <Space wrap>
                     <Button type="primary" icon={<PlusOutlined/>} onClick={openAddDrawer}>
                         {t('clients.addCert')}
                     </Button>
-                    <Button icon={<ReloadOutlined/>} onClick={() => void loadData()}>
-                        {t('common.refresh')}
-                    </Button>
-                </Space>
-                <Space wrap>
+                    <Popconfirm
+                        title={t('clients.downloadCAConfirmTitle')}
+                        description={t('clients.downloadCAConfirmDesc')}
+                        onConfirm={() => void handleDownloadCA()}
+                        okText={t('common.confirm')}
+                        cancelText={t('common.cancel')}
+                        placement="bottom"
+                    >
+                        <Button icon={<DownloadOutlined/>} loading={downloadingCA}>
+                            {t('clients.downloadCA')}
+                        </Button>
+                    </Popconfirm>
                     <Select
                         allowClear
                         showSearch
@@ -294,6 +327,9 @@ export default function CertsPage() {
                         options={clientOptions}
                         onChange={(value) => setUserIdFilter(value)}
                     />
+                    <Button icon={<ReloadOutlined/>} onClick={() => void loadData()}>
+                        {t('common.refresh')}
+                    </Button>
                 </Space>
             </Flex>
 

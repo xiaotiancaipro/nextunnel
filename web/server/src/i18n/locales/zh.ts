@@ -22,11 +22,6 @@ const zh = {
         certs: '证书管理',
         ipFilters: '访问控制',
     },
-    status: {
-        connecting: '连接中…',
-        apiOnline: 'API {{version}}',
-        apiOffline: 'API 未连接',
-    },
     language: {
         label: '语言',
         zh: '中文',
@@ -34,7 +29,7 @@ const zh = {
     },
     clients: {
         title: '客户端管理',
-        description: '注册隧道客户端，对应 CLI client create。',
+        description: '新增、修改、删除隧道客户端。',
         loadFailed: '加载客户端失败',
         createSuccess: '客户端 {{name}} 创建成功',
         createFailed: '创建失败',

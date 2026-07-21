@@ -1,9 +1,8 @@
-import {useEffect, useMemo, useState} from 'react'
+import {useMemo} from 'react'
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import {CloudServerOutlined, SafetyCertificateOutlined, SafetyOutlined} from '@ant-design/icons'
 import {Flex, Layout, Menu, theme, Typography} from 'antd'
 import {LanguageSwitcher} from '@nextunnel/web-shared'
-import {fetchVersion} from './api'
 import {useI18n} from './i18n'
 import ClientsPage from './pages/ClientsPage'
 import CertsPage from './pages/CertsPage'
@@ -32,21 +31,11 @@ function AppLayout() {
     const location = useLocation()
     const navigate = useNavigate()
     const {t} = useI18n()
-    const [version, setVersion] = useState<string>()
-    const [versionLoading, setVersionLoading] = useState(true)
     const {token: themeToken} = theme.useToken()
 
     const {Header, Sider, Content} = Layout
 
-    useEffect(() => {
-        void fetchVersion()
-            .then(setVersion)
-            .catch(() => setVersion(undefined))
-            .finally(() => setVersionLoading(false))
-    }, [])
-
     const {selectedKey, pageTitle} = resolvePageMeta(location.pathname, t)
-    const apiOnline = Boolean(version)
 
     const menuItems = useMemo(
         () => [
@@ -99,19 +88,6 @@ function AppLayout() {
                             onClick={({key}) => navigate(ROUTE_BY_KEY[key] ?? '/clients')}
                             className="console-sider-menu"
                         />
-                        <Flex align="center" justify="center" className="console-sider-status">
-                            <div className="console-status">
-                                <span
-                                    className={`console-status__dot${apiOnline ? ' console-status__dot--online' : ''}`}/>
-                                <span className="console-status__text">
-                                    {versionLoading
-                                        ? t('status.connecting')
-                                        : apiOnline
-                                            ? t('status.apiOnline', {version: version ?? ''})
-                                            : t('status.apiOffline')}
-                                </span>
-                            </div>
-                        </Flex>
                     </div>
                 </Sider>
 
