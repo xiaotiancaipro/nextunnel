@@ -238,6 +238,218 @@
     border-radius: var(--radius-sm);
 }
 
+.access-control-page {
+    flex: 1;
+    min-height: 0;
+}
+
+.access-control-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+}
+
+.access-control-layout__table,
+.access-control-layout__flow {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.access-control-layout__table.ant-card,
+.access-control-layout__flow.ant-card {
+    overflow: hidden;
+}
+
+.access-control-layout__table.ant-card > .ant-card-body,
+.access-control-layout__flow.ant-card > .ant-card-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.access-control-layout__flow.ant-card > .ant-card-head {
+    min-height: 44px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--console-border);
+    flex-shrink: 0;
+}
+
+.access-control-layout__flow.ant-card > .ant-card-head .ant-card-head-title {
+    padding: 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--console-primary);
+}
+
+.access-control-layout__flow.ant-card-small > .ant-card-body {
+    padding: 0 !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.access-flow-canvas {
+    width: 100%;
+    height: 100%;
+    min-height: 520px;
+    background: #f4f6f8;
+}
+
+.access-flow-canvas--empty {
+    display: grid;
+    place-items: center;
+    background-image: radial-gradient(#c5cdd8 1.2px, transparent 1.2px);
+    background-size: 18px 18px;
+}
+
+.access-flow-canvas .react-flow__controls {
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    border: 1px solid var(--console-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.access-flow-canvas .react-flow__controls-button {
+    background: #fff;
+    border-bottom: 1px solid var(--console-border);
+    width: 28px;
+    height: 28px;
+}
+
+.flow-node {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    padding: 16px 14px;
+    text-align: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.flow-node--deny {
+    background: #fff1f2;
+    border-color: #fecdd3;
+}
+
+.flow-node__icon {
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 8px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.flow-node__icon--blue {
+    background: linear-gradient(135deg, #0870e9, #3b82f6);
+}
+
+.flow-node__icon--teal {
+    background: linear-gradient(135deg, #0f766e, #14b8a6);
+}
+
+.flow-node__icon--rose {
+    background: linear-gradient(135deg, #e11d48, #fb7185);
+}
+
+.flow-node__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.35;
+    flex-shrink: 0;
+}
+
+.flow-node__hint {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.flow-node__action {
+    margin-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.flow-node__action--allow {
+    background: rgba(22, 163, 74, 0.1);
+    color: #15803d;
+}
+
+.flow-node__action--block {
+    background: rgba(225, 29, 72, 0.1);
+    color: #be123c;
+}
+
+.flow-node__rule-text {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.03);
+    font-size: 12px;
+    line-height: 1.45;
+    color: #334155;
+    word-break: break-all;
+    text-align: left;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    flex: 1;
+    min-height: 0;
+}
+
+.flow-node--deny .flow-node__rule-text {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.flow-node__handle {
+    width: 10px !important;
+    height: 10px !important;
+    background: #fff !important;
+    border: 2px solid #94a3b8 !important;
+    border-radius: 999px !important;
+}
+
+@media (max-width: 1100px) {
+    .access-control-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .access-control-layout__flow {
+        min-height: 560px;
+        height: 560px;
+    }
+}
+
 @media (max-width: 768px) {
     .console-page-toolbar {
         flex-direction: column;

@@ -126,6 +126,17 @@ const zh = {
             localNetwork: '本地网络',
             remoteNetwork: '远程网络',
         },
+        flow: {
+            title: '优先级匹配',
+            stepRequest: '访问请求',
+            stepRequestHint: '来自客户端的连接 IP',
+            priorityIp: 'IP',
+            priorityCity: '城市',
+            priorityRegion: '省/区域',
+            priorityCountry: '国家',
+            priorityNetwork: '本地/远程',
+            priorityAll: '全部',
+        },
     },
 }
 

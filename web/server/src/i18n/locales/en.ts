@@ -128,6 +128,17 @@ const en: TranslationSchema = {
             localNetwork: 'Local network',
             remoteNetwork: 'Remote network',
         },
+        flow: {
+            title: 'Priority match',
+            stepRequest: 'Access request',
+            stepRequestHint: 'Incoming client connection IP',
+            priorityIp: 'IP',
+            priorityCity: 'City',
+            priorityRegion: 'Region',
+            priorityCountry: 'Country',
+            priorityNetwork: 'Local/remote',
+            priorityAll: 'All',
+        },
     },
 }
 
