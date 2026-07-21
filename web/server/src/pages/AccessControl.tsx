@@ -215,6 +215,7 @@ function buildFlowGraph(
             source: 'entry',
             target: targetId,
             type: 'default',
+            animated: true,
             style: edgeStyle,
             markerEnd: marker,
         })
@@ -231,6 +232,7 @@ function buildFlowGraph(
                     source: sourceId,
                     target: targetId,
                     type: 'default',
+                    animated: true,
                     style: edgeStyle,
                     markerEnd: marker,
                 })

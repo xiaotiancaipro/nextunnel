@@ -431,11 +431,25 @@
 }
 
 .flow-node__handle {
-    width: 10px !important;
-    height: 10px !important;
-    background: #fff !important;
-    border: 2px solid #94a3b8 !important;
-    border-radius: 999px !important;
+    width: 1px !important;
+    height: 1px !important;
+    min-width: 1px !important;
+    min-height: 1px !important;
+    background: transparent !important;
+    border: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.access-flow-canvas .react-flow__edge.animated path {
+    stroke-dasharray: 6 4;
+    animation: access-flow-edge-dash 0.6s linear infinite;
+}
+
+@keyframes access-flow-edge-dash {
+    to {
+        stroke-dashoffset: -10;
+    }
 }
 
 @media (max-width: 1100px) {
