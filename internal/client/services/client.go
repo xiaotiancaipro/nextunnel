@@ -102,7 +102,7 @@ func (s *Client) ProxiesApplyResponse(conn net.Conn) error {
 	}
 
 	for _, proxy := range s.Proxies {
-		s.Logger.Info(fmt.Sprintf("proxy applied: name=%s, remote_port=%d, local=%s:%d", proxy.Name, proxy.RemotePort, proxy.LocalIP, proxy.LocalPort))
+		s.Logger.Info(fmt.Sprintf("proxy applied: name=\"%s\", remote_port=%d, local=%s:%d", proxy.Name, proxy.RemotePort, proxy.LocalIP, proxy.LocalPort))
 	}
 	return nil
 }
@@ -139,7 +139,7 @@ func (s *Client) WorkConn(msg sharedprotocol.NewWorkConnMsg) {
 		_ = workTLS.Close()
 		return
 	}
-	s.Logger.Info(fmt.Sprintf("work connection bridged: proxy=%s, work_id=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
+	s.Logger.Info(fmt.Sprintf("work connection bridged: proxy=\"%s\", work_id=%s, local=%s", msg.ProxyName, msg.WorkID, localAddr))
 
 	network.Pipe(workTLS, localConn)
 }

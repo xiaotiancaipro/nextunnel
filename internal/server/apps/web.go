@@ -38,7 +38,7 @@ func (a *Web) Start() error {
 		Handler:           a.engine,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	a.Logger.Info("web server listening on " + addr)
+	a.Logger.Info("[web] listening on " + addr)
 	if err := a.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

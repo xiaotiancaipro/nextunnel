@@ -27,7 +27,6 @@ func (a *App) Init() error {
 		return fmt.Errorf("failed to initialize logging: %v", err)
 	}
 	a.logger = logger
-	a.logger.Info("client initializing")
 	a.initServices()
 	if err := a.initApps(); err != nil {
 		return err

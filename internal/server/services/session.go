@@ -162,7 +162,7 @@ func (s *Session) ProxiesApply(conn net.Conn, ctrlWriteMu *sync.Mutex, payload [
 	for name, listener := range opened {
 		ln := listener
 		proxy := desired[name]
-		s.Logger.Info(fmt.Sprintf("proxy listener opened: client_id=%s, name=%s, remote_port=%d", clientID, name, proxy.RemotePort))
+		s.Logger.Info(fmt.Sprintf("proxy listener opened: client_id=%s, name=\"%s\", remote_port=%d", clientID, name, proxy.RemotePort))
 		go func() {
 			select {
 			case <-serverStopCh:

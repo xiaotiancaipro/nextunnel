@@ -54,7 +54,7 @@ func (a *Conn) Start() error {
 	a.mu.Lock()
 	a.listener = listener
 	a.mu.Unlock()
-	a.Logger.Info("conn server listening on " + listener.Addr().String())
+	a.Logger.Info("[conn] listening on " + listener.Addr().String())
 
 	for {
 		connRaw, err := listener.Accept()
