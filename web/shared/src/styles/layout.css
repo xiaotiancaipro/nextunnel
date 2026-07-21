@@ -1,13 +1,16 @@
-.console-shell {
-  min-height: 100vh;
-  min-height: 100dvh;
-  background: var(--console-content-bg);
+.console-shell.ant-layout {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: var(--console-content-bg);
 }
 
 .console-top-header {
-  position: sticky;
-  top: 0;
+  flex: 0 0 auto;
   z-index: 100;
   display: flex;
   align-items: center;
@@ -38,9 +41,10 @@
   white-space: nowrap;
 }
 
-.console-body {
+.console-body.ant-layout {
+  flex: 1 1 auto;
   min-height: 0;
-  flex: 1;
+  overflow: hidden;
 }
 
 .console-sider {
@@ -85,12 +89,14 @@
   font-weight: 600;
 }
 
-.console-content {
+.console-content.ant-layout-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   padding: 20px 24px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--console-content-bg);
 }
 
@@ -98,8 +104,9 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .console-page-header {
@@ -119,10 +126,11 @@
 }
 
 .console-page-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -130,7 +138,7 @@
     padding-inline: 16px !important;
   }
 
-  .console-content {
+  .console-content.ant-layout-content {
     padding: 16px;
   }
 }

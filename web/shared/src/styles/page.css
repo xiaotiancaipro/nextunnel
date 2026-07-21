@@ -1,12 +1,23 @@
 .console-page {
     width: 100%;
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overflow: hidden;
+}
+
+.console-page > .console-card,
+.console-page > .console-table-card,
+.console-page > .access-control-layout {
+    flex: 1;
+    min-height: 0;
 }
 
 .console-page-toolbar {
     padding-bottom: 2px;
+    flex-shrink: 0;
 }
 
 .console-page-desc {
@@ -46,10 +57,54 @@
     border-radius: var(--radius-lg);
     box-shadow: var(--console-card-shadow);
     background: var(--console-surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
 }
 
 .console-card.ant-card-small > .ant-card-body {
     padding: 0;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.console-table-fill {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.console-table-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.console-table-body .ant-table-wrapper,
+.console-table-body .ant-spin-nested-loading,
+.console-table-body .ant-spin-container,
+.console-table-body .ant-table,
+.console-table-body .ant-table-container {
+    height: 100%;
+}
+
+.console-table-footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 12px 18px 16px;
+}
+
+.console-table-footer .ant-pagination {
+    justify-content: flex-start;
 }
 
 .console-card .ant-table-small .ant-table-thead > tr > th {
@@ -83,6 +138,7 @@
 
 .console-page-actions {
     margin-top: -4px;
+    flex-shrink: 0;
 }
 
 .console-drawer-toolbar {
@@ -100,11 +156,6 @@
 
 .console-drawer-table .ant-table-cell {
     white-space: nowrap;
-}
-
-.console-card .ant-pagination {
-    margin: 16px 18px 18px !important;
-    justify-content: flex-start;
 }
 
 .console-empty-hint {
@@ -270,7 +321,7 @@
 .access-control-layout__flow.ant-card > .ant-card-body {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .access-control-layout__flow.ant-card > .ant-card-head {
@@ -297,7 +348,7 @@
 .access-flow-canvas {
     width: 100%;
     height: 100%;
-    min-height: 520px;
+    min-height: 0;
     background: #f4f6f8;
 }
 
@@ -455,12 +506,11 @@
 @media (max-width: 1100px) {
     .access-control-layout {
         grid-template-columns: 1fr;
-        height: auto;
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     }
 
     .access-control-layout__flow {
-        min-height: 560px;
-        height: 560px;
+        min-height: 0;
     }
 }
 

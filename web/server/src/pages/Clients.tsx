@@ -9,6 +9,7 @@ import {
     Input,
     InputNumber,
     message,
+    Pagination,
     Popconfirm,
     Space,
     Switch,
@@ -17,8 +18,8 @@ import {
     Typography,
 } from 'antd'
 import {DeleteOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined,} from '@ant-design/icons'
-import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
-import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
+import type {ColumnsType} from 'antd/es/table'
+import {formatTimestamp, PageCard, PageHeader, useTableScrollY} from '@nextunnel/web-shared'
 import {createClient, deleteClient, listClients} from '../api'
 import {formatPortRange, useI18n} from '../i18n'
 import {index} from '../routers'
@@ -37,6 +38,7 @@ export default function Clients() {
 
     const {t} = useI18n()
     const navigate = useNavigate()
+    const {containerRef, scrollY} = useTableScrollY()
     const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(false)
     const [createDrawerOpen, setCreateDrawerOpen] = useState(false)
@@ -93,10 +95,10 @@ export default function Clients() {
         }
     }
 
-    const handleTableChange = (pagination: TablePaginationConfig) => {
-        setPage(pagination.current ?? 1)
-        setPageSize(pagination.pageSize ?? 10)
-    }
+    const pagedClients = useMemo(
+        () => clients.slice((page - 1) * pageSize, page * pageSize),
+        [clients, page, pageSize],
+    )
 
     const columns: ColumnsType<Client> = useMemo(
         () => [
@@ -209,31 +211,43 @@ export default function Clients() {
                 </Space>
             </Flex>
 
-            <PageCard>
-                <Table
-                    rowKey="id"
-                    size="small"
-                    loading={loading}
-                    columns={columns}
-                    dataSource={clients}
-                    tableLayout="fixed"
-                    scroll={{x: 980}}
-                    onChange={handleTableChange}
-                    pagination={{
-                        current: page,
-                        pageSize,
-                        showSizeChanger: true,
-                        showTotal: (total) => t('common.total', {total}),
-                        position: ['bottomLeft'],
-                    }}
-                    locale={{
-                        emptyText: (
-                            <div className="console-empty-hint">
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('clients.empty')}/>
-                            </div>
-                        ),
-                    }}
-                />
+            <PageCard className="console-table-card">
+                <div className="console-table-fill">
+                    <div ref={containerRef} className="console-table-body">
+                        <Table
+                            rowKey="id"
+                            size="small"
+                            loading={loading}
+                            columns={columns}
+                            dataSource={pagedClients}
+                            tableLayout="fixed"
+                            scroll={{x: 980, y: scrollY}}
+                            pagination={false}
+                            locale={{
+                                emptyText: (
+                                    <div className="console-empty-hint">
+                                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('clients.empty')}/>
+                                    </div>
+                                ),
+                            }}
+                        />
+                    </div>
+                    <div className="console-table-footer">
+                        <Pagination
+                            size="small"
+                            align="start"
+                            current={page}
+                            pageSize={pageSize}
+                            total={clients.length}
+                            showSizeChanger
+                            showTotal={(total) => t('common.total', {total})}
+                            onChange={(nextPage, nextPageSize) => {
+                                setPage(nextPage)
+                                setPageSize(nextPageSize)
+                            }}
+                        />
+                    </div>
+                </div>
             </PageCard>
 
             <Drawer

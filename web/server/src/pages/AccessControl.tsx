@@ -1,5 +1,5 @@
 import {memo, useCallback, useEffect, useMemo, useState} from 'react'
-import {Button, Drawer, Empty, Flex, Form, Input, message, Popconfirm, Select, Space, Table, Tag} from 'antd'
+import {Button, Drawer, Empty, Flex, Form, Input, message, Pagination, Popconfirm, Select, Space, Table, Tag} from 'antd'
 import {
     AimOutlined,
     CheckCircleOutlined,
@@ -11,7 +11,7 @@ import {
     ReloadOutlined,
     StopOutlined,
 } from '@ant-design/icons'
-import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
+import type {ColumnsType} from 'antd/es/table'
 import {
     Background,
     BackgroundVariant,
@@ -28,7 +28,7 @@ import {
     useNodesState,
     useReactFlow,
 } from '@xyflow/react'
-import {formatTimestamp, PageCard, PageHeader, type TFunction} from '@nextunnel/web-shared'
+import {formatTimestamp, PageCard, PageHeader, type TFunction, useTableScrollY} from '@nextunnel/web-shared'
 import {addIPFilter, deleteIPFilter, fromRuleToMutate, listIPFilters, toMutatePayload} from '../api'
 import {ruleDisplayText, useI18n} from '../i18n'
 import type {IPFilterField, IPFilterRule} from '../types'
@@ -341,6 +341,7 @@ function FilterFlowChart({rules}: { rules: IPFilterRule[] }) {
 
 export default function AccessControl() {
     const {t} = useI18n()
+    const {containerRef, scrollY} = useTableScrollY()
     const [rules, setRules] = useState<IPFilterRule[]>([])
     const [loading, setLoading] = useState(false)
     const [drawerOpen, setDrawerOpen] = useState(false)
@@ -410,10 +411,10 @@ export default function AccessControl() {
         }
     }
 
-    const handleTableChange = (pagination: TablePaginationConfig) => {
-        setPage(pagination.current ?? 1)
-        setPageSize(pagination.pageSize ?? 10)
-    }
+    const pagedRules = useMemo(
+        () => rules.slice((page - 1) * pageSize, page * pageSize),
+        [rules, page, pageSize],
+    )
 
     const columns: ColumnsType<IPFilterRule> = useMemo(
         () => [
@@ -495,34 +496,46 @@ export default function AccessControl() {
             </Flex>
 
             <div className="access-control-layout">
-                <PageCard className="access-control-layout__table">
-                    <Table
-                        rowKey="id"
-                        size="small"
-                        loading={loading}
-                        columns={columns}
-                        dataSource={rules}
-                        tableLayout="fixed"
-                        scroll={{x: 560}}
-                        onChange={handleTableChange}
-                        pagination={{
-                            current: page,
-                            pageSize,
-                            showSizeChanger: true,
-                            showTotal: (total) => t('common.total', {total}),
-                            position: ['bottomLeft'],
-                        }}
-                        locale={{
-                            emptyText: (
-                                <div className="console-empty-hint">
-                                    <Empty
-                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                        description={t('accessControl.empty')}
-                                    />
-                                </div>
-                            ),
-                        }}
-                    />
+                <PageCard className="access-control-layout__table console-table-card">
+                    <div className="console-table-fill">
+                        <div ref={containerRef} className="console-table-body">
+                            <Table
+                                rowKey="id"
+                                size="small"
+                                loading={loading}
+                                columns={columns}
+                                dataSource={pagedRules}
+                                tableLayout="fixed"
+                                scroll={{x: 560, y: scrollY}}
+                                pagination={false}
+                                locale={{
+                                    emptyText: (
+                                        <div className="console-empty-hint">
+                                            <Empty
+                                                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                                description={t('accessControl.empty')}
+                                            />
+                                        </div>
+                                    ),
+                                }}
+                            />
+                        </div>
+                        <div className="console-table-footer">
+                            <Pagination
+                                size="small"
+                                align="start"
+                                current={page}
+                                pageSize={pageSize}
+                                total={rules.length}
+                                showSizeChanger
+                                showTotal={(total) => t('common.total', {total})}
+                                onChange={(nextPage, nextPageSize) => {
+                                    setPage(nextPage)
+                                    setPageSize(nextPageSize)
+                                }}
+                            />
+                        </div>
+                    </div>
                 </PageCard>
 
                 <PageCard className="access-control-layout__flow" title={t('accessControl.flow.title')}>

@@ -35,6 +35,10 @@ body,
   margin: 0;
 }
 
+#root {
+  overflow: hidden;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;

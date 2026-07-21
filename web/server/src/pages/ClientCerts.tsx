@@ -8,6 +8,7 @@ import {
     Flex,
     Form,
     message,
+    Pagination,
     Popconfirm,
     Select,
     Space,
@@ -16,9 +17,9 @@ import {
     Tag,
 } from 'antd'
 import {DeleteOutlined, DownloadOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
-import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
+import type {ColumnsType} from 'antd/es/table'
 import dayjs, {type Dayjs} from 'dayjs'
-import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
+import {formatTimestamp, PageCard, PageHeader, useTableScrollY} from '@nextunnel/web-shared'
 import {
     createClientCert,
     deleteClientCert,
@@ -47,6 +48,7 @@ export default function ClientCerts() {
 
     const {t} = useI18n()
     const [searchParams, setSearchParams] = useSearchParams()
+    const {containerRef, scrollY} = useTableScrollY()
     const clientIdFilter = searchParams.get('clientId')?.trim() || undefined
 
     const [clients, setClients] = useState<Client[]>([])
@@ -208,10 +210,10 @@ export default function ClientCerts() {
         }
     }
 
-    const handleTableChange = (pagination: TablePaginationConfig) => {
-        setPage(pagination.current ?? 1)
-        setPageSize(pagination.pageSize ?? 10)
-    }
+    const pagedItems = useMemo(
+        () => filteredItems.slice((page - 1) * pageSize, page * pageSize),
+        [filteredItems, page, pageSize],
+    )
 
     const columns: ColumnsType<CertRow> = useMemo(
         () => [
@@ -333,31 +335,43 @@ export default function ClientCerts() {
                 </Space>
             </Flex>
 
-            <PageCard>
-                <Table
-                    rowKey={(record) => `${record.clientId}-${record.id}`}
-                    size="small"
-                    loading={loading}
-                    columns={columns}
-                    dataSource={filteredItems}
-                    tableLayout="fixed"
-                    scroll={{x: 1200}}
-                    onChange={handleTableChange}
-                    pagination={{
-                        current: page,
-                        pageSize,
-                        showSizeChanger: true,
-                        showTotal: (total) => t('common.total', {total}),
-                        position: ['bottomLeft'],
-                    }}
-                    locale={{
-                        emptyText: (
-                            <div className="console-empty-hint">
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('certs.empty')}/>
-                            </div>
-                        ),
-                    }}
-                />
+            <PageCard className="console-table-card">
+                <div className="console-table-fill">
+                    <div ref={containerRef} className="console-table-body">
+                        <Table
+                            rowKey={(record) => `${record.clientId}-${record.id}`}
+                            size="small"
+                            loading={loading}
+                            columns={columns}
+                            dataSource={pagedItems}
+                            tableLayout="fixed"
+                            scroll={{x: 1200, y: scrollY}}
+                            pagination={false}
+                            locale={{
+                                emptyText: (
+                                    <div className="console-empty-hint">
+                                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('certs.empty')}/>
+                                    </div>
+                                ),
+                            }}
+                        />
+                    </div>
+                    <div className="console-table-footer">
+                        <Pagination
+                            size="small"
+                            align="start"
+                            current={page}
+                            pageSize={pageSize}
+                            total={filteredItems.length}
+                            showSizeChanger
+                            showTotal={(total) => t('common.total', {total})}
+                            onChange={(nextPage, nextPageSize) => {
+                                setPage(nextPage)
+                                setPageSize(nextPageSize)
+                            }}
+                        />
+                    </div>
+                </div>
             </PageCard>
 
             <Drawer
