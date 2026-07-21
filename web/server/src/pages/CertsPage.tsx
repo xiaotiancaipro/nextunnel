@@ -18,12 +18,10 @@ import {
 import {DeleteOutlined, DownloadOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
 import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
 import dayjs, {type Dayjs} from 'dayjs'
-import PageCard from '../components/PageCard'
-import PageHeader from '../components/PageHeader'
+import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
 import {createClientCert, deleteClientCert, downloadClientCert, listClientCerts, listClients,} from '../api'
 import {useI18n} from '../i18n'
 import type {Client, ClientCert} from '../types'
-import {formatTimestamp} from '../utils/formatTime'
 
 interface AddCertFormValues {
     clientId: string

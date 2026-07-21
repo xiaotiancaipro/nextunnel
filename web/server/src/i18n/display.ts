@@ -1,5 +1,5 @@
+import type { TFunction } from '@nextunnel/web-shared'
 import type { IPFilterRule } from '../types'
-import type { TFunction } from './context'
 
 export function formatPortRange(t: TFunction, portStart: number, portEnd: number): string {
   if (portStart > 0 && portEnd > 0) {

@@ -2,12 +2,10 @@ import {useCallback, useEffect, useMemo, useState} from 'react'
 import {Button, Empty, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag} from 'antd'
 import {DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
 import type {ColumnsType} from 'antd/es/table'
-import PageCard from '../components/PageCard'
-import PageHeader from '../components/PageHeader'
+import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
 import {addIPFilter, deleteIPFilter, fromRuleToMutate, listIPFilters, toMutatePayload} from '../api'
 import {ruleDisplayText, useI18n} from '../i18n'
 import type {IPFilterField, IPFilterRule} from '../types'
-import {formatTimestamp} from '../utils/formatTime'
 
 interface AddFormValues {
     status: 0 | 1

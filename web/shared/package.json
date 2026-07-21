@@ -1,0 +1,23 @@
+{
+  "name": "@nextunnel/web-shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles/index.css": "./src/styles/index.css",
+    "./styles/layout.css": "./src/styles/layout.css",
+    "./styles/page.css": "./src/styles/page.css"
+  },
+  "peerDependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "antd": "^6.5.1",
+    "dayjs": "^1.11.21",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "~7.0.2"
+  }
+}

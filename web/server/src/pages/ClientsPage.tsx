@@ -24,12 +24,10 @@ import {
     SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
-import PageCard from '../components/PageCard'
-import PageHeader from '../components/PageHeader'
+import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
 import {createClient, deleteClient, downloadCACert, listClients} from '../api'
 import {formatPortRange, useI18n} from '../i18n'
 import type {Client} from '../types'
-import {formatTimestamp} from '../utils/formatTime'
 
 interface CreateFormValues {
     name: string

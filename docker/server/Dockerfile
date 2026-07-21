@@ -1,12 +1,15 @@
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web-builder
 
-WORKDIR /src/web/server
+WORKDIR /src/web
 
-COPY web/server/package.json web/server/package-lock.json ./
-RUN npm ci
+COPY web/package.json web/package-lock.json ./
+COPY web/shared/package.json ./shared/
+COPY web/server/package.json ./server/
+RUN --mount=type=cache,target=/root/.npm npm ci
 
-COPY web/server/ ./
-RUN npm run build
+COPY web/shared ./shared
+COPY web/server ./server
+RUN npm run build -w nextunnel-server-web
 
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
@@ -33,7 +36,7 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata \
 	&& mkdir -p /etc/nextunnel/certs \
-	&& mkdir -p /var/log/nextunnel \
+	&& mkdir -p /var/log/nextunnel
 
 WORKDIR /root
 

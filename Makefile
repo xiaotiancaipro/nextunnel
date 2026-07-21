@@ -45,7 +45,7 @@ build-multi-client:
 	done
 
 build-server-web:
-	cd "$(WEB_DIR)/server" && npm ci && npm run build
+	cd "$(WEB_DIR)" && npm ci && npm run build -w nextunnel-server-web
 
 clean:
 	rm -rf bin/

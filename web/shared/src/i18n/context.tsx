@@ -3,15 +3,10 @@ import { App as AntdApp, ConfigProvider } from 'antd'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import { consoleTheme } from '../theme'
-import en from './locales/en'
-import zh from './locales/zh'
-import type { TranslationSchema } from './locales/zh'
 
 export type Locale = 'zh' | 'en'
 
 const STORAGE_KEY = 'nextunnel-locale'
-
-const locales: Record<Locale, TranslationSchema> = { zh, en }
 
 const antdLocales = { zh: zhCN, en: enUS }
 
@@ -51,7 +46,13 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null)
 
-export function I18nProvider({ children }: { children: ReactNode }) {
+export interface I18nProviderProps {
+  children: ReactNode
+  locales: Record<Locale, Record<string, unknown>>
+  documentTitles?: Partial<Record<Locale, string>>
+}
+
+export function I18nProvider({ children, locales, documentTitles }: I18nProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(detectLocale)
 
   const setLocale = useCallback((next: Locale) => {
@@ -61,16 +62,19 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback<TFunction>(
     (key, params) => {
-      const text = lookup(locales[locale] as unknown as Record<string, unknown>, key) ?? key
+      const text = lookup(locales[locale], key) ?? key
       return interpolate(text, params)
     },
-    [locale],
+    [locale, locales],
   )
 
   useEffect(() => {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
-    document.title = locale === 'zh' ? 'nextunnel-server 管理控制台' : 'nextunnel-server Console'
-  }, [locale])
+    const title = documentTitles?.[locale]
+    if (title) {
+      document.title = title
+    }
+  }, [documentTitles, locale])
 
   const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t])
 

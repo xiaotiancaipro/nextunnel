@@ -1,6 +1,6 @@
 import { GlobalOutlined } from '@ant-design/icons'
 import { Select } from 'antd'
-import { useI18n, type Locale } from '../i18n'
+import { useI18n, type Locale } from '../i18n/context'
 
 export default function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n()

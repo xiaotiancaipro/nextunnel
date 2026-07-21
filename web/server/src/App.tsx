@@ -2,13 +2,13 @@ import {useEffect, useMemo, useState} from 'react'
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import {CloudServerOutlined, SafetyCertificateOutlined, SafetyOutlined} from '@ant-design/icons'
 import {Flex, Layout, Menu, theme, Typography} from 'antd'
+import {LanguageSwitcher} from '@nextunnel/web-shared'
 import {fetchVersion} from './api'
-import LanguageSwitcher from './components/LanguageSwitcher'
 import {useI18n} from './i18n'
 import ClientsPage from './pages/ClientsPage'
 import CertsPage from './pages/CertsPage'
 import IpFilterPage from './pages/IpFilterPage'
-import './styles/layout.css'
+import '@nextunnel/web-shared/styles/layout.css'
 
 const SIDER_WIDTH = 220
 
