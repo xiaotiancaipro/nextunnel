@@ -1,10 +1,11 @@
 # nextunnel-client
 
-`nextunnel-client` 运行在内网侧。它通过 mTLS 主动连接 `nextunnel-server`，使用已注册的客户端 ID 登录，提交本地代理配置，并把服务端公网端口收到的流量桥接到本地服务。
+`nextunnel-client` 运行在内网侧。它通过 mTLS 主动连接 `nextunnel-server`，使用已注册的客户端 ID 与匹配的客户端证书登录，提交本地代理配置，并把服务端公网端口收到的流量桥接到本地服务。
 
 ## 职责
 
 - 使用 TLS 1.2+ 和客户端证书连接服务端。
+- 使用 `[client].id` 登录；证书指纹必须属于该客户端。
 - 根据 `[[proxies]]` 注册 TCP 代理。
 - 当服务端远程端口收到连接时，按需打开工作连接。
 - 将每条工作连接转发到 `local_ip:local_port`。
@@ -24,7 +25,7 @@ flowchart LR
 | 依赖 | 说明 |
 | --- | --- |
 | Go 1.26+ | 仅本地编译时需要。 |
-| 客户端 ID | 在服务端通过 `nextunnel-server client create` 创建。 |
+| 客户端 ID | 在服务端通过 Web 控制台或 `nextunnel-server client create` 创建。 |
 | mTLS 文件 | 从服务端生成或下载的 `ca.crt`、`client.crt`、`client.key`。 |
 
 ## 快速开始
@@ -38,9 +39,8 @@ cp /path/to/client-certs/{ca.crt,client.crt,client.key} certs/
 cp nextunnel-client.example.toml nextunnel-client.toml
 
 # 3. 编译并启动客户端。
-mkdir -p bin
-go build -o bin/nextunnel-client ./cmd/client
-./bin/nextunnel-client --config nextunnel-client.toml
+make build-client
+./bin/nextunnel-client-$(cat VERSION) --config nextunnel-client.toml
 ```
 
 启动后，客户端会加载配置、初始化 mTLS、连接 `[server].host:[server].port`、使用 `[client].id` 登录、提交 `[[proxies]]`，然后进入控制循环。
@@ -73,7 +73,7 @@ remote_port = 5000
 | 配置段 | 字段 | 说明 |
 | --- | --- | --- |
 | `[server]` | `host` / `port` | 服务端控制通道地址。 |
-| `[client]` | `id` | 已注册的客户端名称，不能为空。 |
+| `[client]` | `id` | 已注册的客户端名称，不能为空，且必须与客户端证书匹配。 |
 | `[cert]` | `ca_file` / `cert_file` / `key_file` | mTLS 所需 CA 和客户端证书文件。 |
 | `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | 日志输出与保留策略。 |
 | `[timezone]` | `location` | IANA 时区；未配置时默认 `Asia/Shanghai`。 |
@@ -105,7 +105,7 @@ nextunnel-client [--config <path>]
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--config`, `-c` | `nextunnel-client.toml` | 配置文件路径。 |
+| `--config`, `-c` | `nextunnel-client.toml` | 配置文件路径；未指定时可回退到 `NEXTUNNEL_CLIENT_CONFIG`。 |
 | `-h`, `--help` | - | 显示帮助。 |
 | `-v`, `--version` | - | 显示版本。 |
 
@@ -123,6 +123,9 @@ cd docker/client
 # volumes/nextunnel/certs/ca.crt
 # volumes/nextunnel/certs/client.crt
 # volumes/nextunnel/certs/client.key
+#
+# Docker 下请将证书路径设为 /etc/nextunnel/certs 下的文件，
+# 并将 [logs].file 设为 /var/log/nextunnel/nextunnel-client.log。
 
 docker compose up -d
 ```

@@ -1,10 +1,11 @@
 # nextunnel-client
 
-`nextunnel-client` runs inside the private network. It dials `nextunnel-server` over mTLS, logs in with a registered client ID, submits local proxy definitions, and bridges server-side inbound traffic to local services.
+`nextunnel-client` runs inside the private network. It dials `nextunnel-server` over mTLS, logs in with a registered client ID and a matching client certificate, submits local proxy definitions, and bridges server-side inbound traffic to local services.
 
 ## Responsibilities
 
 - Connect to the server with TLS 1.2+ and a client certificate.
+- Log in with `[client].id`; the certificate fingerprint must belong to that client.
 - Register TCP proxies from `[[proxies]]`.
 - Open work connections when the server receives traffic on a remote proxy port.
 - Forward each work connection to `local_ip:local_port`.
@@ -24,7 +25,7 @@ flowchart LR
 | Dependency | Notes |
 | --- | --- |
 | Go 1.26+ | Required only when building locally. |
-| Client ID | Create it on the server with `nextunnel-server client create`. |
+| Client ID | Create it on the server with the web console or `nextunnel-server client create`. |
 | mTLS files | `ca.crt`, `client.crt`, and `client.key` generated or downloaded from the server. |
 
 ## Quick Start
@@ -38,9 +39,8 @@ cp /path/to/client-certs/{ca.crt,client.crt,client.key} certs/
 cp nextunnel-client.example.toml nextunnel-client.toml
 
 # 3. Build and start the client.
-mkdir -p bin
-go build -o bin/nextunnel-client ./cmd/client
-./bin/nextunnel-client --config nextunnel-client.toml
+make build-client
+./bin/nextunnel-client-$(cat VERSION) --config nextunnel-client.toml
 ```
 
 On startup, the client loads configuration, initializes mTLS, dials `[server].host:[server].port`, logs in with `[client].id`, submits `[[proxies]]`, and enters the control loop.
@@ -73,7 +73,7 @@ remote_port = 5000
 | Section | Field | Description |
 | --- | --- | --- |
 | `[server]` | `host` / `port` | Server control endpoint. |
-| `[client]` | `id` | Registered client name. Must not be empty. |
+| `[client]` | `id` | Registered client name. Must not be empty, and must match the client certificate. |
 | `[cert]` | `ca_file` / `cert_file` / `key_file` | CA and client certificate files for mTLS. |
 | `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | Log output and retention settings. |
 | `[timezone]` | `location` | IANA timezone, defaulting to `Asia/Shanghai` when unset. |
@@ -105,7 +105,7 @@ nextunnel-client [--config <path>]
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--config`, `-c` | `nextunnel-client.toml` | Configuration file path. |
+| `--config`, `-c` | `nextunnel-client.toml` | Configuration file path. If not set, the loader can fall back to `NEXTUNNEL_CLIENT_CONFIG`. |
 | `-h`, `--help` | - | Show help. |
 | `-v`, `--version` | - | Show version. |
 
@@ -123,6 +123,9 @@ cd docker/client
 # volumes/nextunnel/certs/ca.crt
 # volumes/nextunnel/certs/client.crt
 # volumes/nextunnel/certs/client.key
+#
+# For Docker, set certificate paths under /etc/nextunnel/certs
+# and [logs].file to /var/log/nextunnel/nextunnel-client.log.
 
 docker compose up -d
 ```

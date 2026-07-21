@@ -4,7 +4,7 @@
 
 **Secure reverse TCP tunnels for private networks**
 
-Outbound-first · mTLS by default · PostgreSQL-backed control plane · single Go binaries
+Outbound-first · mTLS by default · PostgreSQL-backed control plane · embedded web console · single Go binaries
 
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-Apache%20License%202.0-blue)](./LICENSE)
@@ -18,7 +18,7 @@ Outbound-first · mTLS by default · PostgreSQL-backed control plane · single G
 
 Nextunnel is a reverse tunnel stack for exposing private TCP services through a public server. `nextunnel-client` runs inside the private network and dials out to `nextunnel-server`; the server listens on public proxy ports and forwards accepted traffic back through mTLS control and work channels.
 
-Unlike token-only tunnel setups, Nextunnel treats client certificates as the primary admission boundary. The server owns the CA, verifies client certificates with `RequireAndVerifyClientCert`, and stores operational state in PostgreSQL.
+Unlike token-only tunnel setups, Nextunnel treats client certificates as the primary admission boundary. The server owns the CA, verifies client certificates with `RequireAndVerifyClientCert`, binds each login to the certificate fingerprint of that client ID, and stores operational state in PostgreSQL. An embedded web console and HTTP management API are served from the same server binary.
 
 ```mermaid
 flowchart LR
@@ -27,35 +27,37 @@ flowchart LR
     Server <-->|mTLS control/work channels| Client[nextunnel-client]
     Client --> Service[Private TCP service]
     Server --> PG[(PostgreSQL)]
+    Admin[Admin] -->|HTTP| Web[Embedded web / API]
+    Web --> Server
 ```
 
 ## Features
 
 - **TCP reverse proxying**: expose private TCP services such as SSH, databases, or development services through server-side ports.
-- **mTLS-first access**: the server bootstraps CA/server certificates and verifies every client certificate.
+- **mTLS-first access**: the server bootstraps CA/server certificates, verifies every client certificate, and rejects logins whose certificate does not belong to the claimed client ID.
 - **Client onboarding**: register clients, assign optional remote port ranges, create/list/download/delete client certificates.
 - **Access control**: allow or block by IP, country, region, city, local traffic, remote traffic, or all traffic.
 - **Connection records**: store proxy state and access logs in PostgreSQL.
 - **Resilient clients**: reconnect automatically with 2s to 30s exponential backoff and heartbeat-based control channels.
-- **Optional management API**: enable the server HTTP API with `[web].enabled = true`.
+- **Embedded web console**: manage clients, certificates, and IP filters from a built-in UI and HTTP API on `[server_web]`.
 
 ## Quick Start
 
+Building the server requires Go 1.26+ and Node.js/npm (for the embedded web UI). The client only needs Go.
+
 ```bash
-# Build both binaries.
-mkdir -p bin
+# Build both binaries (server web UI is built first via npm).
 make build
 
-# Or build explicitly.
-mkdir -p bin
-go build -o bin/nextunnel-server ./cmd/server
-go build -o bin/nextunnel-client ./cmd/client
+# Binaries land under bin/ with the VERSION suffix, for example:
+#   bin/nextunnel-server-v1.0.0-alpha
+#   bin/nextunnel-client-v1.0.0-alpha
 ```
 
 1. Start PostgreSQL and `nextunnel-server`.
-2. Create a client with `nextunnel-server client create <name>`.
-3. Create and download a client certificate with `nextunnel-server client cert create/list/download`.
-4. Copy `ca.crt`, `client.crt`, and `client.key` to the client host.
+2. Open the web console (default `http://127.0.0.1:25001`) or use the CLI.
+3. Create a client and a client certificate, then download `ca.crt`, `client.crt`, and `client.key`.
+4. Copy those files to the client host.
 5. Configure `nextunnel-client.toml` and start `nextunnel-client`.
 
 See the component guides for exact commands and configuration:
@@ -69,9 +71,10 @@ See the component guides for exact commands and configuration:
 ```text
 cmd/server/       nextunnel-server CLI entrypoint
 cmd/client/       nextunnel-client CLI entrypoint
-internal/server/  server app, services, controllers, and persistence
+internal/server/  server app, services, controllers, embedded web assets, and persistence
 internal/client/  client app and forwarding services
 internal/shared/  shared protocol, cert, logging, and config helpers
+web/server/       React management console source (built into the server binary)
 docker/server/    server and PostgreSQL Compose files
 docker/client/    client Compose file
 docs/             detailed English and Chinese documentation
@@ -87,7 +90,7 @@ docs/             detailed English and Chinese documentation
 - More proxy types, including UDP and HTTP/HTTPS routing.
 - Richer certificate policies and revocation workflows.
 - User and tenant-oriented management.
-- A web console built on top of the management API.
+- Authentication for the management web/API surface.
 
 ## License
 
