@@ -6,7 +6,7 @@ import {LanguageSwitcher} from '@nextunnel/web-shared'
 import {useI18n} from './i18n'
 import ClientsPage from './pages/ClientsPage'
 import CertsPage from './pages/CertsPage'
-import IpFilterPage from './pages/IpFilterPage'
+import AccessControl from './pages/AccessControl.tsx'
 import '@nextunnel/web-shared/styles/layout.css'
 
 const SIDER_WIDTH = 220
@@ -103,7 +103,7 @@ function AppLayout() {
                                 <Route path="/" element={<Navigate to="/clients" replace/>}/>
                                 <Route path="/clients" element={<ClientsPage/>}/>
                                 <Route path="/certs" element={<CertsPage/>}/>
-                                <Route path="/ip-filters" element={<IpFilterPage/>}/>
+                                <Route path="/ip-filters" element={<AccessControl/>}/>
                             </Routes>
                         </div>
                     </div>

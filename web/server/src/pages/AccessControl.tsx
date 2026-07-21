@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react'
-import {Button, Empty, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag} from 'antd'
+import {Button, Drawer, Empty, Flex, Form, Input, message, Popconfirm, Select, Space, Table, Tag} from 'antd'
 import {DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons'
-import type {ColumnsType} from 'antd/es/table'
+import type {ColumnsType, TablePaginationConfig} from 'antd/es/table'
 import {formatTimestamp, PageCard, PageHeader} from '@nextunnel/web-shared'
 import {addIPFilter, deleteIPFilter, fromRuleToMutate, listIPFilters, toMutatePayload} from '../api'
 import {ruleDisplayText, useI18n} from '../i18n'
@@ -14,14 +14,17 @@ interface AddFormValues {
 }
 
 const categoryFields = new Set<IPFilterField>(['all', 'local', 'remote'])
+const DRAWER_WIDTH = 480
 
-export default function IpFilterPage() {
+export default function AccessControl() {
     const {t} = useI18n()
     const [rules, setRules] = useState<IPFilterRule[]>([])
     const [loading, setLoading] = useState(false)
-    const [modalOpen, setModalOpen] = useState(false)
+    const [drawerOpen, setDrawerOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     const [form] = Form.useForm<AddFormValues>()
 
     const fieldOptions = useMemo(
@@ -52,13 +55,17 @@ export default function IpFilterPage() {
         void loadRules()
     }, [loadRules])
 
+    const closeDrawer = () => {
+        setDrawerOpen(false)
+        form.resetFields()
+    }
+
     const handleAdd = async (values: AddFormValues) => {
         setSubmitting(true)
         try {
             await addIPFilter(toMutatePayload(values.status, values.field, values.value?.trim()))
             message.success(t('ipFilters.addSuccess'))
-            setModalOpen(false)
-            form.resetFields()
+            closeDrawer()
             await loadRules()
         } catch (err) {
             message.error(err instanceof Error ? err.message : t('ipFilters.addFailed'))
@@ -80,11 +87,19 @@ export default function IpFilterPage() {
         }
     }
 
-    const allowCount = rules.filter((rule) => rule.status === 1).length
-    const blockCount = rules.length - allowCount
+    const handleTableChange = (pagination: TablePaginationConfig) => {
+        setPage(pagination.current ?? 1)
+        setPageSize(pagination.pageSize ?? 10)
+    }
 
     const columns: ColumnsType<IPFilterRule> = useMemo(
         () => [
+            {
+                title: t('common.index'),
+                key: 'index',
+                width: 64,
+                render: (_value, _record, index) => (page - 1) * pageSize + index + 1,
+            },
             {
                 title: t('ipFilters.columnAction'),
                 dataIndex: 'status',
@@ -126,11 +141,10 @@ export default function IpFilterPage() {
                         okButtonProps={{danger: true}}
                     >
                         <Button
-                            type="link"
+                            size="small"
                             danger
                             icon={<DeleteOutlined/>}
                             loading={deletingId === record.id}
-                            style={{paddingInline: 0, whiteSpace: 'nowrap'}}
                         >
                             {t('common.delete')}
                         </Button>
@@ -138,32 +152,23 @@ export default function IpFilterPage() {
                 ),
             },
         ],
-        [t, deletingId],
+        [t, deletingId, page, pageSize],
     )
 
     return (
         <div className="console-page">
-            <PageHeader
-                description={t('ipFilters.description')}
-                badge={
-                    <Space size={8}>
-                        <span className="console-count-badge">{t('ipFilters.allowCount', {count: allowCount})}</span>
-                        <span className="console-count-badge console-count-badge--danger">
-              {t('ipFilters.blockCount', {count: blockCount})}
-            </span>
-                    </Space>
-                }
-                extra={
-                    <Space>
-                        <Button icon={<ReloadOutlined/>} onClick={() => void loadRules()}>
-                            {t('common.refresh')}
-                        </Button>
-                        <Button type="primary" icon={<PlusOutlined/>} onClick={() => setModalOpen(true)}>
-                            {t('ipFilters.addRule')}
-                        </Button>
-                    </Space>
-                }
-            />
+            <PageHeader description={t('ipFilters.description')}/>
+
+            <Flex className="console-page-actions" justify="flex-start">
+                <Space wrap>
+                    <Button type="primary" icon={<PlusOutlined/>} onClick={() => setDrawerOpen(true)}>
+                        {t('ipFilters.addRule')}
+                    </Button>
+                    <Button icon={<ReloadOutlined/>} onClick={() => void loadRules()}>
+                        {t('common.refresh')}
+                    </Button>
+                </Space>
+            </Flex>
 
             <PageCard>
                 <Table
@@ -173,8 +178,15 @@ export default function IpFilterPage() {
                     columns={columns}
                     dataSource={rules}
                     tableLayout="fixed"
-                    scroll={{x: 652}}
-                    pagination={{pageSize: 10, showSizeChanger: true, showTotal: (total) => t('common.total', {total})}}
+                    scroll={{x: 716}}
+                    onChange={handleTableChange}
+                    pagination={{
+                        current: page,
+                        pageSize,
+                        showSizeChanger: true,
+                        showTotal: (total) => t('common.total', {total}),
+                        position: ['bottomLeft'],
+                    }}
                     locale={{
                         emptyText: (
                             <div className="console-empty-hint">
@@ -185,19 +197,21 @@ export default function IpFilterPage() {
                 />
             </PageCard>
 
-            <Modal
-                className="console-modal"
+            <Drawer
+                className="console-drawer"
                 title={t('ipFilters.modalTitle')}
-                open={modalOpen}
-                onCancel={() => {
-                    setModalOpen(false)
-                    form.resetFields()
-                }}
-                onOk={() => form.submit()}
-                confirmLoading={submitting}
+                open={drawerOpen}
+                onClose={closeDrawer}
+                width={DRAWER_WIDTH}
                 destroyOnHidden
-                okText={t('common.add')}
-                cancelText={t('common.cancel')}
+                footer={
+                    <Flex justify="flex-end" gap={8}>
+                        <Button onClick={closeDrawer}>{t('common.cancel')}</Button>
+                        <Button type="primary" loading={submitting} onClick={() => form.submit()}>
+                            {t('common.add')}
+                        </Button>
+                    </Flex>
+                }
             >
                 <Form
                     form={form}
@@ -234,7 +248,7 @@ export default function IpFilterPage() {
                         }}
                     </Form.Item>
                 </Form>
-            </Modal>
+            </Drawer>
         </div>
     )
 }
