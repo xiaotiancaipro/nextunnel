@@ -99,10 +99,6 @@ func (a *App) initServices() {
 		Config:   a.Configs.Cert,
 	}
 	clientProxy := services.ClientProxy{Database: a.clients.Database}
-	listener := services.Listener{
-		Config: a.Configs.Server,
-		Logger: a.logger,
-	}
 	proxyBroker := services.ProxyBroker{Logger: a.logger}
 	accessRule := services.AccessRule{Database: a.clients.Database}
 	accessLog := services.AccessLog{
@@ -136,7 +132,6 @@ func (a *App) initServices() {
 		Client:       &client,
 		ClientCert:   &clientCert,
 		ClientProxy:  &clientProxy,
-		Listener:     &listener,
 		ProxyBroker:  &proxyBroker,
 		Session:      &session,
 		Tls:          &tls,
@@ -153,6 +148,7 @@ func (a *App) initApps() error {
 		return fmt.Errorf("initialize API APP error: %w", err)
 	}
 	conn := apps.Conn{
+		Config:   a.Configs,
 		Logger:   a.logger,
 		Services: a.services,
 	}

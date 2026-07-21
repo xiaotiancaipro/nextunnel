@@ -7,7 +7,6 @@ type Services struct {
 	Client       *Client
 	ClientCert   *ClientCert
 	ClientProxy  *ClientProxy
-	Listener     *Listener
 	ProxyBroker  *ProxyBroker
 	Session      *Session
 	Tls          *Tls

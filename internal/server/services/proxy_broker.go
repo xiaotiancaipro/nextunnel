@@ -9,7 +9,7 @@ import (
 	"time"
 
 	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
-	"github.com/xiaotiancaipro/nextunnel/internal/shared/network"
+	sharednetwork "github.com/xiaotiancaipro/nextunnel/internal/shared/network"
 	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
@@ -34,18 +34,16 @@ func (s *ProxyBroker) StartWorkConn(workTLS net.Conn, payload []byte) error {
 		return fmt.Errorf("failed to parse StartWorkConnMsg")
 	}
 	if msg.WorkID == "" {
-		_ = workTLS.Close()
 		s.Logger.Warn("start work conn rejected: work_id is empty")
 		return fmt.Errorf("work_id is empty")
 	}
 	userConn, ok := s.takePendingIfCertMatches(msg.WorkID, workTLS)
 	if !ok {
 		s.Logger.Warn(fmt.Sprintf("no matching pending work or certificate mismatch: work_id=%s", msg.WorkID))
-		_ = workTLS.Close()
 		return fmt.Errorf("unknown or expired work_id, or certificate mismatch")
 	}
 	s.Logger.Info(fmt.Sprintf("work connection bridged: work_id=%s", msg.WorkID))
-	go network.Pipe(userConn, workTLS)
+	go sharednetwork.Pipe(userConn, workTLS)
 	return nil
 }
 
@@ -59,7 +57,6 @@ func (s *ProxyBroker) Register(workID string, userConn net.Conn, certFP [sha256.
 		certFP:   certFP,
 	}
 	s.pendingMu.Unlock()
-
 	time.AfterFunc(pendingWorkTTL, func() {
 		s.pendingMu.Lock()
 		p, ok := s.pendingWork[workID]

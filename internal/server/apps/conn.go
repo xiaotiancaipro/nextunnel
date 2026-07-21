@@ -9,42 +9,52 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xiaotiancaipro/nextunnel/internal/server/configs"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/services"
 	sharedprotocol "github.com/xiaotiancaipro/nextunnel/internal/shared/protocol"
 	"go.uber.org/zap"
 )
 
+const (
+	handshakeTimeout       = 10 * time.Second
+	controlReadIdleTimeout = 90 * time.Second // client heartbeats every 30s
+)
+
 type Conn struct {
+	Config   *configs.Configs
 	Logger   *zap.Logger
 	Services *services.Services
 	listener net.Listener
 	mu       sync.Mutex
+	tlsConf  *tls.Config
 	stopCh   chan struct{}
 	stopOnce sync.Once
 }
 
 func (a *Conn) Init() error {
 	a.stopCh = make(chan struct{})
-	return nil
-}
-
-func (a *Conn) Start() error {
-	listener, err := a.Services.Listener.Listen()
-	if err != nil {
-		return err
-	}
-	a.mu.Lock()
-	a.listener = listener
-	a.mu.Unlock()
-
-	a.Logger.Info("conn server listening on " + listener.Addr().String())
-
 	tlsConfig, err := a.Services.Tls.Init()
 	if err != nil {
 		a.Logger.Error(fmt.Sprintf("failed to initialize tls: %v", err))
 		return err
 	}
+	a.tlsConf = tlsConfig
 	a.Logger.Info("tls config loaded")
+	return nil
+}
+
+func (a *Conn) Start() error {
+
+	addr := fmt.Sprintf(":%d", a.Config.Server.Port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		a.Logger.Error(fmt.Sprintf("failed to listen on %s: %v", addr, err))
+		return fmt.Errorf("failed to listen")
+	}
+	a.mu.Lock()
+	a.listener = listener
+	a.mu.Unlock()
+	a.Logger.Info("conn server listening on " + listener.Addr().String())
 
 	for {
 		connRaw, err := listener.Accept()
@@ -60,7 +70,7 @@ func (a *Conn) Start() error {
 			a.Logger.Error(fmt.Sprintf("failed to accept connection: %v", err))
 			return err
 		}
-		go a.handle(connRaw, tlsConfig)
+		go a.handle(connRaw)
 	}
 
 }
@@ -83,46 +93,61 @@ func (a *Conn) Stop(_ context.Context) error {
 	return closeErr
 }
 
-func (a *Conn) handle(connRaw net.Conn, tlsConfig *tls.Config) {
-	conn, err := a.Services.Listener.Establish(connRaw, tlsConfig)
-	if err != nil {
+func (a *Conn) handle(connRaw net.Conn) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			a.Logger.Error(fmt.Sprintf("panic in conn handler from %s: %v", connRaw.RemoteAddr(), r))
+		}
+	}()
+
+	conn := tls.Server(connRaw, a.tlsConf)
+	owned := false
+	defer func() {
+		if !owned {
+			_ = conn.Close()
+		}
+	}()
+
+	_ = conn.SetDeadline(time.Now().Add(handshakeTimeout))
+	if err := conn.Handshake(); err != nil {
 		a.Logger.Warn(fmt.Sprintf("failed to establish tls connection from %s: %v", connRaw.RemoteAddr(), err))
-		_ = connRaw.Close()
 		return
 	}
-	a.dispatch(conn)
-}
 
-func (a *Conn) dispatch(conn net.Conn) {
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	msgType, payload, err := sharedprotocol.ReadMsg(conn)
 	if err != nil {
 		a.Logger.Warn(fmt.Sprintf("failed to read first message from %s: %v", conn.RemoteAddr(), err))
-		_ = conn.Close()
 		return
 	}
 	_ = conn.SetDeadline(time.Time{})
+
 	switch msgType {
 	case sharedprotocol.MsgLogin:
+		owned = true
 		a.serveControl(conn, payload)
 	case sharedprotocol.MsgStartWorkConn:
 		if err := a.Services.ProxyBroker.StartWorkConn(conn, payload); err != nil {
 			a.Logger.Warn(fmt.Sprintf("failed to start work connection: %v", err))
-			_ = conn.Close()
 			return
 		}
+		owned = true
 	default:
 		a.Logger.Warn(fmt.Sprintf("unknown first message type 0x%02x from %s", msgType, conn.RemoteAddr()))
-		_ = conn.Close()
 	}
+
 }
 
 func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 
+	defer func() { _ = conn.Close() }()
+
+	_ = conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	clientID, runID, err := a.Services.Session.Login(conn, loginPayload)
+	_ = conn.SetDeadline(time.Time{})
 	if err != nil {
 		a.Logger.Warn(fmt.Sprintf("client login failed from %s: %v", conn.RemoteAddr(), err))
-		_ = conn.Close()
 		return
 	}
 
@@ -136,11 +161,14 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 		} else {
 			a.Logger.Info(fmt.Sprintf("client proxies marked offline: client_id=%s", clientID))
 		}
-		_ = conn.Close()
 	}()
 
 	var ctrlWriteMu sync.Mutex
 	for {
+		if err := conn.SetReadDeadline(time.Now().Add(controlReadIdleTimeout)); err != nil {
+			a.Logger.Warn(fmt.Sprintf("failed to set control read deadline: client_id=%s, err=%v", clientID, err))
+			return
+		}
 		msgType, payload, err := sharedprotocol.ReadMsg(conn)
 		if err != nil {
 			a.Logger.Info(fmt.Sprintf("client control disconnected: client_id=%s, run_id=%s, err=%v", clientID, runID, err))
