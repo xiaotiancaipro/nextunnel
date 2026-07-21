@@ -18,12 +18,14 @@ type Session struct {
 	Logger              *zap.Logger
 	Database            *clients.Database
 	ClientService       *Client
+	ClientCertService   *ClientCert
 	ClientProxyService  *ClientProxy
 	ProxyBrokerService  *ProxyBroker
 	AccessFilterService *AccessFilter
 }
 
 func (s *Session) Login(conn net.Conn, payload []byte) (clientID, runID string, err error) {
+
 	var loginMsg sharedprotocol.LoginMsg
 	if err := sharedprotocol.Decode(payload, &loginMsg); err != nil {
 		s.Logger.Error(fmt.Sprintf("failed to parse login msg: %v", err))
@@ -35,10 +37,31 @@ func (s *Session) Login(conn net.Conn, payload []byte) (clientID, runID string, 
 		s.Logger.Warn("client login rejected: client_id is empty")
 		return "", "", fmt.Errorf("client_id is empty")
 	}
-	if _, err := s.ClientService.ResolveClientId(s.Database.DB, loginMsg.Id); err != nil {
+
+	peerFP, err := sharedcerts.ClientLeafCertSHA256(conn)
+	if err != nil {
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client certificate is required"})
+		s.Logger.Warn(fmt.Sprintf("client login rejected: client_id=%s, missing peer certificate: %v", loginMsg.Id, err))
+		return "", "", fmt.Errorf("client certificate is required")
+	}
+
+	clientUUID, err := s.ClientService.ResolveClientId(s.Database.DB, loginMsg.Id)
+	if err != nil {
 		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client_id is invalid"})
 		s.Logger.Warn(fmt.Sprintf("client login rejected: client_id=%s is invalid", loginMsg.Id))
 		return "", "", fmt.Errorf("client_id is invalid")
+	}
+
+	ok, err := s.ClientCertService.OwnsFingerprint(clientUUID, peerFP)
+	if err != nil {
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "failed to verify client certificate"})
+		s.Logger.Error(fmt.Sprintf("client login rejected: client_id=%s, cert lookup failed: %v", loginMsg.Id, err))
+		return "", "", fmt.Errorf("failed to verify client certificate")
+	}
+	if !ok {
+		_ = sharedprotocol.WriteMsg(conn, sharedprotocol.MsgLoginResp, sharedprotocol.LoginRespMsg{Error: "client certificate is not authorized for this client_id"})
+		s.Logger.Warn(fmt.Sprintf("client login rejected: client_id=%s, certificate not bound to client", loginMsg.Id))
+		return "", "", fmt.Errorf("client certificate mismatch")
 	}
 
 	runID = uuid.New().String()
@@ -49,6 +72,7 @@ func (s *Session) Login(conn net.Conn, payload []byte) (clientID, runID string, 
 
 	s.Logger.Info(fmt.Sprintf("client logged in: client_id=%s, run_id=%s, remote=%s", loginMsg.Id, runID, conn.RemoteAddr()))
 	return loginMsg.Id, runID, nil
+
 }
 
 func (s *Session) SetClientProxiesOffline(clientID string) error {

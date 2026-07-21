@@ -117,6 +117,7 @@ func (a *App) initServices() {
 		Logger:              a.logger,
 		Database:            a.clients.Database,
 		ClientService:       &client,
+		ClientCertService:   &clientCert,
 		ClientProxyService:  &clientProxy,
 		ProxyBrokerService:  &proxyBroker,
 		AccessFilterService: &accessFilter,

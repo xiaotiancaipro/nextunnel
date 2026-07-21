@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"os"
@@ -132,6 +134,40 @@ func (s *ClientCert) ReadFiles(clientID uuid.UUID, certID uuid.UUID) ([]byte, []
 		return nil, nil, err
 	}
 	return sharedcerts.ReadCertFiles(absPath)
+}
+
+// OwnsFingerprint reports whether peerFP matches an active, unexpired certificate
+// registered for clientID. Soft-deleted or missing on-disk certs do not match.
+func (s *ClientCert) OwnsFingerprint(clientID uuid.UUID, peerFP [sha256.Size]byte) (bool, error) {
+	var records []models.ClientCert
+	now := time.Now().UTC()
+	if err := s.Database.DB.Where("client_id = ? AND is_delete = ? AND expired_at > ?", clientID, false, now).
+		Find(&records).Error; err != nil {
+		return false, fmt.Errorf("failed to query client certificates: %w", err)
+	}
+
+	matched := 0
+	for i := range records {
+		fp, err := s.fingerprintOf(records[i])
+		if err != nil {
+			continue
+		}
+		matched |= subtle.ConstantTimeCompare(fp[:], peerFP[:])
+	}
+	return matched == 1, nil
+}
+
+func (s *ClientCert) fingerprintOf(record models.ClientCert) ([sha256.Size]byte, error) {
+	var z [sha256.Size]byte
+	absPath, err := sharedcerts.AbsCertPath(s.Config.Dir, record.CertPath)
+	if err != nil {
+		return z, err
+	}
+	certPEM, err := os.ReadFile(filepath.Join(absPath, sharedcerts.FileClientCert))
+	if err != nil {
+		return z, err
+	}
+	return sharedcerts.CertPEMSHA256(certPEM)
 }
 
 func (s *ClientCert) getActive(clientID, certID uuid.UUID) (*models.ClientCert, error) {
