@@ -3,7 +3,7 @@ package configs
 import sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
 
 const (
-	defaultLogFile       = "logs/nextunnel.log"
+	defaultLogFile       = "logs/nextunnel-server.log"
 	defaultLogLevel      = "info"
 	defaultLogMaxsize    = "100MB"
 	defaultLogMaxBackups = 30
