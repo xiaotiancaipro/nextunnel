@@ -11,11 +11,12 @@ import (
 
 func New(version string) *cobra.Command {
 	c := &cobra.Command{
-		Use:     "nextunnel-server",
-		Short:   "nextunnel-server",
-		Version: version,
-		Args:    cobra.ExactArgs(0),
-		Run:     run,
+		Use:          "nextunnel-server",
+		Short:        "nextunnel-server",
+		Version:      version,
+		Args:         cobra.ExactArgs(0),
+		RunE:         run,
+		SilenceUsage: true,
 	}
 	c.PersistentFlags().String("config", cli.ServerDefaultConfigPath, "configuration file path (overrides $"+cli.ServerEnvConfigPath+")")
 	c.AddCommand(client.NewCommand())
@@ -23,9 +24,14 @@ func New(version string) *cobra.Command {
 	return c
 }
 
-func run(cmd *cobra.Command, _ []string) {
-	config := cli.LoadServerConfig(cmd)
+func run(cmd *cobra.Command, _ []string) error {
+	config, err := cli.LoadServerConfig(cmd)
+	if err != nil {
+		return err
+	}
 	app := server.App{Configs: config}
-	sharedcli.ExitOnErr(cmd, app.Init())
-	sharedcli.RunApp(cmd, &app)
+	if err := app.Init(); err != nil {
+		return err
+	}
+	return sharedcli.RunApp(&app)
 }

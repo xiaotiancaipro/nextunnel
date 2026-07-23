@@ -11,6 +11,36 @@ import (
 	sharedlogger "github.com/xiaotiancaipro/nextunnel/internal/shared/logger"
 )
 
+const (
+	ServerDefaultConfigPath = "nextunnel-server.toml"
+	ServerEnvConfigPath     = "NEXTUNNEL_SERVER_CONFIG"
+)
+
+func LoadServerConfig(cmd *cobra.Command) (*configs.Configs, error) {
+	spec := sharedcli.ConfigSpec{
+		DefaultPath: ServerDefaultConfigPath,
+		EnvVar:      ServerEnvConfigPath,
+	}
+	c, err := sharedcli.LoadConfig(cmd, spec, configs.Configs{})
+	if err != nil {
+		return nil, err
+	}
+	checks := []func() error{
+		c.CheckCert,
+		c.CheckDatabase,
+		c.CheckIPLocation,
+		c.CheckLogs,
+		c.CheckServer,
+		c.CheckServerWeb,
+	}
+	for _, check := range checks {
+		if err := check(); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
 func NewClientRegistryFromConfig(cfg *configs.Configs) (*services.Client, error) {
 	database, err := newDatabaseFromConfig(cfg)
 	if err != nil {
@@ -40,19 +70,9 @@ func NewClientRegistryAndCertFromConfig(cfg *configs.Configs) (*services.Client,
 	return &client, &clientCert, nil
 }
 
-// CloseDatabase closes the database connection. Safe for nil and repeated calls.
 func CloseDatabase(db *clients.Database) {
 	if db != nil {
 		_ = db.Close()
-	}
-}
-
-// ExitOnDBErr closes db before exiting, because sharedcli.ExitOnErr uses os.Exit
-// and skips deferred Close.
-func ExitOnDBErr(cmd *cobra.Command, err error, db *clients.Database) {
-	if err != nil {
-		CloseDatabase(db)
-		sharedcli.ExitOnErr(cmd, err)
 	}
 }
 

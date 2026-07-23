@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,27 +15,24 @@ type ConfigSpec struct {
 	EnvVar      string
 }
 
-func LoadConfig[T any](cmd *cobra.Command, spec ConfigSpec, configsType T) *T {
+func LoadConfig[T any](cmd *cobra.Command, spec ConfigSpec, configsType T) (*T, error) {
 
 	path, err := resolveConfigPath(cmd, spec)
 	if err != nil {
-		cmd.PrintErrf("Invalid flags: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("invalid flags: %w", err)
 	}
 
 	file, err := filepath.Abs(path)
 	if err != nil {
-		cmd.PrintErrf("Invalid config path %q: %v\n", path, err)
-		os.Exit(1)
+		return nil, fmt.Errorf("invalid config path %q: %w", path, err)
 	}
 
 	c, err := sharedconfigs.Load(configsType, file)
 	if err != nil {
-		cmd.PrintErrf("Failed to load config, %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	return c
+	return c, nil
 
 }
 

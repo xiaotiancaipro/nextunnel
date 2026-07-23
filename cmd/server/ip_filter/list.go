@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli/ip_filter"
 )
 
 func NewListCommand() *cobra.Command {
@@ -13,28 +13,38 @@ func NewListCommand() *cobra.Command {
 		Use:   "list",
 		Short: "list current IP filtering rules",
 		Args:  cobra.NoArgs,
-		Run:   listRun,
+		RunE:  listRun,
 	}
 	return c
 }
 
-func listRun(cmd *cobra.Command, _ []string) {
+func listRun(cmd *cobra.Command, _ []string) error {
 
-	cfg := cli.LoadServerConfig(cmd)
+	cfg, err := cli.LoadServerConfig(cmd)
+	if err != nil {
+		return err
+	}
+
 	service, err := cli.NewAccessRuleFromConfig(cfg)
-	sharedcli.ExitOnErr(cmd, err)
+	if err != nil {
+		return err
+	}
 	defer cli.CloseDatabase(service.Database)
 
 	rules, err := service.ListRules()
-	cli.ExitOnDBErr(cmd, err, service.Database)
+	if err != nil {
+		return err
+	}
 
 	if len(rules) == 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no ip filter rules")
-		return
+		return nil
 	}
 
 	for i := range rules {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), cli.FormatAccessRule(rules[i]))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ip_filter.FormatAccessRule(rules[i]))
 	}
+
+	return nil
 
 }

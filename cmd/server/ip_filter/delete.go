@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
-	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli/ip_filter"
 )
 
 func NewDeleteCommand() *cobra.Command {
@@ -13,29 +13,41 @@ func NewDeleteCommand() *cobra.Command {
 		Use:   "delete [--allow | --block] [--ip | --country | --region | --city | --all | --local | --remote] [value]",
 		Short: "delete IP filtering rules",
 		Args:  cobra.MaximumNArgs(1),
-		Run:   deleteRun,
+		RunE:  deleteRun,
 	}
-	cli.SetFlags(c)
+	ip_filter.SetFlags(c)
 	return c
 }
 
-func deleteRun(cmd *cobra.Command, args []string) {
+func deleteRun(cmd *cobra.Command, args []string) error {
 
-	status, field, value, err := cli.ParseIPFilterFlags(cmd, args)
-	sharedcli.ExitOnErr(cmd, err)
-
-	cfg := cli.LoadServerConfig(cmd)
-	service, err := cli.NewAccessRuleFromConfig(cfg)
-	sharedcli.ExitOnErr(cmd, err)
-	defer cli.CloseDatabase(service.Database)
-
-	target, format, msgArgs, err := cli.BuildRuleTarget(service, field, value)
-	cli.ExitOnDBErr(cmd, err, service.Database)
-
-	if err := service.DeleteRule(target, status); err != nil {
-		cli.ExitOnDBErr(cmd, err, service.Database)
+	status, field, value, err := ip_filter.ParseIPFilterFlags(cmd, args)
+	if err != nil {
+		return err
 	}
 
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "deleted "+format+"\n", append([]any{cli.RuleAction(status)}, msgArgs...)...)
+	cfg, err := cli.LoadServerConfig(cmd)
+	if err != nil {
+		return err
+	}
+
+	service, err := cli.NewAccessRuleFromConfig(cfg)
+	if err != nil {
+		return err
+	}
+	defer cli.CloseDatabase(service.Database)
+
+	target, format, msgArgs, err := ip_filter.BuildRuleTarget(service, field, value)
+	if err != nil {
+		return err
+	}
+
+	if err := service.DeleteRule(target, status); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "deleted "+format+"\n", append([]any{ip_filter.RuleAction(status)}, msgArgs...)...)
+
+	return nil
 
 }

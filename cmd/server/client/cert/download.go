@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xiaotiancaipro/nextunnel/internal/server/cli"
+	"github.com/xiaotiancaipro/nextunnel/internal/server/cli/client/cert"
 	sharedcerts "github.com/xiaotiancaipro/nextunnel/internal/shared/certs"
-	sharedcli "github.com/xiaotiancaipro/nextunnel/internal/shared/cli"
 	sharedstring "github.com/xiaotiancaipro/nextunnel/internal/shared/string"
 )
 
@@ -18,44 +18,57 @@ func NewDownloadCommand() *cobra.Command {
 		Use:   "download [name] [cert-id]",
 		Short: "download a client TLS certificate to a directory",
 		Args:  cobra.ExactArgs(2),
-		Run:   downloadRun,
+		RunE:  downloadRun,
 	}
 	c.Flags().StringVar(&dir, "dir", "", "output directory (default: stored certificate directory)")
 	return c
 }
 
-func downloadRun(cmd *cobra.Command, args []string) {
+func downloadRun(cmd *cobra.Command, args []string) error {
 
 	clientName := strings.TrimSpace(args[0])
 	if clientName == "" {
-		sharedcli.ExitOnErr(cmd, fmt.Errorf("client name is required"))
+		return fmt.Errorf("client name is required")
 	}
 
-	cfg := cli.LoadServerConfig(cmd)
+	cfg, err := cli.LoadServerConfig(cmd)
+	if err != nil {
+		return err
+	}
+
 	registry, certService, err := cli.NewClientRegistryAndCertFromConfig(cfg)
-	sharedcli.ExitOnErr(cmd, err)
+	if err != nil {
+		return err
+	}
 	defer cli.CloseDatabase(registry.Database)
 
 	client, err := registry.GetByName(clientName)
-	cli.ExitOnDBErr(cmd, err, registry.Database)
+	if err != nil {
+		return err
+	}
 
 	certID, err := sharedstring.ParseUUID(args[1])
-	cli.ExitOnDBErr(cmd, err, registry.Database)
+	if err != nil {
+		return err
+	}
 
 	certPEM, keyPEM, err := certService.ReadFiles(client.Id, certID)
-	cli.ExitOnDBErr(cmd, err, registry.Database)
+	if err != nil {
+		return err
+	}
 
 	outDir := strings.TrimSpace(dir)
 	if outDir == "" {
-		outDir, err = cli.CertOutputDir(cfg, clientName, certID.String())
-		cli.ExitOnDBErr(cmd, err, registry.Database)
+		outDir, err = cert.OutputDir(cfg, clientName, certID.String())
 	} else {
-		outDir, err = cli.EnsureOutputDir(outDir)
-		cli.ExitOnDBErr(cmd, err, registry.Database)
+		outDir, err = cert.EnsureOutputDir(outDir)
+	}
+	if err != nil {
+		return err
 	}
 
 	if err := sharedcerts.WriteClientPEMToDir(outDir, certPEM, keyPEM); err != nil {
-		cli.ExitOnDBErr(cmd, err, registry.Database)
+		return err
 	}
 
 	_, _ = fmt.Fprintf(
@@ -66,5 +79,7 @@ func downloadRun(cmd *cobra.Command, args []string) {
 		certID,
 		outDir,
 	)
+
+	return nil
 
 }

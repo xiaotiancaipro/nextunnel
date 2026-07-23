@@ -6,7 +6,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-func Load[T any](value T, file string) (*T, error) {
+func Load[T any](_ T, file string) (*T, error) {
 
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		return nil, err

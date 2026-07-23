@@ -1,4 +1,4 @@
-package cli
+package ip_filter
 
 import (
 	"fmt"

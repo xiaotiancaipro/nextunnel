@@ -11,15 +11,25 @@ const (
 	ClientEnvConfigPath     = "NEXTUNNEL_CLIENT_CONFIG"
 )
 
-func LoadClientConfig(cmd *cobra.Command) *configs.Configs {
+func LoadClientConfig(cmd *cobra.Command) (*configs.Configs, error) {
 	spec := sharedcli.ConfigSpec{
 		DefaultPath: ClientDefaultConfigPath,
 		EnvVar:      ClientEnvConfigPath,
 	}
-	c := sharedcli.LoadConfig(cmd, spec, configs.Configs{})
-	sharedcli.ExitOnErr(cmd, c.CheckCert())
-	sharedcli.ExitOnErr(cmd, c.CheckClient())
-	sharedcli.ExitOnErr(cmd, c.CheckLogs())
-	sharedcli.ExitOnErr(cmd, c.CheckServer())
-	return c
+	c, err := sharedcli.LoadConfig(cmd, spec, configs.Configs{})
+	if err != nil {
+		return nil, err
+	}
+	checks := []func() error{
+		c.CheckCert,
+		c.CheckClient,
+		c.CheckLogs,
+		c.CheckServer,
+	}
+	for _, check := range checks {
+		if err := check(); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
 }

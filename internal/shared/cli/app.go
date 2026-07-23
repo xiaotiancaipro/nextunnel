@@ -4,8 +4,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
-	"github.com/spf13/cobra"
 )
 
 type App interface {
@@ -14,7 +12,7 @@ type App interface {
 	Stop()
 }
 
-func RunApp(cmd *cobra.Command, app App) {
+func RunApp(app App) error {
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -27,12 +25,11 @@ func RunApp(cmd *cobra.Command, app App) {
 	select {
 	case err := <-errCh:
 		signal.Stop(sigCh)
-		ExitOnErr(cmd, err)
+		return err
 	case <-sigCh:
 		signal.Stop(sigCh)
 		app.Stop()
-		err := <-errCh
-		ExitOnErr(cmd, err)
+		return <-errCh
 	}
 
 }

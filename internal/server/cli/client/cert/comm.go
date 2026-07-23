@@ -1,4 +1,4 @@
-package cli
+package cert
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ func FormatExpires(expiresAt *time.Time) string {
 	return sharedtimezone.FormatUTC(*expiresAt)
 }
 
-func CertOutputDir(cfg *configs.Configs, clientName, certID string) (string, error) {
+func OutputDir(cfg *configs.Configs, clientName, certID string) (string, error) {
 	recordPath := sharedcerts.RelClientCertPath(clientName, certID)
 	return sharedcerts.AbsCertPath(cfg.Cert.Dir, recordPath)
 }
