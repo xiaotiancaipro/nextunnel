@@ -23,7 +23,7 @@ Nextunnel keeps the project overview in the root README files and places compone
 
 - Server builds need Go 1.26+ and Node.js/npm (`make build-server` runs `web/server` via npm, then embeds the assets).
 - Client builds need Go only.
-- `make build` writes versioned binaries under `bin/` using the root `VERSION` file (currently `v1.0.0-alpha`).
+- `make build` writes versioned binaries under `bin/` using the root `VERSION` file.
 
 ## Behavior Notes Aligned with Current Code
 
