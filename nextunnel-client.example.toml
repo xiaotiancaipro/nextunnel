@@ -17,9 +17,6 @@ maxSize = "100MB"
 maxBackups = 30
 maxAge = 7
 
-[timezone]
-location = "Asia/Shanghai"
-
 [[proxies]]
 name = "ssh"
 type = "tcp"
