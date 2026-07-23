@@ -32,7 +32,7 @@ func (a *Web) Init() error {
 }
 
 func (a *Web) Start() error {
-	addr := fmt.Sprintf("%s:%d", a.Config.ServerWeb.Host, a.Config.ServerWeb.PortOrDefault())
+	addr := fmt.Sprintf("%s:%d", a.Config.ServerWeb.HostOrDefault(), a.Config.ServerWeb.PortOrDefault())
 	a.httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           a.engine,

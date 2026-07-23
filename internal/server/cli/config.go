@@ -16,5 +16,13 @@ func LoadServerConfig(cmd *cobra.Command) *configs.Configs {
 		DefaultPath: ServerDefaultConfigPath,
 		EnvVar:      ServerEnvConfigPath,
 	}
-	return sharedcli.LoadConfig(cmd, spec, configs.Configs{})
+	c := sharedcli.LoadConfig(cmd, spec, configs.Configs{})
+	sharedcli.ExitOnErr(cmd, c.CheckCert())
+	sharedcli.ExitOnErr(cmd, c.CheckDatabase())
+	sharedcli.ExitOnErr(cmd, c.CheckIPLocation())
+	sharedcli.ExitOnErr(cmd, c.CheckLogs())
+	sharedcli.ExitOnErr(cmd, c.CheckServer())
+	sharedcli.ExitOnErr(cmd, c.CheckServerWeb())
+	sharedcli.ExitOnErr(cmd, c.CheckTimezone())
+	return c
 }
