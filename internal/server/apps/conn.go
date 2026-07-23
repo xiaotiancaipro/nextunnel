@@ -45,7 +45,7 @@ func (a *Conn) Init() error {
 
 func (a *Conn) Start() error {
 
-	addr := fmt.Sprintf(":%d", a.Config.Server.PortOrDefault())
+	addr := fmt.Sprintf(":%d", a.Config.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		a.Logger.Error(fmt.Sprintf("failed to listen on %s: %v", addr, err))

@@ -63,7 +63,7 @@ func (c *Database) connect() (*gorm.DB, error) {
 		c.Config.Username,
 		c.Config.Password,
 		c.Config.Database,
-		c.Config.SSLModeOrDefault(),
+		c.Config.SSLMode,
 	)
 	conf := gorm.Config{
 		Logger:  sharedlogger.NewGormLogger(c.Logger, 0),

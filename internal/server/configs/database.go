@@ -35,10 +35,3 @@ func (c *Configs) CheckDatabase() error {
 	}
 	return nil
 }
-
-func (d *Database) SSLModeOrDefault() string {
-	if d == nil || d.SSLMode == "" {
-		return "disable"
-	}
-	return d.SSLMode
-}

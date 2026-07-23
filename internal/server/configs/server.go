@@ -15,10 +15,3 @@ func (c *Configs) CheckServer() error {
 	}
 	return nil
 }
-
-func (s *Server) PortOrDefault() int {
-	if s == nil || s.Port <= 0 {
-		return defaultServerPort
-	}
-	return s.Port
-}

@@ -22,17 +22,3 @@ func (c *Configs) CheckServerWeb() error {
 	}
 	return nil
 }
-
-func (w *ServerWeb) HostOrDefault() string {
-	if w == nil || w.Host == "" {
-		return defaultServerWebHost
-	}
-	return w.Host
-}
-
-func (w *ServerWeb) PortOrDefault() int {
-	if w == nil || w.Port <= 0 {
-		return defaultServerWebPort
-	}
-	return w.Port
-}
