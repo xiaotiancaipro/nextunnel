@@ -6,9 +6,9 @@
 
 - 使用 TLS 1.2+，并通过 `RequireAndVerifyClientCert` 校验客户端证书。
 - 将每次客户端登录绑定到该客户端 ID 已登记的证书指纹。
-- 在 PostgreSQL 中保存客户端、证书、代理、访问规则和访问日志。
+- 在 PostgreSQL 中保存客户端、证书、代理、访问规则和访问日志（库内时间统一为 UTC）。
 - 根据客户端提交的代理配置监听远程端口。
-- 可选地通过小甜菜科技 IP API 查询归属地，并用于国家、省/区域、城市规则。
+- 通过小甜菜科技 IP API 查询归属地，用于国家、省/区域、城市规则。
 - 在 `[server_web]` 上提供内嵌管理 UI 与 `/api` 接口。
 
 ```mermaid
@@ -30,7 +30,7 @@ flowchart LR
 | Go 1.26+ | 本地编译时需要。 |
 | Node.js / npm | 构建内嵌 Web UI（`web/server`）时需要。 |
 | PostgreSQL | 保存客户端、证书、代理、访问规则和访问日志。 |
-| IP 归属地 API Key | 可选配置 `[ip_location].api_key`；未配置时地理规则没有归属地数据。 |
+| IP 归属地 API Key | **必填**。配置 `[ip_location].api_key`（小甜菜科技 SDK）；空值无法启动。 |
 
 ## 快速开始
 
@@ -41,7 +41,7 @@ cp example.env .env
 docker compose -f docker-compose.middleware.yaml up -d
 cd ../..
 
-# 2. 复制并编辑服务端配置。
+# 2. 复制并编辑服务端配置（务必填写 [ip_location].api_key）。
 cp nextunnel-server.example.toml nextunnel-server.toml
 
 # 3. 编译并启动服务端（会自动执行 npm 构建）。
@@ -49,9 +49,11 @@ make build-server
 ./bin/nextunnel-server-$(cat VERSION) --config nextunnel-server.toml
 ```
 
-启动后，服务端会加载配置、连接 PostgreSQL、执行迁移、初始化 IP 归属地客户端、监听 `0.0.0.0:<server.port>`、在 `[server_web].host:<port>` 启动 Web，并确保 `[cert].dir` 下存在 `ca.crt`、`ca.key`、`server.crt`、`server.key`。
+启动后，服务端会加载并校验配置、连接 PostgreSQL（DSN 使用 `timezone=UTC`）、执行迁移、初始化 IP 归属地客户端、监听 `0.0.0.0:<server.port>`、在 `[server_web].host:<port>` 启动 Web，并确保 `[cert].dir` 下存在 `ca.crt`、`ca.key`、`server.crt`、`server.key`（缺失时自动生成）。
 
 使用示例默认配置时，可打开 `http://127.0.0.1:25001` 访问控制台。
+
+日志同时写入文件与 stdout；日志时间戳与按日轮转使用**系统本地时区**（不再提供 `[timezone]` 配置项）。数据库与 API/CLI 展示时间使用 UTC。
 
 ## 接入客户端
 
@@ -97,7 +99,7 @@ remote_port = 5000
 
 客户端连接后，服务端会把它的 `[[proxies]]` 同步到 PostgreSQL。客户端在线时代理标记为在线，断开后标记为离线。如果客户端配置了端口范围，每个 `remote_port` 都必须在该范围内。
 
-登录时还要求所出示的客户端证书指纹属于所声明的 `[client].id`。即使证书由本 CA 签发，也不能冒用其他客户端 ID。
+登录时还要求所出示的客户端证书指纹属于所声明的 `[client].id`。`[client].id` 可为客户端 **name 或 UUID**。即使证书由本 CA 签发，也不能冒用其他客户端 ID。
 
 ## CLI 参考
 
@@ -117,13 +119,20 @@ nextunnel-server ip-filter delete [--allow | --block] [--ip | --country | --regi
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--config` | `nextunnel-server.toml` | 配置文件路径；未指定时加载器可回退到 `NEXTUNNEL_SERVER_CONFIG`。 |
+| `--config` | `nextunnel-server.toml` | 配置文件路径。显式指定时优先生效；未指定时回退到 `NEXTUNNEL_SERVER_CONFIG`，再否则用默认路径。 |
 | `-h`, `--help` | - | 显示帮助。 |
 | `-v`, `--version` | - | 显示版本。 |
 
+说明：
+
+- `--port-start` / `--port-end` 必须成对出现，范围 `1–65535`；都省略表示不限制端口。
+- `--expires-at` 为空表示永不过期；有值时按 RFC3339 解析并转为 UTC。
+- `ip-filter add|delete` 必须恰好指定一个 `--allow`/`--block`，以及恰好一个匹配类型；`--all` / `--local` / `--remote` 不能带 value。
+- 删除客户端记录目前仅提供 HTTP API（`DELETE /api/clients/{name}`），CLI 无对应子命令。
+
 ## 访问规则
 
-规则存储在 PostgreSQL 中，服务端运行时即时生效，无需重启。
+规则存储在 PostgreSQL 中。服务端内存缓存约 **10 秒**，因此新规则通常在数秒内生效，无需重启进程。
 
 ```bash
 nextunnel-server ip-filter add --allow --ip 203.0.113.10
@@ -141,8 +150,9 @@ nextunnel-server ip-filter add --block --remote
 | 默认策略 | 没有规则匹配时允许连接。 |
 | 同级规则 | 精确度相同时，允许规则优先于阻断规则。 |
 | 优先级 | IP > 城市 > 省/区域 > 国家 > 本地/远程 > 全部。 |
-| 地域名称 | 国家、省/区域和城市值必须与当前 IP API 返回结果一致。 |
-| API Key | 未配置 `[ip_location].api_key` 时归属地查询为空，地理规则基本不会命中。 |
+| 地域名称 | 国家、省/区域和城市值必须与 IP API 返回结果一致（`region` 对应 API 的 Province）。 |
+| 本地流量 | `IsPrivate` / `IsLoopback` / `IsLinkLocalUnicast` 视为本地，不查归属地。 |
+| API Key | `[ip_location].api_key` 为启动必填项；查询失败时该次归属地为空，地理规则不会命中。 |
 
 ## 配置说明
 
@@ -150,18 +160,19 @@ nextunnel-server ip-filter add --block --remote
 
 | 配置段 | 字段 | 说明 |
 | --- | --- | --- |
-| `[server]` | `port` | 公网控制/监听端口；隧道监听绑定所有网卡。 |
-| `[server_web]` | `host` / `port` | 管理 UI 与 HTTP API 监听地址。默认端口 `25001`。示例默认为 `127.0.0.1`。 |
-| `[cert]` | `host` | 自动生成证书时写入 SAN 的主机名或 IP。 |
-| `[cert]` | `dir` | 证书目录，用于 CA、服务端证书和生成的客户端证书。 |
-| `[database]` | `host` / `port` / `username` / `password` / `db` / `sslmode` | PostgreSQL 连接配置。 |
-| `[ip_location]` | `api_key` | 可选，IP 归属地查询 API Key。 |
-| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | 日志输出与保留策略。 |
-| `[timezone]` | `location` | IANA 时区；未配置时默认 `Asia/Shanghai`。 |
+| `[server]` | `port` | 公网控制/监听端口；隧道监听绑定所有网卡。未配置或 ≤0 时默认 `25930`。 |
+| `[server_web]` | `host` / `port` | 管理 UI 与 HTTP API 监听地址。默认 `127.0.0.1:25001`。 |
+| `[cert]` | `host` | **必填**。自动生成证书时写入 SAN 的主机名或 IP（另含 `localhost`、`127.0.0.1`、`::1`）。 |
+| `[cert]` | `dir` | **必填**。证书目录，用于 CA、服务端证书和生成的客户端证书。 |
+| `[database]` | `host` / `port` / `username` / `password` / `db` / `sslmode` | **全部必填**。PostgreSQL 连接配置；`sslmode` 无默认值。 |
+| `[ip_location]` | `api_key` | **必填**。小甜菜科技 IP 归属地 API Key。 |
+| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | 日志输出与保留策略。默认文件路径为 `logs/nextunnel.log`；`level` 仅允许 `info` / `warn` / `error`；`maxSize` 默认 `100MB`，`maxBackups` 默认 `30`，`maxAge` 默认 `7`。 |
+
+未提供可配置时区。库内与 API 时间为 UTC；日志展示与按日轮转跟随系统本地时区。
 
 ## Docker
 
-服务端 Compose 文件位于 `docker/server`。服务端容器使用 host 网络，控制口、Web 口与代理口均由 TOML 配置决定。
+服务端 Compose 文件位于 `docker/server`。服务端容器使用 host 网络，控制口、Web 口与代理口均由 TOML 配置决定。镜像内含 `tzdata`，可通过容器 `TZ` 影响日志时区。
 
 ```bash
 cd docker/server
@@ -169,7 +180,8 @@ cp example.env .env
 
 # 先编辑 volumes/nextunnel/config/nextunnel-server.toml。
 # Docker 下请将 [cert].dir 设为 "/etc/nextunnel/certs"，
-# 并将 [logs].file 设为 "/var/log/nextunnel/nextunnel-server.log"。
+# 将 [logs].file 设为 "/var/log/nextunnel/nextunnel-server.log"，
+# 并填写 [ip_location].api_key。
 docker compose up -d
 
 # 或只启动 PostgreSQL。
@@ -192,6 +204,8 @@ docker compose -f docker-compose.middleware.yaml up -d
 - `/api` 管理接口
 
 HTTP 层没有内置认证。请将 `[server_web].host` 绑定到回环或私网地址，或放在防火墙 / 带认证的反向代理之后。示例配置绑定 `127.0.0.1:25001`。
+
+API 时间戳格式为 UTC：`2006-01-02T15:04:05Z`。
 
 | 接口 | 作用 |
 | --- | --- |

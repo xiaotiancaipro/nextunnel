@@ -18,7 +18,7 @@ db = "nextunnel"
 sslmode = "disable"
 
 [ip_location]
-api_key = ""
+api_key = "YOUR_API_KEY" # Required. Xiaotiancai Tech IP location API key
 
 [logs]
 file = "logs/nextunnel-server.log" # If using Docker to start, this parameter must be in /var/log/nextunnel/nextunnel-server.log

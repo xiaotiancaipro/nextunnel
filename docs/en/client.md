@@ -9,8 +9,8 @@
 - Register TCP proxies from `[[proxies]]`.
 - Open work connections when the server receives traffic on a remote proxy port.
 - Forward each work connection to `local_ip:local_port`.
-- Reconnect automatically with exponential backoff from 2 seconds up to 30 seconds.
-- Send heartbeats every 30 seconds on the control channel.
+- Reconnect automatically with exponential backoff from 2 seconds up to 30 seconds; the delay resets to 2 seconds after a successful session setup.
+- Send heartbeats every 30 seconds on the control channel; control-channel read idle timeout is 90 seconds.
 
 ```mermaid
 flowchart LR
@@ -25,7 +25,7 @@ flowchart LR
 | Dependency | Notes |
 | --- | --- |
 | Go 1.26+ | Required only when building locally. |
-| Client ID | Create it on the server with the web console or `nextunnel-server client create`. |
+| Client ID | Create it on the server with the web console or `nextunnel-server client create`. The config value may be the client **name or UUID**. |
 | mTLS files | `ca.crt`, `client.crt`, and `client.key` generated or downloaded from the server. |
 
 ## Quick Start
@@ -73,14 +73,15 @@ remote_port = 5000
 | Section | Field | Description |
 | --- | --- | --- |
 | `[server]` | `host` / `port` | Server control endpoint. |
-| `[client]` | `id` | Registered client name. Must not be empty, and must match the client certificate. |
-| `[cert]` | `ca_file` / `cert_file` / `key_file` | CA and client certificate files for mTLS. |
-| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | Log output and retention settings. |
-| `[timezone]` | `location` | IANA timezone, defaulting to `Asia/Shanghai` when unset. |
+| `[client]` | `id` | Registered client name or UUID. Must not be empty, and must match the client certificate. |
+| `[cert]` | `ca_file` / `cert_file` / `key_file` | CA and client certificate files for mTLS; both `cert_file` and `key_file` are required. |
+| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | Log output and retention. `level` must be `info`, `warn`, or `error`; empty `maxSize` defaults to `100MB`; `0` for `maxBackups` / `maxAge` disables cleanup on that dimension. |
 | `[[proxies]]` | `name` | Proxy name, referenced by the server when opening work connections. |
-| `[[proxies]]` | `type` | Proxy type. Currently `tcp`. |
+| `[[proxies]]` | `type` | Proxy type. The server currently accepts only `tcp`. |
 | `[[proxies]]` | `local_ip` / `local_port` | Local service address reached from the client host/container. |
 | `[[proxies]]` | `remote_port` | Public server-side port for this proxy. |
+
+The server also enforces non-empty `name` / `local_ip`, ports in `1–65535`, unique `name` and `remote_port` per client, and that `remote_port` falls inside any assigned port range.
 
 ## Proxy Example: SSH
 
@@ -105,15 +106,15 @@ nextunnel-client [--config <path>]
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--config`, `-c` | `nextunnel-client.toml` | Configuration file path. If not set, the loader can fall back to `NEXTUNNEL_CLIENT_CONFIG`. |
+| `--config`, `-c` | `nextunnel-client.toml` | Configuration file path. An explicit flag wins; otherwise `$NEXTUNNEL_CLIENT_CONFIG`, then the default path. |
 | `-h`, `--help` | - | Show help. |
 | `-v`, `--version` | - | Show version. |
 
-The client runs in the foreground. Press `Ctrl+C` or send `SIGTERM` for graceful shutdown.
+The client runs in the foreground. Press `Ctrl+C` or send `SIGTERM` for graceful shutdown (about 5 seconds to close connections).
 
 ## Docker
 
-The client Compose file lives under `docker/client` and uses host networking so `local_ip` can reach services on the host.
+The client Compose file lives under `docker/client` and uses host networking so `local_ip` can reach services on the host. The image includes `tzdata`; set container `TZ` if you need a specific log timezone.
 
 ```bash
 cd docker/client

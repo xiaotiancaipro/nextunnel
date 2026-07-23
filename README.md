@@ -36,9 +36,9 @@ flowchart LR
 - **TCP reverse proxying**: expose private TCP services such as SSH, databases, or development services through server-side ports.
 - **mTLS-first access**: the server bootstraps CA/server certificates, verifies every client certificate, and rejects logins whose certificate does not belong to the claimed client ID.
 - **Client onboarding**: register clients, assign optional remote port ranges, create/list/download/delete client certificates.
-- **Access control**: allow or block by IP, country, region, city, local traffic, remote traffic, or all traffic.
-- **Connection records**: store proxy state and access logs in PostgreSQL.
-- **Resilient clients**: reconnect automatically with 2s to 30s exponential backoff and heartbeat-based control channels.
+- **Access control**: allow or block by IP, country, region, city, local traffic, remote traffic, or all traffic (requires a Xiaotiancai Tech IP location API key).
+- **Connection records**: store proxy state and access logs in PostgreSQL (UTC); log files use the system local timezone.
+- **Resilient clients**: reconnect automatically with 2s to 30s exponential backoff and 30s heartbeat control channels.
 - **Embedded web console**: manage clients, certificates, and IP filters from a built-in UI and HTTP API on `[server_web]`.
 
 ## Quick Start
@@ -54,7 +54,7 @@ make build
 #   bin/nextunnel-client-v1.0.0-alpha
 ```
 
-1. Start PostgreSQL and `nextunnel-server`.
+1. Start PostgreSQL and prepare `nextunnel-server.toml` (fill in `[ip_location].api_key`, then start `nextunnel-server`).
 2. Open the web console (default `http://127.0.0.1:25001`) or use the CLI.
 3. Create a client and a client certificate, then download `ca.crt`, `client.crt`, and `client.key`.
 4. Copy those files to the client host.

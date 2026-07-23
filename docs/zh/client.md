@@ -9,8 +9,8 @@
 - 根据 `[[proxies]]` 注册 TCP 代理。
 - 当服务端远程端口收到连接时，按需打开工作连接。
 - 将每条工作连接转发到 `local_ip:local_port`。
-- 断线后自动重连，退避间隔从 2 秒增长到 30 秒。
-- 控制通道每 30 秒发送一次心跳。
+- 断线后自动重连，退避间隔从 2 秒增长到 30 秒；会话建立成功后重置为 2 秒。
+- 控制通道每 30 秒发送一次心跳；读空闲超时为 90 秒。
 
 ```mermaid
 flowchart LR
@@ -25,7 +25,7 @@ flowchart LR
 | 依赖 | 说明 |
 | --- | --- |
 | Go 1.26+ | 仅本地编译时需要。 |
-| 客户端 ID | 在服务端通过 Web 控制台或 `nextunnel-server client create` 创建。 |
+| 客户端 ID | 在服务端通过 Web 控制台或 `nextunnel-server client create` 创建；配置里可用 **name 或 UUID**。 |
 | mTLS 文件 | 从服务端生成或下载的 `ca.crt`、`client.crt`、`client.key`。 |
 
 ## 快速开始
@@ -73,14 +73,15 @@ remote_port = 5000
 | 配置段 | 字段 | 说明 |
 | --- | --- | --- |
 | `[server]` | `host` / `port` | 服务端控制通道地址。 |
-| `[client]` | `id` | 已注册的客户端名称，不能为空，且必须与客户端证书匹配。 |
-| `[cert]` | `ca_file` / `cert_file` / `key_file` | mTLS 所需 CA 和客户端证书文件。 |
-| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | 日志输出与保留策略。 |
-| `[timezone]` | `location` | IANA 时区；未配置时默认 `Asia/Shanghai`。 |
+| `[client]` | `id` | 已注册的客户端 name 或 UUID，不能为空，且必须与客户端证书匹配。 |
+| `[cert]` | `ca_file` / `cert_file` / `key_file` | mTLS 所需 CA 和客户端证书文件；`cert_file` 与 `key_file` 均不能为空。 |
+| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | 日志输出与保留策略。`level` 仅允许 `info` / `warn` / `error`；`maxSize` 空值按 `100MB`；`maxBackups` / `maxAge` 为 `0` 时表示不按该维度清理。 |
 | `[[proxies]]` | `name` | 代理名称，服务端创建工作连接时会引用。 |
-| `[[proxies]]` | `type` | 代理类型，当前支持 `tcp`。 |
+| `[[proxies]]` | `type` | 代理类型；当前仅服务端接受 `tcp`。 |
 | `[[proxies]]` | `local_ip` / `local_port` | 客户端主机或容器可访问的本地服务地址。 |
 | `[[proxies]]` | `remote_port` | 服务端公网侧监听端口。 |
+
+服务端还会校验：`name` / `local_ip` 非空，端口落在 `1–65535`，同一客户端下 `name` 与 `remote_port` 不重复，且 `remote_port` 落在分配的端口范围内（若已配置范围）。
 
 ## 代理示例：SSH
 
@@ -105,15 +106,15 @@ nextunnel-client [--config <path>]
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--config`, `-c` | `nextunnel-client.toml` | 配置文件路径；未指定时可回退到 `NEXTUNNEL_CLIENT_CONFIG`。 |
+| `--config`, `-c` | `nextunnel-client.toml` | 配置文件路径。显式指定时优先生效；未指定时回退到 `NEXTUNNEL_CLIENT_CONFIG`，再否则用默认路径。 |
 | `-h`, `--help` | - | 显示帮助。 |
 | `-v`, `--version` | - | 显示版本。 |
 
-客户端以前台方式运行；按 `Ctrl+C` 或发送 `SIGTERM` 可优雅退出。
+客户端以前台方式运行；按 `Ctrl+C` 或发送 `SIGTERM` 可优雅退出（约 5 秒超时关闭连接）。
 
 ## Docker
 
-客户端 Compose 文件位于 `docker/client`，并使用 host 网络模式，便于 `local_ip` 访问宿主机上的服务。
+客户端 Compose 文件位于 `docker/client`，并使用 host 网络模式，便于 `local_ip` 访问宿主机上的服务。镜像内含 `tzdata`，可通过容器 `TZ` 影响日志时区。
 
 ```bash
 cd docker/client

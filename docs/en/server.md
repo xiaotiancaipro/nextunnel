@@ -6,9 +6,9 @@
 
 - Terminate TLS 1.2+ with `RequireAndVerifyClientCert`.
 - Bind each client login to the certificate fingerprint registered for that client ID.
-- Create and store client identities, port ranges, certificates, proxies, access rules, and access logs in PostgreSQL.
+- Create and store client identities, port ranges, certificates, proxies, access rules, and access logs in PostgreSQL (timestamps stored in UTC).
 - Listen on remote proxy ports submitted by connected clients.
-- Optionally query IP location through the Xiaotiancai API for country, region, and city rules.
+- Query IP location through the Xiaotiancai Tech API for country, region, and city rules.
 - Serve the embedded management UI and `/api` endpoints on `[server_web]`.
 
 ```mermaid
@@ -30,7 +30,7 @@ flowchart LR
 | Go 1.26+ | Required when building locally. |
 | Node.js / npm | Required to build the embedded web UI (`web/server`). |
 | PostgreSQL | Stores clients, certificates, proxies, access rules, and access logs. |
-| IP location API key | Optional `[ip_location].api_key`. Without it, geo-based rules have no location data. |
+| IP location API key | **Required.** Set `[ip_location].api_key` (Xiaotiancai Tech SDK). An empty value prevents startup. |
 
 ## Quick Start
 
@@ -41,7 +41,7 @@ cp example.env .env
 docker compose -f docker-compose.middleware.yaml up -d
 cd ../..
 
-# 2. Copy and edit the server config.
+# 2. Copy and edit the server config (fill in [ip_location].api_key).
 cp nextunnel-server.example.toml nextunnel-server.toml
 
 # 3. Build and start the server (npm build runs automatically).
@@ -49,9 +49,11 @@ make build-server
 ./bin/nextunnel-server-$(cat VERSION) --config nextunnel-server.toml
 ```
 
-On startup, the server loads configuration, connects to PostgreSQL, runs migrations, initializes the IP location client, listens on `0.0.0.0:<server.port>`, starts the web listener on `[server_web].host:<port>`, and ensures `ca.crt`, `ca.key`, `server.crt`, and `server.key` exist under `[cert].dir`.
+On startup, the server loads and validates configuration, connects to PostgreSQL (DSN uses `timezone=UTC`), runs migrations, initializes the IP location client, listens on `0.0.0.0:<server.port>`, starts the web listener on `[server_web].host:<port>`, and ensures `ca.crt`, `ca.key`, `server.crt`, and `server.key` exist under `[cert].dir` (auto-generated when missing).
 
 Open the console at `http://127.0.0.1:25001` when using the example defaults.
+
+Logs are written to both the configured file and stdout. Log timestamps and daily rotation use the **system local timezone** (there is no `[timezone]` config). Database and API/CLI display times use UTC.
 
 ## Client Onboarding
 
@@ -97,7 +99,7 @@ remote_port = 5000
 
 When the client connects, the server syncs its `[[proxies]]` into PostgreSQL. A proxy is marked online while the client is connected and offline after disconnect. If the client has a port range, every `remote_port` must fall inside that range.
 
-Login also requires that the presented client certificate fingerprint belongs to the claimed `[client].id`. A CA-trusted certificate issued for another client cannot impersonate this ID.
+Login also requires that the presented client certificate fingerprint belongs to the claimed `[client].id`. The ID may be the client **name or UUID**. A CA-trusted certificate issued for another client cannot impersonate this ID.
 
 ## CLI Reference
 
@@ -117,13 +119,20 @@ Global flags:
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--config` | `nextunnel-server.toml` | Configuration file path. If not set, the loader can fall back to `NEXTUNNEL_SERVER_CONFIG`. |
+| `--config` | `nextunnel-server.toml` | Configuration file path. An explicit flag wins; otherwise `$NEXTUNNEL_SERVER_CONFIG`, then the default path. |
 | `-h`, `--help` | - | Show help. |
 | `-v`, `--version` | - | Show version. |
 
+Notes:
+
+- `--port-start` / `--port-end` must be set together and stay in `1–65535`. Omitting both means no port restriction.
+- Empty `--expires-at` means non-expiring; otherwise values are parsed as RFC3339 and stored in UTC.
+- `ip-filter add|delete` requires exactly one of `--allow`/`--block` and exactly one match type. `--all` / `--local` / `--remote` must not take a value.
+- Client deletion is available only via HTTP API (`DELETE /api/clients/{name}`); there is no CLI subcommand for it.
+
 ## Access Rules
 
-Rules are stored in PostgreSQL and take effect without restarting the server.
+Rules are stored in PostgreSQL. The server caches them in memory for about **10 seconds**, so new rules usually take effect within a few seconds without restarting the process.
 
 ```bash
 nextunnel-server ip-filter add --allow --ip 203.0.113.10
@@ -141,8 +150,9 @@ nextunnel-server ip-filter add --block --remote
 | Default | Connections are allowed when no rule matches. |
 | Tie-breaker | At equal specificity, allow beats block. |
 | Priority | IP > city > region > country > local/remote > all. |
-| Geo names | Country, region, and city values must match the active IP API response. |
-| API key | Without `[ip_location].api_key`, location lookups stay empty and geo rules will not match usefully. |
+| Geo names | Country, region, and city values must match the IP API response (`region` maps to the API Province field). |
+| Local traffic | `IsPrivate` / `IsLoopback` / `IsLinkLocalUnicast` are treated as local and skip geo lookup. |
+| API key | `[ip_location].api_key` is required at startup. Failed lookups leave location empty for that request, so geo rules will not match. |
 
 ## Configuration
 
@@ -150,26 +160,28 @@ See [`../../nextunnel-server.example.toml`](../../nextunnel-server.example.toml)
 
 | Section | Field | Description |
 | --- | --- | --- |
-| `[server]` | `port` | Public control/listen port. The tunnel listener binds to all interfaces. |
-| `[server_web]` | `host` / `port` | Management UI and HTTP API listen address. Default port `25001`. Example defaults to `127.0.0.1`. |
-| `[cert]` | `host` | Hostname or IP used in generated certificate SANs. |
-| `[cert]` | `dir` | Certificate directory for CA, server certs, and generated client certs. |
-| `[database]` | `host` / `port` / `username` / `password` / `db` / `sslmode` | PostgreSQL connection. |
-| `[ip_location]` | `api_key` | Optional API key for IP location lookup. |
-| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | Log output and retention settings. |
-| `[timezone]` | `location` | IANA timezone, defaulting to `Asia/Shanghai` when unset. |
+| `[server]` | `port` | Public control/listen port. The tunnel listener binds to all interfaces. Defaults to `25930` when unset or ≤0. |
+| `[server_web]` | `host` / `port` | Management UI and HTTP API listen address. Defaults to `127.0.0.1:25001`. |
+| `[cert]` | `host` | **Required.** Hostname or IP used in generated certificate SANs (plus `localhost`, `127.0.0.1`, `::1`). |
+| `[cert]` | `dir` | **Required.** Certificate directory for CA, server certs, and generated client certs. |
+| `[database]` | `host` / `port` / `username` / `password` / `db` / `sslmode` | **All required.** PostgreSQL connection settings; `sslmode` has no default. |
+| `[ip_location]` | `api_key` | **Required.** Xiaotiancai Tech IP location API key. |
+| `[logs]` | `file` / `level` / `maxSize` / `maxBackups` / `maxAge` | Log output and retention. Default file path is `logs/nextunnel.log`; `level` must be `info`, `warn`, or `error`; defaults are `100MB` / `30` / `7` for size, backups, and age. |
+
+There is no configurable timezone. Database and API times are UTC; log display and daily rotation follow the system local timezone.
 
 ## Docker
 
-The server Compose files live under `docker/server`. The server container uses host networking so control, web, and proxy ports come from the TOML config.
+The server Compose files live under `docker/server`. The server container uses host networking so control, web, and proxy ports come from the TOML config. The image includes `tzdata`; set container `TZ` if you need a specific log timezone.
 
 ```bash
 cd docker/server
 cp example.env .env
 
 # Edit volumes/nextunnel/config/nextunnel-server.toml first.
-# For Docker, set [cert].dir = "/etc/nextunnel/certs"
-# and [logs].file = "/var/log/nextunnel/nextunnel-server.log".
+# For Docker, set [cert].dir = "/etc/nextunnel/certs",
+# [logs].file = "/var/log/nextunnel/nextunnel-server.log",
+# and fill in [ip_location].api_key.
 docker compose up -d
 
 # Or start PostgreSQL only.
@@ -192,6 +204,8 @@ The management surface always starts with the server. It serves:
 - the `/api` management endpoints
 
 There is no built-in HTTP authentication. Keep `[server_web].host` on a loopback or private address, or put the listener behind a firewall / authenticated reverse proxy. The example config binds `127.0.0.1:25001`.
+
+API timestamps use UTC in the form `2006-01-02T15:04:05Z`.
 
 | Endpoint | Purpose |
 | --- | --- |
