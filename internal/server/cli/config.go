@@ -23,6 +23,5 @@ func LoadServerConfig(cmd *cobra.Command) *configs.Configs {
 	sharedcli.ExitOnErr(cmd, c.CheckLogs())
 	sharedcli.ExitOnErr(cmd, c.CheckServer())
 	sharedcli.ExitOnErr(cmd, c.CheckServerWeb())
-	sharedcli.ExitOnErr(cmd, c.CheckTimezone())
 	return c
 }

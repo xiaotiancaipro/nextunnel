@@ -9,7 +9,6 @@ import (
 	"time"
 
 	sharedconfigs "github.com/xiaotiancaipro/nextunnel/internal/shared/configs"
-	sharedtimezone "github.com/xiaotiancaipro/nextunnel/internal/shared/timezone"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -30,7 +29,7 @@ func NewLogger(config *sharedconfigs.Logs) (*zap.Logger, error) {
 		LineEnding:       zapcore.DefaultLineEnding,
 		ConsoleSeparator: " - ",
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-			enc.AppendString(sharedtimezone.Format(t))
+			enc.AppendString(t.In(time.Local).Format("2006-01-02 15:04:05"))
 		},
 		EncodeLevel:    zapcore.LowercaseLevelEncoder,
 		EncodeCaller:   repoRelativeCallerEncoder,
@@ -133,10 +132,9 @@ func pathRelativeToRepoRoot(file string) (string, bool) {
 }
 
 func scheduleDailyLogRotation(logger *dailyLogWriter) {
-	loc := sharedtimezone.Location()
 	for {
-		now := time.Now().In(loc)
-		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+		now := time.Now().In(time.Local)
+		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).AddDate(0, 0, 1)
 		time.Sleep(time.Until(next))
 		if err := logger.Rotate(); err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "logger: daily rotate: %v\n", err)
