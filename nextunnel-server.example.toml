@@ -7,7 +7,7 @@ port = 25001
 
 [cert]
 host = "127.0.0.1"
-dir = "certs" # If using Docker to start, this parameter must be in /etc/nextunnel/certs
+dir = "certs" # If using Docker to start, this parameter must be in "certs"
 
 [database]
 host = "127.0.0.1"
@@ -18,10 +18,10 @@ db = "nextunnel"
 sslmode = "disable"
 
 [ip_location]
-api_key = "YOUR_API_KEY" # Required. Xiaotiancai Tech IP location API key
+api_key = "YOUR_API_KEY"
 
 [logs]
-file = "logs/nextunnel-server.log" # If using Docker to start, this parameter must be in /var/log/nextunnel/nextunnel-server.log
+file = "logs/nextunnel-server.log" # If using Docker to start, this parameter must be in "logs/nextunnel-server.log"
 level = "info" # allowed: info, warn, error
 maxSize = "100MB"
 maxBackups = 30

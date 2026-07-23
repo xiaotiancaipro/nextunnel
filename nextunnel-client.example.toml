@@ -6,12 +6,12 @@ port = 25930
 id = ""
 
 [cert]
-ca_file = "certs/ca.crt" # If using Docker to start, this parameter must be in /etc/nextunnel/certs/ca.crt
-cert_file = "certs/client.crt" # If using Docker to start, this parameter must be in /etc/nextunnel/certs/client.crt
-key_file = "certs/client.key" # If using Docker to start, this parameter must be in /etc/nextunnel/certs/client.key
+ca_file = "certs/ca.crt" # If using Docker to start, this parameter must be in "certs/ca.crt"
+cert_file = "certs/client.crt" # If using Docker to start, this parameter must be in "certs/client.crt"
+key_file = "certs/client.key" # If using Docker to start, this parameter must be in "certs/client.key"
 
 [logs]
-file = "logs/nextunnel-client.log" # If using Docker to start, this parameter must be in /var/log/nextunnel/nextunnel-client.log
+file = "logs/nextunnel-client.log" # If using Docker to start, this parameter must be in "logs/nextunnel-client.log"
 level = "info" # allowed: info, warn, error
 maxSize = "100MB"
 maxBackups = 30
