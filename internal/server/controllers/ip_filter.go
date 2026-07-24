@@ -102,7 +102,7 @@ func (c *IPFilter) buildRuleTarget(field, value string) (services.RuleTarget, er
 	case "COUNTRY", "REGION", "CITY":
 		return c.AccessRuleService.NewRuleTarget(strings.ToLower(field), value)
 	default:
-		return services.RuleTarget{}, fmt.Errorf("unsupported field: " + field)
+		return services.RuleTarget{}, fmt.Errorf("unsupported field: %s", field)
 	}
 }
 
