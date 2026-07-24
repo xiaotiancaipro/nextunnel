@@ -27,8 +27,8 @@ build-multi-server: build-server-web
 		for arch in amd64 arm64; do \
 			ext=""; \
 			[ "$$os" = "windows" ] && ext=".exe"; \
-			echo "Building server for $$os/$$arch"; \
 			GOOS=$$os GOARCH=$$arch go build -o bin/nextunnel-server-$(VERSION)-$$os-$$arch$$ext ./cmd/server; \
+			echo "build server($(VERSION)) for $$os/$$arch successfully"; \
 		done; \
 	done
 
@@ -38,12 +38,13 @@ build-multi-client:
 		for arch in amd64 arm64; do \
 			ext=""; \
 			[ "$$os" = "windows" ] && ext=".exe"; \
-			echo "Building client for $$os/$$arch"; \
 			GOOS=$$os GOARCH=$$arch go build -o bin/nextunnel-client-$(VERSION)-$$os-$$arch$$ext ./cmd/client; \
+			echo "build client($(VERSION)) for $$os/$$arch successfully"; \
 		done; \
 	done
 
 build-server-web:
+	rm -rf internal/server/controllers/dist
 	cd "$(WEB_DIR)" && npm ci && npm run build -w nextunnel-server-web
 
 clean:
