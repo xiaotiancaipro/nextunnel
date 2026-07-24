@@ -21,14 +21,16 @@ const (
 )
 
 type Conn struct {
-	Config   *configs.Configs
-	Logger   *zap.Logger
-	Services *services.Services
-	listener net.Listener
-	mu       sync.Mutex
-	tlsConf  *tls.Config
-	stopCh   chan struct{}
-	stopOnce sync.Once
+	Config    *configs.Configs
+	Logger    *zap.Logger
+	Services  *services.Services
+	listener  net.Listener
+	mu        sync.Mutex
+	tlsConf   *tls.Config
+	stopCh    chan struct{}
+	stopOnce  sync.Once
+	ctrlConns map[net.Conn]struct{}
+	ctrlWg    sync.WaitGroup
 }
 
 func (a *Conn) Init() error {
@@ -75,7 +77,7 @@ func (a *Conn) Start() error {
 
 }
 
-func (a *Conn) Stop(_ context.Context) error {
+func (a *Conn) Stop(ctx context.Context) error {
 	var closeErr error
 	a.stopOnce.Do(func() {
 		a.Logger.Info("conn server stopping")
@@ -85,9 +87,23 @@ func (a *Conn) Stop(_ context.Context) error {
 		a.mu.Lock()
 		ln := a.listener
 		a.listener = nil
+		for c := range a.ctrlConns {
+			_ = c.Close()
+		}
 		a.mu.Unlock()
 		if ln != nil {
 			closeErr = ln.Close()
+		}
+		done := make(chan struct{})
+		go func() {
+			a.ctrlWg.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			a.Logger.Info("all control connections cleaned up")
+		case <-ctx.Done():
+			a.Logger.Warn("timed out waiting for control connections to clean up")
 		}
 	})
 	return closeErr
@@ -141,6 +157,12 @@ func (a *Conn) handle(connRaw net.Conn) {
 
 func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 
+	if !a.registerCtrlConn(conn) {
+		_ = conn.Close()
+		return
+	}
+	defer a.unregisterCtrlConn(conn)
+
 	defer func() { _ = conn.Close() }()
 
 	_ = conn.SetDeadline(time.Now().Add(handshakeTimeout))
@@ -190,4 +212,27 @@ func (a *Conn) serveControl(conn net.Conn, loginPayload []byte) {
 		}
 	}
 
+}
+
+func (a *Conn) registerCtrlConn(conn net.Conn) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	select {
+	case <-a.stopCh:
+		return false
+	default:
+	}
+	if a.ctrlConns == nil {
+		a.ctrlConns = make(map[net.Conn]struct{})
+	}
+	a.ctrlConns[conn] = struct{}{}
+	a.ctrlWg.Add(1)
+	return true
+}
+
+func (a *Conn) unregisterCtrlConn(conn net.Conn) {
+	a.mu.Lock()
+	delete(a.ctrlConns, conn)
+	a.mu.Unlock()
+	a.ctrlWg.Done()
 }
