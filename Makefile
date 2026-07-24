@@ -1,5 +1,4 @@
 VERSION ?= $(shell cat VERSION)
-LDFLAGS := -X main.version=$(VERSION)
 WEB_DIR := web
 
 .PHONY: \
@@ -15,10 +14,10 @@ WEB_DIR := web
 build: build-server build-client
 
 build-server: build-server-web
-	go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-server-"${VERSION}" ./cmd/server
+	go build -o bin/nextunnel-server-"${VERSION}" ./cmd/server
 
 build-client:
-	go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-client-"${VERSION}" ./cmd/client
+	go build -o bin/nextunnel-client-"${VERSION}" ./cmd/client
 
 build-multi: build-multi-server build-multi-client
 
@@ -29,7 +28,7 @@ build-multi-server: build-server-web
 			ext=""; \
 			[ "$$os" = "windows" ] && ext=".exe"; \
 			echo "Building server for $$os/$$arch"; \
-			GOOS=$$os GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-server-$(VERSION)-$$os-$$arch$$ext ./cmd/server; \
+			GOOS=$$os GOARCH=$$arch go build -o bin/nextunnel-server-$(VERSION)-$$os-$$arch$$ext ./cmd/server; \
 		done; \
 	done
 
@@ -40,7 +39,7 @@ build-multi-client:
 			ext=""; \
 			[ "$$os" = "windows" ] && ext=".exe"; \
 			echo "Building client for $$os/$$arch"; \
-			GOOS=$$os GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o bin/nextunnel-client-$(VERSION)-$$os-$$arch$$ext ./cmd/client; \
+			GOOS=$$os GOARCH=$$arch go build -o bin/nextunnel-client-$(VERSION)-$$os-$$arch$$ext ./cmd/client; \
 		done; \
 	done
 

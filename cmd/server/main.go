@@ -1,11 +1,13 @@
 package main
 
-import "os"
+import (
+	"os"
 
-var version = "v0.0.0"
+	"github.com/xiaotiancaipro/nextunnel"
+)
 
 func main() {
-	if err := New(version).Execute(); err != nil {
+	if err := New(nextunnel.Version).Execute(); err != nil {
 		os.Exit(1)
 	}
 }
